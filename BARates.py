@@ -397,6 +397,7 @@ class Auto:
         ExpenseConstant = pd.DataFrame(self.rateTables[company]['ExpenseConstant_Ext'][1:], index=None, columns=self.rateTables[company]['ExpenseConstant_Ext'][0])
         val = ExpenseConstant.iloc[0, 1]
         ExpenseConstant = ExpenseConstant.astype(object)   # allow mixed string/numeric
+        ExpenseConstant = ExpenseConstant.astype(object)
         ExpenseConstant.iloc[0, 1] = f"${val:.0f}"
 
         return ExpenseConstant.filter(items=['Rate'])
@@ -1682,6 +1683,7 @@ class Auto:
 
         output_table = output_table[["Fleet","Non-Fleet","Liability","Physical Damage"]]
         output_table[["Non-Fleet","Fleet"]] = output_table[["Non-Fleet","Fleet"]].astype(int)
+        output_table = output_table.astype(object)
         output_table.iloc[:,-1] = output_table.iloc[:,-1].apply(lambda x: f"{x:.3f}")
 
         return output_table
@@ -2369,6 +2371,7 @@ class Auto:
         Rule89Table7 = pd.concat([Rule89Table7ab, Rule89Table7cd])
         Rule89Table7 = Rule89Table7[['Volunteer', 'Minimum Premium']] # Edited to only have minimum premium.
         Rule89Table7 = Rule89Table7.rename(columns = {"Volunteer" : "Coverage"})
+        Rule89Table7 = Rule89Table7.astype(object)
         Rule89Table7.iloc[:, 1:] = Rule89Table7.iloc[:,1:].map(lambda x: f"{x:.0f}")
 
         return Rule89Table7
@@ -3968,6 +3971,7 @@ class Auto:
         table.rename(columns = {"Constant" : "Modification: ", "Factor" : ""}, inplace = True)
         table = table.astype(object)
         table.iloc[0, 1] = f"{table.iloc[0, 1] * 100:.0f}%"
+        table = table.astype(object)
         table.iloc[1, 1] = f"{table.iloc[1, 1] * 100:.0f}%"
 
         return table
@@ -4494,6 +4498,7 @@ class Auto:
         HiredAutoLiabFactors = pd.concat([HiredAutoLiabFactors1, HiredAutoMinFactors]).rename(columns={'Constant':'' , 'Rate': 'Rate'})
         HiredAutoLiabFactors = HiredAutoLiabFactors.astype(object)
         HiredAutoLiabFactors.iloc[0, 0] = 'Per $100 Cost of Hire'
+        HiredAutoLiabFactors = HiredAutoLiabFactors.astype(object)
         HiredAutoLiabFactors.iloc[1, 0] = 'Minimum Premium - Non Truckers'
         return HiredAutoLiabFactors
 

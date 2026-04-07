@@ -395,7 +395,9 @@ class Auto:
     @log_exceptions
     def buildExpenseConstant(self, company):
         ExpenseConstant = pd.DataFrame(self.rateTables[company]['ExpenseConstant_Ext'][1:], index=None, columns=self.rateTables[company]['ExpenseConstant_Ext'][0])
-        ExpenseConstant.iloc[0,1] = f"${ExpenseConstant.iloc[0, 1]:.0f}"
+        val = ExpenseConstant.iloc[0, 1]
+        ExpenseConstant = ExpenseConstant.astype(object)   # allow mixed string/numeric
+        ExpenseConstant.iloc[0, 1] = f"${val:.0f}"
 
         return ExpenseConstant.filter(items=['Rate'])
 

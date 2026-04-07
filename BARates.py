@@ -1643,6 +1643,7 @@ class Auto:
         replace_values = ['Factor']
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values, replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[0, 1] = f"{output_table.iloc[0, 1]:.3f}"
 
         return output_table
@@ -1654,6 +1655,7 @@ class Auto:
         replace_values = ['Factor']
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values, replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[0, 1] = f"{output_table.iloc[0, 1]:.3f}"
 
         return output_table
@@ -3964,6 +3966,7 @@ class Auto:
                              columns=self.rateTables[company]["ExperienceRatingModifierRange_Ext"][0])
 
         table.rename(columns = {"Constant" : "Modification: ", "Factor" : ""}, inplace = True)
+        table = table.astype(object)
         table.iloc[0, 1] = f"{table.iloc[0, 1] * 100:.0f}%"
         table.iloc[1, 1] = f"{table.iloc[1, 1] * 100:.0f}%"
 
@@ -4489,6 +4492,7 @@ class Auto:
         HiredAutoLiabFactors1 = pd.DataFrame(self.rateTables[company]['LiabilityCostOfHireRate'][1:], index=None, columns=self.rateTables[company]['LiabilityCostOfHireRate'][0])
         HiredAutoMinFactors = pd.DataFrame(self.rateTables[company]['HiredAutoMinimumLiabilityPremium'][1:], index=None, columns=self.rateTables[company]['HiredAutoMinimumLiabilityPremium'][0]).rename(columns={'Premium': 'Rate'})
         HiredAutoLiabFactors = pd.concat([HiredAutoLiabFactors1, HiredAutoMinFactors]).rename(columns={'Constant':'' , 'Rate': 'Rate'})
+        HiredAutoLiabFactors = HiredAutoLiabFactors.astype(object)
         HiredAutoLiabFactors.iloc[0, 0] = 'Per $100 Cost of Hire'
         HiredAutoLiabFactors.iloc[1, 0] = 'Minimum Premium - Non Truckers'
         return HiredAutoLiabFactors

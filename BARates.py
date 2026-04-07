@@ -184,9 +184,9 @@ class Auto:
         LEVEL2 = rateTables["NGIC"] or rateTables["NWAG"]
         LEVEL3 = rateTables["CW"]
 
-        # If this company IS the LEVEL2 source (NGIC/NWAG), there is nothing
-        # to cascade down — every sheet in LEVEL2 is already in LEVEL1.
-        if LEVEL1 is not LEVEL2:
+        # Cascade LEVEL2 → LEVEL1: skip if LEVEL2 is unavailable (None) or if
+        # this company IS the LEVEL2 source (every sheet already in LEVEL1).
+        if LEVEL2 is not None and LEVEL1 is not LEVEL2:
             sheets_to_ignore = [sheet for sheet in LEVEL2.keys() if
                                 (sheet in ["FlowChart", "Rate Book Details"]) and (sheet.startswith("CA7"))]
 

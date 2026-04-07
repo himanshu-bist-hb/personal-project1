@@ -58,46 +58,24 @@ logger = logging.getLogger(__name__)
 
 
 # ==============================================================================
-#  CONSTANTS  —  change paths / magic numbers here, nowhere else in the file
+#  CONSTANTS  —  all paths / magic numbers live in config/constants.py
 # ==============================================================================
-_CW_RATEBOOK_DEFAULT = Path(r"M:\Actshare\Com\BA\CW Ratebook\BA CW Ratebook.xlsx")
-_NAICS_FILE          = Path(r"M:\Actshare\Com\BA\CW Ratebook\BA NAICS Codes and Definitions.xlsx")
-_NAICS_SHEET         = "NAICSDescriptions"
-_NAICS_SKIP_ROWS     = list(range(11))   # skip rows 0-10 (header/branding rows)
-
-_DETAIL_SHEET        = "Rate Book Details"
-_DETAIL_STATE_ROW    = 3                 # zero-based .iloc row index for state name
-_DETAIL_STATE_COL    = 4                 # zero-based .iloc col index for state name
-_DETAIL_DATE_ROW     = 7                 # zero-based .iloc row index for effective date
-_DETAIL_DATE_COL     = 4                 # zero-based .iloc col index for effective date
-_DATE_FMT            = "%m-%d-%Y"
-
-_DATA_START_ROW      = 12               # rate data in every sheet starts here
-_SHEET_ID_CELL       = "B6"             # cell that holds the human-readable table name
-_SKIP_SHEET_SUFFIX   = "RR"            # sheets whose A1 ends with this are skipped
-
-
-# ==============================================================================
-#  STATE ABBREVIATION LOOKUP
-# ==============================================================================
-STATE_ABBREVIATIONS: Dict[str, str] = {
-    "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR",
-    "California": "CA", "Colorado": "CO", "Connecticut": "CT",
-    "Delaware": "DE", "District of Columbia": "DC", "Florida": "FL",
-    "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL",
-    "Indiana": "IN", "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY",
-    "Louisiana": "LA", "Maine": "ME", "Maryland": "MD",
-    "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN",
-    "Mississippi": "MS", "Missouri": "MO", "Montana": "MT",
-    "Nebraska": "NE", "Nevada": "NV", "New Hampshire": "NH",
-    "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
-    "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH",
-    "Oklahoma": "OK", "Oregon": "OR", "Pennsylvania": "PA",
-    "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD",
-    "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT",
-    "Virginia": "VA", "Washington": "WA", "West Virginia": "WV",
-    "Wisconsin": "WI", "Wyoming": "WY",
-}
+from config.constants import (
+    CW_RATEBOOK_DEFAULT,
+    NAICS_FILE,
+    NAICS_SHEET,
+    NAICS_SKIP_ROWS,
+    DETAIL_SHEET,
+    DETAIL_STATE_ROW,
+    DETAIL_STATE_COL,
+    DETAIL_DATE_ROW,
+    DETAIL_DATE_COL,
+    DATE_FMT,
+    DATA_START_ROW,
+    SHEET_ID_CELL,
+    SKIP_SHEET_SUFFIX,
+    STATE_ABBREVIATIONS,
+)
 
 # A lightweight typed container for the metadata we pull from Rate Book Details
 RateBookInfo = namedtuple(
@@ -139,21 +117,25 @@ def load_ratebook(ratebook_path: Optional[str]) -> Union[pd.ExcelFile, str]:
         # None or empty string — skip without even trying to open
         return "Not found"
     try:
-        # Streamlit UploadedFile (and any other file-like object) must be read
-        # into a BytesIO buffer first.  pd.ExcelFile consumes the stream to its
-        # end; load_workbook later needs to re-read from the start.  BytesIO
-        # supports seek(), so both callers can rewind independently.
+        # Read everything into raw bytes upfront.
+        # Ratebook_path may be a Streamlit UploadedFile (file-like) or a path
+        # string.  Either way, slurp to bytes so we can hand a FRESH BytesIO
+        # to every reader (pd.ExcelFile consumes the stream; load_workbook needs
+        # to read again from position 0 — a fresh BytesIO is the only safe way).
         if hasattr(ratebook_path, 'read'):
-            ratebook_path = _io.BytesIO(ratebook_path.read())
-        return pd.ExcelFile(ratebook_path)
+            raw_bytes = ratebook_path.read()
+        else:
+            with open(str(ratebook_path), 'rb') as fh:
+                raw_bytes = fh.read()
+        ef = pd.ExcelFile(_io.BytesIO(raw_bytes))
+        ef._raw_bytes = raw_bytes   # stash for reuse by process_ratebook
+        return ef
     except Exception as exc:
         logger.warning("Could not load ratebook: %s", exc)
         return "Not found"
 
 
 def get_rate_book_info(
-    ngic_path: Optional[str],
-    mm_path:   Optional[str],
     ngic_loaded: Union[pd.ExcelFile, str],
     mm_loaded:   Union[pd.ExcelFile, str],
 ) -> RateBookInfo:
@@ -177,17 +159,20 @@ def get_rate_book_info(
         the raw path string here because we only need this one sheet and
         pd.read_excel(path, sheet_name=...) is slightly simpler.
     """
-    use_ngic  = (ngic_loaded != "Not found") and (mm_loaded == "Not found")
-    src_path  = ngic_path if use_ngic else mm_path
+    use_ngic   = (ngic_loaded != "Not found") and (mm_loaded == "Not found")
+    loaded_ef  = ngic_loaded if use_ngic else mm_loaded
 
-    details   = pd.read_excel(src_path, sheet_name=_DETAIL_SHEET)
+    # Use the raw bytes stored by load_ratebook to create a fresh BytesIO.
+    # The original UploadedFile stream is already exhausted at this point.
+    source = _io.BytesIO(loaded_ef._raw_bytes)
+    details = pd.read_excel(source, sheet_name=DETAIL_SHEET)
 
-    state     = details.iloc[_DETAIL_STATE_ROW, _DETAIL_STATE_COL]
+    state     = details.iloc[DETAIL_STATE_ROW, DETAIL_STATE_COL]
     state_abb = STATE_ABBREVIATIONS.get(str(state), "Unknown")
 
-    raw_date  = details.iloc[_DETAIL_DATE_ROW, _DETAIL_DATE_COL]
-    n_eff     = datetime.date.strftime(raw_date, _DATE_FMT)
-    r_eff     = datetime.date.strftime(raw_date, _DATE_FMT)
+    raw_date  = details.iloc[DETAIL_DATE_ROW, DETAIL_DATE_COL]
+    n_eff     = datetime.date.strftime(raw_date, DATE_FMT)
+    r_eff     = datetime.date.strftime(raw_date, DATE_FMT)
 
     return RateBookInfo(
         state=state,
@@ -224,17 +209,17 @@ def process_sheet(sheet) -> Tuple[Optional[str], Optional[List]]:
         This matches what BARates.Auto expects.
     """
     # Guard 1 — skip the metadata sheet
-    if sheet.title == _DETAIL_SHEET:
+    if sheet.title == DETAIL_SHEET:
         return None, None
 
     # Guard 2 — skip sheets flagged with 'RR' in A1
     a1_val = sheet["A1"].value
-    if a1_val and str(a1_val)[-len(_SKIP_SHEET_SUFFIX):] == _SKIP_SHEET_SUFFIX:
+    if a1_val and str(a1_val)[-len(SKIP_SHEET_SUFFIX):] == SKIP_SHEET_SUFFIX:
         return None, None
 
     # Build the cell range: A12 → <last_col><last_row>
     last_col    = get_column_letter(sheet.max_column)
-    cell_range  = f"A{_DATA_START_ROW}:{last_col}{sheet.max_row}"
+    cell_range  = f"A{DATA_START_ROW}:{last_col}{sheet.max_row}"
     width       = sheet.max_column - 1
 
     if width == 0:
@@ -245,7 +230,7 @@ def process_sheet(sheet) -> Tuple[Optional[str], Optional[List]]:
             for row in sheet[cell_range]
         ]
 
-    return sheet[_SHEET_ID_CELL].value, cells
+    return sheet[SHEET_ID_CELL].value, cells
 
 
 def process_ratebook(
@@ -282,11 +267,11 @@ def process_ratebook(
         return company, None
 
     try:
-        # pd.ExcelFile may have advanced the stream position to end.
-        # Seek back to 0 so openpyxl can read the file from the beginning.
-        if hasattr(company_file.io, 'seek'):
-            company_file.io.seek(0)
-        wb = load_workbook(company_file.io, read_only=True, data_only=True)
+        # Always create a FRESH BytesIO from the stored raw bytes.
+        # pd.ExcelFile consumed the original stream; re-using .io risks reading
+        # from the end position.  A new BytesIO always starts at position 0.
+        source = _io.BytesIO(company_file._raw_bytes)
+        wb = load_workbook(source, read_only=True, data_only=True)
     except (InvalidFileException, Exception) as exc:
         logger.error("Cannot open workbook for '%s': %s", company, exc)
         return company, None
@@ -348,7 +333,7 @@ def load_all_ratebooks(
             
         key, tables = process_ratebook(company, company_file)
         rate_tables[key] = tables
-        status = f"{len(tables)} tables" if tables else "skipped"
+        status = f"{len(tables)} tables" if tables is not None else "skipped"
         logger.info("Company '%s': %s", key, status)
         print(f"  Loaded {key}: {status}")
         
@@ -363,8 +348,8 @@ def load_naics_descriptions() -> pd.DataFrame:
         • Mocked in unit tests without touching the real network drive.
         • Easily swapped for a DB query or local cache later.
     """
-    naics_ef = pd.ExcelFile(str(_NAICS_FILE))
-    return pd.read_excel(naics_ef, sheet_name=_NAICS_SHEET, skiprows=_NAICS_SKIP_ROWS)
+    naics_ef = pd.ExcelFile(str(NAICS_FILE))
+    return pd.read_excel(naics_ef, sheet_name=NAICS_SHEET, skiprows=NAICS_SKIP_ROWS)
 
 
 # ==============================================================================
@@ -440,8 +425,6 @@ def run(
 
     # ── 2. Extract state / date metadata ──────────────────────────────────────
     info = get_rate_book_info(
-        ngic_path=NGICRatebook,
-        mm_path=MMRatebook,
         ngic_loaded=ratebooks["NGICRatebook"],
         mm_loaded=ratebooks["MMRatebook"],
     )
@@ -451,8 +434,15 @@ def run(
     # info.r_effective → e.g. "01-01-2025"
 
     # ── 3. Resolve CW ratebook ────────────────────────────────────────────────
-    cw_path = CWRatebook if CWRatebook else str(_CW_RATEBOOK_DEFAULT)
-    cw_file = pd.ExcelFile(cw_path)
+    # If no CW file was uploaded, fall back to the path in config/constants.py.
+    cw_source = CWRatebook if CWRatebook else str(CW_RATEBOOK_DEFAULT)
+    cw_file   = load_ratebook(cw_source)
+    if cw_file == "Not found":
+        raise ValueError(
+            f"CW (Countrywide) ratebook could not be loaded.\n"
+            f"Upload a CW file, or ensure this path is accessible:\n"
+            f"  {CW_RATEBOOK_DEFAULT}"
+        )
 
     # ── 4. Load NAICS descriptions ────────────────────────────────────────────
     if progress_callback: progress_callback("Loading NAICS descriptions...")

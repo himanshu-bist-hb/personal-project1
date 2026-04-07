@@ -199,6 +199,12 @@ class Auto:
         if LEVEL2 is not None:
             sheets_to_ignore_2 = [sheet for sheet in LEVEL2.keys() if (sheet in ["FlowChart", "Rate Book Details"]) and (sheet.startswith("CA7"))]  # Check for both String and Int values of 777 in the ratebook
 
+        if LEVEL3 is None:
+            raise RuntimeError(
+                "CW (Countrywide) ratebook is missing from rateTables. "
+                "Ensure the CW ratebook path is accessible before running."
+            )
+
         for sheet in LEVEL3.keys():
 
             data = pd.DataFrame(LEVEL3[sheet][1:], index=None, columns=LEVEL3[sheet][0])

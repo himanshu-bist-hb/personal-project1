@@ -24,6 +24,7 @@
 # ==============================================================================
 
 import datetime
+import io as _io
 import logging
 import warnings
 from collections import namedtuple
@@ -138,9 +139,15 @@ def load_ratebook(ratebook_path: Optional[str]) -> Union[pd.ExcelFile, str]:
         # None or empty string — skip without even trying to open
         return "Not found"
     try:
+        # Streamlit UploadedFile (and any other file-like object) must be read
+        # into a BytesIO buffer first.  pd.ExcelFile consumes the stream to its
+        # end; load_workbook later needs to re-read from the start.  BytesIO
+        # supports seek(), so both callers can rewind independently.
+        if hasattr(ratebook_path, 'read'):
+            ratebook_path = _io.BytesIO(ratebook_path.read())
         return pd.ExcelFile(ratebook_path)
     except Exception as exc:
-        logger.warning("Could not load ratebook '%s': %s", ratebook_path, exc)
+        logger.warning("Could not load ratebook: %s", exc)
         return "Not found"
 
 
@@ -275,6 +282,10 @@ def process_ratebook(
         return company, None
 
     try:
+        # pd.ExcelFile may have advanced the stream position to end.
+        # Seek back to 0 so openpyxl can read the file from the beginning.
+        if hasattr(company_file.io, 'seek'):
+            company_file.io.seek(0)
         wb = load_workbook(company_file.io, read_only=True, data_only=True)
     except (InvalidFileException, Exception) as exc:
         logger.error("Cannot open workbook for '%s': %s", company, exc)
@@ -419,6 +430,13 @@ def run(
         "CCMICRatebook": load_ratebook(CCMICRatebook),
         "NWAGRatebook":  load_ratebook(NWAGRatebook),
     }
+
+    # NGIC is mandatory — fail immediately with a clear message if missing
+    if ratebooks["NGICRatebook"] == "Not found":
+        raise ValueError(
+            "NGIC ratebook is required but could not be loaded. "
+            "Please upload a valid NGIC ratebook file and try again."
+        )
 
     # ── 2. Extract state / date metadata ──────────────────────────────────────
     info = get_rate_book_info(

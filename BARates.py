@@ -848,6 +848,7 @@ class Auto:
         NAICSCoverages = pd.DataFrame(self.rateTables[company]['NAICSFactors_Ext'][1:], index=None, columns=self.rateTables[company]['NAICSFactors_Ext'][0])
         NAICSCoverages = NAICSCoverages.pivot(index='NAICSCode', columns='VehicleAndCoverageType', values='Factor').reset_index('NAICSCode').rename(columns={'NAICSCode' : 'NAICS Six-Digit Code'}).filter(items=['NAICS Six-Digit Code', 'NAICS Category', 'Trucks, Tractors, And Trailers Liability', 'Trucks, Tractors, And Trailers Comprehensive And Specified Causes Of Loss', 'Trucks And Truck-tractors Collision', 'Trailers Collision', 'Private Passenger Types Liability', 'Private Passenger Types Collision', 'Private Passenger Types Comprehensive']).astype({'NAICS Six-Digit Code': 'int64'})
         #NAICSCoverages = self.buildDataFrame("NAICSFactors_Ext").pivot(index='NAICSCode', columns='VehicleAndCoverageType', values='Factor').reset_index('NAICSCode').rename(columns={'NAICSCode' : 'NAICS Six-Digit Code'}).filter(items=['NAICS Six-Digit Code', 'NAICS Category', 'Trucks, Tractors, And Trailers Liability', 'Trucks, Tractors, And Trailers Comprehensive And Specified Causes Of Loss', 'Trucks And Truck-tractors Collision', 'Trailers Collision']).astype({'NAICS Six-Digit Code': 'int64'})
+        NAICSCoverages = NAICSCoverages.astype(object)
         NAICSCoverages.iloc[:, 1:] = NAICSCoverages.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")        #NAICSCoverages = self.buildDataFrame("NAICSFactors_Ext").pivot(index='NAICSCode', columns='VehicleAndCoverageType', values='Factor').reset_index('NAICSCode').rename(columns={'NAICSCode' : 'NAICS Six-Digit Code'}).filter(items=['NAICS Six-Digit Code', 'NAICS Category', 'Trucks, Tractors, And Trailers Liability', 'Trucks, Tractors, And Trailers Comprehensive And Specified Causes Of Loss', 'Trucks And Truck-tractors Collision', 'Trailers Collision']).astype({'NAICS Six-Digit Code': 'int64'})
         TTTNAICSFactors = pd.merge(NAICSReference, NAICSCoverages, on = 'NAICS Six-Digit Code', how = 'inner')
         TTTNAICSFactors.drop(columns = "NAICS Definition", inplace = True)
@@ -1094,6 +1095,7 @@ class Auto:
         table.sort_values(by = "Number Of Powered Vehicles", inplace = True)
         table = table.iloc[1:,:]
         table["Number Of Powered Vehicles"] = self.self_propelled_vehicles
+        table = table.astype(object)
         table.iloc[:,1:] = table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return table
@@ -1268,6 +1270,7 @@ class Auto:
         SecondaryFactors = SecondaryFactors[['Secondary Class', '4th-5th Digits of Class Code', 'Liability', 'OTC', 'Collision', 'Trailers Collision']]
 
         SecondaryFactors = SecondaryFactors.sort_values('4th-5th Digits of Class Code')
+        SecondaryFactors = SecondaryFactors.astype(object)
         SecondaryFactors.iloc[:, 2:] = SecondaryFactors.iloc[:, 2:].astype(float).map(lambda x: f"{x:.3f}")
 
         return SecondaryFactors
@@ -1431,6 +1434,7 @@ class Auto:
             }
 
             NC_rule231_table = pd.DataFrame(NC_rule231_table)
+            NC_rule231_table = NC_rule231_table.astype(object)
             NC_rule231_table.iloc[:, 1:] = NC_rule231_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
             return NC_rule231_table
@@ -1444,6 +1448,7 @@ class Auto:
             table = pd.merge(factors, class_codes, on=['PrivatePassengerType', 'PrivatePassengerOperatorExperience', 'PrivatePassengerUse'], how='left')
             table = table.pivot(index=['ClassCode'], columns='Coverage', values='Factor').reset_index()
             table = table.rename(columns={"ClassCode": "Class Code", "Liability": "Liability and Medical Payments"})
+            table = table.astype(object)
             table.iloc[:, 1:] = table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
             return table
@@ -1515,6 +1520,7 @@ class Auto:
         LayupFactors26['MonthsLaidUp'].replace('6', '6+', inplace=True)
         LayupFactors = pd.concat([LayupFactors01, LayupFactors26]).rename(columns={'MonthsLaidUp' : 'Months Laid Up'})
 
+        LayupFactors = LayupFactors.astype(object)
         LayupFactors.iloc[:, 1:] = LayupFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return LayupFactors
@@ -1580,6 +1586,7 @@ class Auto:
     def buildTowingAndLabor(self, company):
         TowingAndLabor = pd.DataFrame(self.rateTables[company]['TowingLaborRate'][1:], index=None, columns=self.rateTables[company]['TowingLaborRate'][0])
         TowingAndLabor = TowingAndLabor.rename(columns = {TowingAndLabor.columns[0] : "Limit", TowingAndLabor.columns[1] : "Rate"})
+        TowingAndLabor = TowingAndLabor.astype(object)
         TowingAndLabor.iloc[:, 1:] = TowingAndLabor.iloc[:, 1:].map(lambda x: f"{x:.2f}")
 
         return TowingAndLabor
@@ -1595,6 +1602,7 @@ class Auto:
         output_table.index = self_propelled_vehicles
         output_table.reset_index(inplace = True)
         output_table.rename(columns={'index': 'Number Of Self-propelled Vehicles'}, inplace=True)
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -1609,6 +1617,7 @@ class Auto:
         output_table.index = self_propelled_vehicles
         output_table.reset_index(inplace = True)
         output_table.rename(columns={'index': 'Number Of Self-propelled Vehicles'}, inplace=True)
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
         return output_table
 
@@ -1622,6 +1631,7 @@ class Auto:
         output_table.index = self_propelled_vehicles
         output_table.reset_index(inplace = True)
         output_table.rename(columns={'index': 'Number Of Self-propelled Vehicles'}, inplace=True)
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -1782,6 +1792,7 @@ class Auto:
         #GKColl = self.buildDataFrame("GaragekeepersCollisionPreliminaryBasePremium")
         GKColl = GKColl.query(f'GaragekeepersCollisionRatingBase == "Direct (Primary)" & GaragekeepersCollisionLimit != 999999999 & GaragekeepersCollisionDeductible == "100"').rename(columns={'GaragekeepersCollisionLimit' : 'Limit', 'Premium' : '$100 per auto deductible'}).filter(items=['Limit', '$100 per auto deductible'])
         GKFactors = pd.merge(GKComp, GKColl, on= 'Limit', how = 'inner')
+        GKFactors = GKFactors.astype(object)
         GKFactors.iloc[:, 1:] = GKFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.0f}")
 
         return GKFactors
@@ -1835,6 +1846,7 @@ class Auto:
         GKColl.loc[GKColl['Collision'] == "10,000", 'Factor'] = GKColl.iloc[6,1] / GKColl.iloc[0,1]
 
         GKColl = GKColl[['Collision', 'Factor']]
+        GKColl = GKColl.astype(object)
         GKColl.iloc[:, 1:] = GKColl.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return GKColl
@@ -1854,6 +1866,7 @@ class Auto:
             replace_values.remove("Med")
 
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, 'Coverage', orig_values, replace_values, filter_values=orig_values)
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -1866,6 +1879,7 @@ class Auto:
 
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values, replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: 'Factor'})
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -1884,6 +1898,7 @@ class Auto:
 
         Rule68TableAB = pd.merge(Rule68Table1a, Rule68Table1b, on= 'Coverage', how = 'inner').query(f'Coverage != "PhysDamCollSA" & Coverage != "PhysDamOTCSA"')
         Rule68Table2 = pd.merge(Rule68Table1, Rule68TableAB, on= 'Coverage', how = 'inner').query(f'Coverage != "PhysDamCollSA" & Coverage != "PhysDamOTCSA"')
+        Rule68Table2 = Rule68Table2.astype(object)
         Rule68Table2.iloc[:, 1:] = Rule68Table2.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         no_med = pd.read_excel(BA_INPUT_FILE, sheet_name="No MedPay")
@@ -1901,6 +1916,7 @@ class Auto:
     def buildRule68table3(self, company):
         Rule68Table3 = pd.DataFrame(self.rateTables[company]['DriverTrainingLiabilityAndMedicalPaymentsCoveragesFactor'][1:], index=None, columns=self.rateTables[company]['DriverTrainingLiabilityAndMedicalPaymentsCoveragesFactor'][0]).query(f'Constant == "Y"').filter(items=['Factor'])
         #Rule68Table3 = self.buildDataFrame("DriverTrainingLiabilityAndMedicalPaymentsCoveragesFactor").query(f'Constant == "Y"').filter(items=['Factor'])
+        Rule68Table3 = Rule68Table3.astype(object)
         Rule68Table3.iloc[:,:] = Rule68Table3.iloc[:,:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule68Table3
@@ -1911,6 +1927,7 @@ class Auto:
     def buildRule68table4(self, company):
         Rule68Table4 = pd.DataFrame(self.rateTables[company]['DriverTrainingMedicalPaymentsCoverageFactors'][1:], index=None, columns=self.rateTables[company]['DriverTrainingMedicalPaymentsCoverageFactors'][0]).query(f'MedicalPaymentsLimitText != "No Coverage"').rename(columns={'MedicalPaymentsLimitText' : 'Limit Per Person'}).sort_values('Factor')
         #Rule68Table4 = self.buildDataFrame("DriverTrainingMedicalPaymentsCoverageFactors").query(f'MedicalPaymentsLimitText != "No Coverage"').rename(columns={'MedicalPaymentsLimitText' : 'Limit Per Person'}).sort_values('Factor')
+        Rule68Table4 = Rule68Table4.astype(object)
         Rule68Table4.iloc[:, 1:] = Rule68Table4.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule68Table4
@@ -2048,6 +2065,7 @@ class Auto:
         # Apply the 250 factor to the 250$+ Deductibles.
         output_table.iloc[1:,1:] = output_table.iloc[1:,1:] * [low_250_factor, med_250_factor, high_250_factor]
 
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].map(lambda x: "${:,.2f}".format(x))
 
         return output_table
@@ -2068,6 +2086,7 @@ class Auto:
         Rule83Table1a.replace(mapping_dict, inplace=True)
         Rule83Table1a = Rule83Table1a.rename(columns={'SpecialTypesOtherThanCollisionCoverageType' : 'CoverageType', 'SpecialTypesSupplementaryType' : 'SuppType'}).query(f'CoverageType == "Stated Amount - Specified Causes of Loss"')
         Rule83Table1a = Rule83Table1a.pivot(index=['Territory', 'CoverageType'], columns='SuppType', values='Factor').reset_index(['Territory', 'CoverageType']).filter(items=['Territory', 'Miscellaneous Type Vehicles Buildings', 'Miscellaneous Type Vehicles Open Lots', 'Personal Auto Type Vehicles Buildings', 'Personal Auto Type Vehicles Non-Standard Open Lots', 'Personal Auto Type Vehicles Standard Open Lots'])
+        Rule83Table1a = Rule83Table1a.astype(object)
         Rule83Table1a.iloc[:, 1:] = Rule83Table1a.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule83Table1a
@@ -2088,6 +2107,7 @@ class Auto:
         Rule83Table2a = Rule83Table2a.rename(columns={'SpecialTypesOtherThanCollisionCoverageType' : 'CoverageType', 'SpecialTypesSupplementaryType' : 'SuppType'}).replace({"Stated Amount - Specified Perils","Stated Amount - Limited Specified Causes of Loss"}).query(f'CoverageType == "Stated Amount - Limited Specified Causes of Loss"')
 
         Rule83Table2a = Rule83Table2a.pivot(index=['Territory', 'CoverageType'], columns='SuppType', values='Factor').reset_index(['Territory', 'CoverageType']).filter(items=['Territory', 'Miscellaneous Type Vehicles Buildings', 'Miscellaneous Type Vehicles Open Lots', 'Personal Auto Type Vehicles Buildings', 'Personal Auto Type Vehicles Non-Standard Open Lots', 'Personal Auto Type Vehicles Standard Open Lots'])
+        Rule83Table2a = Rule83Table2a.astype(object)
         Rule83Table2a.iloc[:, 1:] = Rule83Table2a.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule83Table2a
@@ -2108,6 +2128,7 @@ class Auto:
         Rule83Table3a = Rule83Table3a.rename(columns={'SpecialTypesOtherThanCollisionCoverageType': 'CoverageType',
                          'SpecialTypesSupplementaryType': 'SuppType'}).query(f'CoverageType == "Stated Amount"')
         Rule83Table3a = Rule83Table3a.pivot(index=['Territory', 'CoverageType'], columns='SuppType', values='Factor').reset_index(['Territory', 'CoverageType']).filter(items=['Territory', 'Miscellaneous Type Vehicles Buildings', 'Miscellaneous Type Vehicles Open Lots', 'Personal Auto Type Vehicles Buildings', 'Personal Auto Type Vehicles Non-Standard Open Lots', 'Personal Auto Type Vehicles Standard Open Lots'])
+        Rule83Table3a = Rule83Table3a.astype(object)
         Rule83Table3a.iloc[:, 1:] = Rule83Table3a.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule83Table3a
@@ -2237,6 +2258,7 @@ class Auto:
         # Apply the 250 factor to the 250$+ Deductibles.
         output_table.iloc[1:,1:] = output_table.iloc[1:,1:] * [low_250_factor, med_250_factor, high_250_factor]
 
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].map(lambda x: f"{x:.2f}")
 
         return output_table
@@ -2266,6 +2288,7 @@ class Auto:
         Rule89Table1 = Rule89Table1[['Total Number of Employees:', 'Liability Limit']]
         Rule89Table1['Liability Limit'] = Rule89Table1['Liability Limit']
 
+        Rule89Table1 = Rule89Table1.astype(object)
         Rule89Table1.iloc[:,1:] = Rule89Table1.iloc[:,1:].map(lambda x: f"{x:.0f}")
 
         return Rule89Table1
@@ -2276,6 +2299,7 @@ class Auto:
     def buildRule89table2(self, company):
         Rule89Table2 = pd.DataFrame(self.rateTables[company]['NonOwnedPartnershipFactor'][1:], index=None, columns=self.rateTables[company]['NonOwnedPartnershipFactor'][0]).query(f'Constant == "Y"').filter(items=['Factor'])
         #Rule89Table2 = self.buildDataFrame("NonOwnedPartnershipFactor").query(f'Constant == "Y"').filter(items=['Factor'])
+        Rule89Table2 = Rule89Table2.astype(object)
         Rule89Table2.iloc[:,:] = Rule89Table2.iloc[:,:].astype(float).map(lambda x: f"{x:.3f}")
         return Rule89Table2
 
@@ -2285,6 +2309,7 @@ class Auto:
     def buildRule89table3(self, company):
         Rule89Table3 = pd.DataFrame(self.rateTables[company]['GarageServicesLiabilityEmployeesFactor'][1:], index=None, columns=self.rateTables[company]['GarageServicesLiabilityEmployeesFactor'][0]).query(f'Constant == "Y"').rename(columns={'EmployeeLiabilityFactor' : 'Factor'}).filter(items=['Factor'])
         #Rule89Table3 = self.buildDataFrame("GarageServicesLiabilityEmployeesFactor").query(f'Constant == "Y"').rename(columns={'EmployeeLiabilityFactor' : 'Factor'}).filter(items=['Factor'])
+        Rule89Table3 = Rule89Table3.astype(object)
         Rule89Table3.iloc[:,:] = Rule89Table3.iloc[:,:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule89Table3
@@ -2295,6 +2320,7 @@ class Auto:
     def buildRule89table4(self, company):
         Rule89Table4 = pd.DataFrame(self.rateTables[company]['NonOwnedAutoFoodorGoodsDeliveryExposureFactor_Ext'][1:], index=None, columns=self.rateTables[company]['NonOwnedAutoFoodorGoodsDeliveryExposureFactor_Ext'][0]).query(f'Constant == "Y"').filter(items=['Factor'])
         #Rule89Table4 = self.buildDataFrame("NonOwnedAutoFoodorGoodsDeliveryExposureFactor_Ext").query(f'Constant == "Y"').filter(items=['Factor'])
+        Rule89Table4 = Rule89Table4.astype(object)
         Rule89Table4.iloc[:,:] = Rule89Table4.iloc[:,:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule89Table4
@@ -2305,8 +2331,11 @@ class Auto:
     def buildRule89table5(self, company):
         Rule89Table5 = pd.DataFrame(self.rateTables[company]['NonOwnedAutoFoodorGoodsDeliveryIncreasedLimitFactor_Ext'][1:], index=None, columns=self.rateTables[company]['NonOwnedAutoFoodorGoodsDeliveryIncreasedLimitFactor_Ext'][0])
         #Rule89Table5 = self.buildDataFrame("NonOwnedAutoFoodorGoodsDeliveryIncreasedLimitFactor_Ext")
+        Rule89Table5 = Rule89Table5.astype(object)
         Rule89Table5.iloc[:, 0] = Rule89Table5.iloc[:, 0].astype(str).str.replace(",", "", regex=False)
+        Rule89Table5 = Rule89Table5.astype(object)
         Rule89Table5.iloc[:, :1] = Rule89Table5.iloc[:, :1].astype(float).map(lambda x: f"{x:,.0f}")
+        Rule89Table5 = Rule89Table5.astype(object)
         Rule89Table5.iloc[:,1:] = Rule89Table5.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Rule89Table5
@@ -2347,6 +2376,7 @@ class Auto:
         Rule89Table8 = pd.DataFrame(self.rateTables[company]['EmployeesAsInsuredsFactor'][1:], index=None, columns=self.rateTables[company]['EmployeesAsInsuredsFactor'][0]).query(f'Constant == "Y"').filter(items=['Factor'])
         #Rule89Table3 = self.buildDataFrame("GarageServicesLiabilityEmployeesFactor").query(f'Constant == "Y"').rename(columns={'EmployeeLiabilityFactor' : 'Factor'}).filter(items=['Factor'])
 
+        Rule89Table8 = Rule89Table8.astype(object)
         Rule89Table8.iloc[:, :] = Rule89Table8.iloc[:, :].map(lambda x: f"{x:.3f}")
 
         return Rule89Table8
@@ -2355,6 +2385,7 @@ class Auto:
         # 289.B.1.b
         output_table = pd.DataFrame(self.rateTables[company]['VolunteersAsInsuredsBasePremium'][1:], index=None, columns=self.rateTables[company]['VolunteersAsInsuredsBasePremium'][0]).query(f'Constant == "Y"').filter(items=['Factor']).rename(columns={'Factor' : 'Liability Limit'})
         output_table = output_table.rename(columns = {"Liability Limit" : "Rate"})
+        output_table = output_table.astype(object)
         output_table.iloc[:, :] = output_table.iloc[:, :].map(lambda x: f"{x:.2f}")
 
         return output_table
@@ -2363,6 +2394,7 @@ class Auto:
         # 289.B.2.b.(2).(a)
         output_table = pd.DataFrame(self.rateTables[company]['NonOwnedVolunteersBasePremium'][1:], index=None, columns=self.rateTables[company]['NonOwnedVolunteersBasePremium'][0]).query(f'Constant == "Y"').filter(items=['Factor']).rename(columns={'Factor' : 'Liability Limit'})
         output_table = output_table.rename(columns={"Liability Limit": "Rate"})
+        output_table = output_table.astype(object)
         output_table.iloc[:, :] = output_table.iloc[:, :].map(lambda x: f"{x:.2f}")
 
         return output_table
@@ -2454,7 +2486,9 @@ class Auto:
         Rule98Table1 = Rule98Table1.rename(columns={'Deductible Amount' : 'Deductible','Property Damage Per Accident_x' : 'Other Than Zone-Rated', 'Property Damage Per Accident_y' : 'Zone-Rated', 'Combined Single Limit_x' : 'Other Than Zone-Rated', 'Combined Single Limit_y' : 'Zone-Rated'})
 
         Rule98Table1.iloc[:,1:] = 1 - Rule98Table1.iloc[:,1:]
+        Rule98Table1 = Rule98Table1.astype(object)
         Rule98Table1.iloc[:,:1] = Rule98Table1.iloc[:,:1].astype(int).map(lambda x: "{:,}".format(x)) # Deductible Commas
+        Rule98Table1 = Rule98Table1.astype(object)
         Rule98Table1.iloc[:, 1:] = Rule98Table1.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}") # 3 Place float factors
         Rule98Table1.fillna("NA", inplace = True)
         Rule98Table1.replace({"nan" : "NA"}, inplace=True)
@@ -2543,6 +2577,7 @@ class Auto:
         output_table['Deductible'] = output_table['Deductible'].apply(lambda x: int(x.replace(',', '')))
         output_table.sort_values(by='Deductible', inplace=True)
         output_table.dropna(subset=output_table.columns[2:], how='all', inplace=True)
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         # Put the commas back in the Deductible column
@@ -2650,6 +2685,7 @@ class Auto:
         output_table['Deductible'] = output_table['Deductible'].apply(lambda x: int(x.replace(',', '')))
         output_table.sort_values(by='Deductible', inplace=True)
         output_table.dropna(subset=output_table.columns[2:], how='all', inplace=True)
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         # Put the commas back in the Deductible column
@@ -2759,6 +2795,7 @@ class Auto:
         output_table.sort_values(by='Deductible Amount', inplace=True)
         output_table.rename(columns = {"Deductible Amount" : "Deductible"}, inplace = True)
         output_table.dropna(subset=output_table.columns[2:], how='all', inplace=True)
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         # Put the commas back in the Deductible column
@@ -2795,6 +2832,7 @@ class Auto:
             lambda x: f"{x:,.0f}" if pd.notna(x) else ""
         )
 
+        factor_table = factor_table.astype(object)
         factor_table.iloc[:, 1:] = factor_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         factor_table = factor_table[factor_table["Deductible"] != "100"]
 
@@ -2820,6 +2858,7 @@ class Auto:
         output_table["$250/1,000"] = [factor_fire] + [factor_250_500] * 4
         output_table["$500/2,500"] = [factor_fire] + [factor_500_1000] * 4
 
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         output_table.fillna("NA", inplace = True)
 
@@ -2838,6 +2877,7 @@ class Auto:
             output_table[col] = pd.to_numeric(output_table[col], errors='coerce')
 
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:] * factor
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         output_table.fillna("NA", inplace = True)
 
@@ -2922,6 +2962,7 @@ class Auto:
         Motorcycles1 = pd.DataFrame(self.rateTables[company]['SpecialTypesMotorcycleLiabilityFactor'][1:], index=None, columns=self.rateTables[company]['SpecialTypesMotorcycleLiabilityFactor'][0])
         #Motorcycles1 = self.buildDataFrame("SpecialTypesMotorcycleLiabilityFactor")
         Motorcycles1 = Motorcycles1.rename(columns={'EngineSize' : 'Engine Size (cc)'})
+        Motorcycles1 = Motorcycles1.astype(object)
         Motorcycles1.iloc[:, 1:] = Motorcycles1.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Motorcycles1
 
@@ -2932,6 +2973,7 @@ class Auto:
         Motorcycles2 = pd.DataFrame(self.rateTables[company]['SpecialTypesMotorcycleFactor'][1:], index=None, columns=self.rateTables[company]['SpecialTypesMotorcycleFactor'][0])
         #Motorcycles2 = self.buildDataFrame("SpecialTypesMotorcycleFactor")
         Motorcycles2 = Motorcycles2.query(f'TypeCoverage == "UM/UIM"').rename(columns={'TypeCoverage' : 'Coverage'}).replace({'Coverage' : {'UM/UIM' : 'UM'}})
+        Motorcycles2 = Motorcycles2.astype(object)
         Motorcycles2.iloc[:, 1:] = Motorcycles2.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Motorcycles2
 
@@ -2942,6 +2984,7 @@ class Auto:
         Motorcycles3 = pd.DataFrame(self.rateTables[company]['SpecialTypesMotorcycleFactor'][1:], index=None, columns=self.rateTables[company]['SpecialTypesMotorcycleFactor'][0])
         #Motorcycles3 = self.buildDataFrame("SpecialTypesMotorcycleFactor")
         Motorcycles3 = Motorcycles3.query(f'TypeCoverage == "MedicalPayments"').rename(columns={'TypeCoverage' : 'Coverage'}).replace({'Coverage' : {'MedicalPayments' : 'Med'}})
+        Motorcycles3 = Motorcycles3.astype(object)
         Motorcycles3.iloc[:, 1:] = Motorcycles3.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Motorcycles3
 
@@ -2952,6 +2995,7 @@ class Auto:
         Motorcycles4 = pd.DataFrame(self.rateTables[company]['SpecialTypesMotorcycleFactor'][1:], index=None, columns=self.rateTables[company]['SpecialTypesMotorcycleFactor'][0])
         #Motorcycles4 = self.buildDataFrame("SpecialTypesMotorcycleFactor")
         Motorcycles4 = Motorcycles4.query(f'TypeCoverage == "PhysDamOTCACV" | TypeCoverage == "PhysDamCollACV"').rename(columns={'TypeCoverage' : 'Coverage'}).replace({'Coverage' : {'PhysDamOTCACV' : 'Comp', 'PhysDamCollACV' : 'Coll'}})
+        Motorcycles4 = Motorcycles4.astype(object)
         Motorcycles4.iloc[:, 1:] = Motorcycles4.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Motorcycles4
 
@@ -2962,6 +3006,7 @@ class Auto:
         Motorcycles5 = pd.DataFrame(self.rateTables[company]['SpecialTypesMotorcycleFactor'][1:], index=None, columns=self.rateTables[company]['SpecialTypesMotorcycleFactor'][0])
         #Motorcycles5 = self.buildDataFrame("SpecialTypesMotorcycleFactor")
         Motorcycles5 = Motorcycles5.query(f'TypeCoverage == "PhysDamOTCSA" | TypeCoverage == "PhysDamCollSA"').rename(columns={'TypeCoverage' : 'Coverage'}).replace({'Coverage' : {'PhysDamOTCSA' : 'Comp', 'PhysDamCollSA' : 'Coll'}})
+        Motorcycles5 = Motorcycles5.astype(object)
         Motorcycles5.iloc[:, 1:] = Motorcycles5.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Motorcycles5
 
@@ -3081,6 +3126,7 @@ class Auto:
         result['Limit'] = result['Limit'].str.replace(',', '').astype(int)
         result = result.sort_values(by='Limit')
         result['Limit'] = result['Limit'].apply(lambda x: f"{x:,}")
+        result = result.astype(object)
         result.iloc[:, 1:] = result.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return result
@@ -3095,6 +3141,7 @@ class Auto:
         MedPaymentsZone = MedPaymentsZone.query(f'Limit != "No Coverage" & Limit != "500"').sort_values('Zone-Rated')
         MedPaymentsZoneFactor = MedPaymentsZone[MedPaymentsZone["Limit"] == "5,000"].iloc[0,1]
         MedPaymentsZone['Zone-Rated'] = MedPaymentsZone['Zone-Rated'] / MedPaymentsZoneFactor
+        MedPaymentsZone = MedPaymentsZone.astype(object)
         MedPaymentsZone.iloc[:, 1:] = MedPaymentsZone.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return MedPaymentsZone
@@ -3475,6 +3522,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3534,6 +3582,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3592,6 +3641,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3653,6 +3703,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3711,6 +3762,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3771,6 +3823,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3830,6 +3883,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3889,6 +3943,7 @@ class Auto:
         output_table = factor_table.rename(
             columns={"PriceBracket": "Price Bracket", "Factor": "All Stated Amount Vehicles"})
         output_table["Price Bracket"] = self.price_brackets
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -3924,7 +3979,9 @@ class Auto:
         #CorporalPunish2 = self.buildDataFrame("MiscellaneousMinimumMaximumPremium_Ext")
         CorporalPunish2 = CorporalPunish2.query(f'CoverageType == "CorporalPunishment_Ext"').filter(items=['CoverageType', 'Premium']).rename(columns={'CoverageType' : 'Limit', 'Premium' : 'BaseRate'})
         CorporalPunish = pd.concat([CorporalPunish1, CorporalPunish2]).replace({'Limit' : {'CorporalPunishment_Ext' : 'Minimum Premium'}})
+        CorporalPunish = CorporalPunish.astype(object)
         CorporalPunish.iloc[:2,1:] = CorporalPunish.iloc[:2,1:].astype(float).map(lambda x: f"{x:.2f}")
+        CorporalPunish = CorporalPunish.astype(object)
         CorporalPunish.iloc[2:3,1:2] = CorporalPunish.iloc[2:3,1:2].astype(float).map(lambda x: f"{x:.0f}")
 
         MinPremFactor154 = pd.DataFrame(self.rateTables[company]['BroadFormSchoolBusOperatorsCoverageFactor_Ext'][1:], index=None, columns=self.rateTables[company]['BroadFormSchoolBusOperatorsCoverageFactor_Ext'][0])
@@ -4060,6 +4117,7 @@ class Auto:
             output_table = output_table[output_table['Coverage'] != "PIP"]
         if self.StateAbb in self.no_med_states.values:
             output_table = output_table[output_table['Coverage'] != "Med"]
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4075,6 +4133,7 @@ class Auto:
             output_table = output_table[output_table['Coverage'] != "PIP"]
         if self.StateAbb in self.no_med_states.values:
             output_table = output_table[output_table['Coverage'] != "Med"]
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4086,6 +4145,7 @@ class Auto:
         replace_values = ['']
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: 'Factor'})
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4102,6 +4162,7 @@ class Auto:
             output_table = output_table[output_table['Coverage'] != "PIP"]
         if self.StateAbb in self.no_med_states.values:
             output_table = output_table[output_table['Coverage'] != "Med"]
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4117,6 +4178,7 @@ class Auto:
             output_table = output_table[output_table['Coverage'] != "PIP"]
         if self.StateAbb in self.no_med_states.values:
             output_table = output_table[output_table['Coverage'] != "Med"]
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4128,6 +4190,7 @@ class Auto:
         replace_values = ['']
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: 'Factor'})
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4142,6 +4205,7 @@ class Auto:
         LeasingOrRentalConcernsFactors['VehicleType'].replace('Truck', 'Trucks, Tractors and Trailers', inplace=True)
         LeasingOrRentalConcernsFactors.rename(columns={'VehicleType': 'Vehicle Type', 'UM/UIM': 'Base Premium', 'BasePremium': 'Base Premium'}, inplace = True)
 
+        LeasingOrRentalConcernsFactors = LeasingOrRentalConcernsFactors.astype(object)
         LeasingOrRentalConcernsFactors.iloc[:, 1:] = LeasingOrRentalConcernsFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.0f}")
 
         return LeasingOrRentalConcernsFactors
@@ -4379,6 +4443,7 @@ class Auto:
         MobileHomeFactors = MobileHomeFactors[["Class Code", "Class Description","Liability","PhysDamCollSA","UM/UIM"]]
         MobileHomeFactors = MobileHomeFactors.rename(columns={'PhysDamCollSA':'Physical Damage','UM/UIM':'All Other Coverages'})
         MobileHomeFactors.drop(columns = ["Class Description"], inplace = True)
+        MobileHomeFactors = MobileHomeFactors.astype(object)
         MobileHomeFactors.iloc[:, 1:] = MobileHomeFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return MobileHomeFactors
@@ -4402,6 +4467,7 @@ class Auto:
                           'Specified Causes of Loss Including Theft (Includes Theft)']
 
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, 'Coverage', orig_values,replace_values, filter_values=orig_values)
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4467,6 +4533,7 @@ class Auto:
             except (ValueError, TypeError):
                 return x
 
+        HiredAutoPDFactors = HiredAutoPDFactors.astype(object)
         HiredAutoPDFactors.iloc[:-1, 1:] = HiredAutoPDFactors.iloc[:-1, 1:].map(safe_format)
 
         return HiredAutoPDFactors
@@ -4483,6 +4550,7 @@ class Auto:
         #BusinessInterruptionCollFactors = self.buildDataFrame("BusinessInterruptionCoverageCollisionBaseLossCost").rename(columns={'BasePremium': 'Collision'})
         BusinessInterruptionFactors = pd.merge(BusinessInterruptionCompFactors, BusinessInterruptionSpecifiedCauseFactors, on='BusinessIncomeCoverageType', how='inner')
         BusinessInterruptionFactors = pd.merge(BusinessInterruptionFactors,BusinessInterruptionCollFactors,on='BusinessIncomeCoverageType', how='inner').rename(columns={'BusinessIncomeCoverageType': 'Covered Causes Of Loss Option'})
+        BusinessInterruptionFactors = BusinessInterruptionFactors.astype(object)
         BusinessInterruptionFactors.iloc[:, 1:] = BusinessInterruptionFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.2f}")
 
         return BusinessInterruptionFactors
@@ -4492,6 +4560,7 @@ class Auto:
     def buildExtendedBusinessFactors(self, company):
         ExtendedBusinessFactors = pd.DataFrame(self.rateTables[company]['ExtendedBusinessIncomeAdditionalCoverageFactor'][1:], index=None, columns=self.rateTables[company]['ExtendedBusinessIncomeAdditionalCoverageFactor'][0]).rename(columns={'ExtendedBusinessIncomeAdditionalCoverageNumberOfDays': 'Number of Days'})
         #ExtendedBusinessFactors = self.buildDataFrame("ExtendedBusinessIncomeAdditionalCoverageFactor").rename(columns={'ExtendedBusinessIncomeAdditionalCoverageNumberOfDays': 'Number of Days'})
+        ExtendedBusinessFactors = ExtendedBusinessFactors.astype(object)
         ExtendedBusinessFactors.iloc[:, 1:] = ExtendedBusinessFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return ExtendedBusinessFactors
 
@@ -4499,6 +4568,7 @@ class Auto:
     def buildWaitingBusinessFactors(self, company):
         WaitingBusinessFactors = pd.DataFrame(self.rateTables[company]['BusinessIncomeCoverageWaitingPeriodFactor'][1:], index=None, columns=self.rateTables[company]['BusinessIncomeCoverageWaitingPeriodFactor'][0]).rename(columns={'BusinessIncomeCoverageWaitingPeriod': 'Duration for Waiting Period'})
         #WaitingBusinessFactors = self.buildDataFrame("BusinessIncomeCoverageWaitingPeriodFactor").rename(columns={'BusinessIncomeCoverageWaitingPeriod': 'Duration for Waiting Period'})
+        WaitingBusinessFactors = WaitingBusinessFactors.astype(object)
         WaitingBusinessFactors.iloc[:, 1:] = WaitingBusinessFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return WaitingBusinessFactors
@@ -4535,6 +4605,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A1 = Table101A1[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A1 = Table101A1.astype(object)
         Table101A1.iloc[:, 1:] = Table101A1.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Table101A1
 
@@ -4558,6 +4629,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A2 = Table101A2[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A2 = Table101A2.astype(object)
         Table101A2.iloc[:, 1:] = Table101A2.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Table101A2
@@ -4582,6 +4654,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A3 = Table101A3[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A3 = Table101A3.astype(object)
         Table101A3.iloc[:, 1:] = Table101A3.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Table101A3
@@ -4606,6 +4679,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A4 = Table101A4[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A4 = Table101A4.astype(object)
         Table101A4.iloc[:, 1:] = Table101A4.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Table101A4
@@ -4630,6 +4704,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A5 = Table101A5[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A5 = Table101A5.astype(object)
         Table101A5.iloc[:, 1:] = Table101A5.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Table101A5
@@ -4655,6 +4730,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A1 = Table101A1[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A1 = Table101A1.astype(object)
         Table101A1.iloc[:, 1:] = Table101A1.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Table101A1
 
@@ -4678,6 +4754,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A2 = Table101A2[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A2 = Table101A2.astype(object)
         Table101A2.iloc[:, 1:] = Table101A2.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Table101A2
@@ -4702,6 +4779,7 @@ class Auto:
                                                                         450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
                                                                         900000 : "900,000+"}})
         Table101A3 = Table101A3[['Price Bracket', 'Current Model Year', 'First Preceding Model Year','2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th', '17th', '18th', '19th', '20th', '21st', '22nd', '23rd', '24th', '25th', '26th', '27th and older' ]]
+        Table101A3 = Table101A3.astype(object)
         Table101A3.iloc[:, 1:] = Table101A3.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return Table101A3
@@ -4728,6 +4806,7 @@ class Auto:
                                    'Heavy Truck-Tractor', 'Light Truck', 'Medium Truck',
                                    'Private Passenger Types', 'Semitrailer', 'Service or Utility Trailer',
                                    'Trailer']]
+        Table101A1 = Table101A1.astype(object)
         Table101A1.iloc[:, 1:] = Table101A1.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         return Table101A1
 
@@ -4737,6 +4816,7 @@ class Auto:
         orig_values = ['Trucks, Tractors, And Trailers','Private Passenger Types']
         replace_values = ['Trucks, Tractors, And Trailers', 'Private Passenger Types']
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, 'All Ages', orig_values,replace_values, filter_values=orig_values)
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -4752,6 +4832,7 @@ class Auto:
         table["AgeGroup"] = table["AgeGroup"].astype(int)
         table = table.rename(columns={'AgeGroup' : 'Vehicle Age'})
         table["Vehicle Age"] = table["Vehicle Age"].replace({1 : 'Current Model Year', 2 : 'First Preceding Model Year', 3 : '2nd', 4 : '3rd', 5 : '4th', 6 : '5th', 7 : '6th', 8 : '7th', 9 : '8th', 10 : '9th', 11 : '10th', 12 : '11th', 13 : '12th', 14 : '13th', 15 : '14th', 16 : '15th', 17 : '16th', 18 : '17th', 19 : '18th', 20 : '19th', 21 : '20th', 22 : '21st', 23 : '22nd', 24 : '23rd', 25 : '24th', 26 : '25th', 27 : '26th', 28 : '27th and older'})
+        table = table.astype(object)
         table.iloc[:, 1:] = table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return table
@@ -4775,6 +4856,7 @@ class Auto:
         category_order = ['Without Auto Protection', 'Auto Protection Plus', 'Auto Protection Gold', 'Platinum']
         FellowEmployeeFactors['Option'] = pd.Categorical(FellowEmployeeFactors['Option'], categories=category_order, ordered=True)
         FellowEmployeeFactors = FellowEmployeeFactors.sort_values('Option')
+        FellowEmployeeFactors = FellowEmployeeFactors.astype(object)
         FellowEmployeeFactors.iloc[:3, 1:] = FellowEmployeeFactors.iloc[:3, 1:].map(lambda x: f"{x:.2f}")
 
         return FellowEmployeeFactors
@@ -4835,6 +4917,7 @@ class Auto:
 
         ILF = ILF[ILF['Combined Single Limit of Liability'].isin(limits_list)]
 
+        ILF = ILF.astype(object)
         ILF.iloc[:, 1:] = ILF.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return ILF
@@ -4880,6 +4963,7 @@ class Auto:
         if self.StateAbb in self.no_med_states.values:
             DriveOtherFactors = DriveOtherFactors[DriveOtherFactors["Coverage"] != "Medical"]
 
+        DriveOtherFactors = DriveOtherFactors.astype(object)
         DriveOtherFactors.iloc[:,1:] = DriveOtherFactors.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return DriveOtherFactors
@@ -4891,6 +4975,7 @@ class Auto:
         RentalFactors = pd.DataFrame(self.rateTables[company]['RentalReimbursementFactor'][1:], index=None, columns=self.rateTables[company]['RentalReimbursementFactor'][0])
         RentalFactors.iloc[:,1] = RentalFactors.iloc[:,1]
         RentalFactors = RentalFactors.rename(columns={'CoverageIndicator': '','Factor': ''})
+        RentalFactors = RentalFactors.astype(object)
         RentalFactors.iloc[:,1:] = RentalFactors.iloc[:,1:].map(lambda x: f"{x:.2f}")
 
         return RentalFactors
@@ -4904,6 +4989,7 @@ class Auto:
         #AudioFactors = self.buildDataFrame("AudioVisualDataEquipmentBasePremium2")
         AudioFactors = AudioFactors.rename(columns={'CostOfNew': 'Cost of Equipment', 'Premium': 'Rate'}) \
             .sort_values(by=['Rate'])
+        AudioFactors = AudioFactors.astype(object)
         AudioFactors.iloc[:, 1:] = AudioFactors.iloc[:, 1:].map(lambda x: f"{x:.0f}")
 
         return AudioFactors
@@ -4915,6 +5001,7 @@ class Auto:
         TapeFactors = pd.DataFrame(self.rateTables[company]['TapesRecordsAndDiscsBasePremium'][1:], index=None, columns=self.rateTables[company]['TapesRecordsAndDiscsBasePremium'][0])
         #TapeFactors = self.buildDataFrame("TapesRecordsAndDiscsBasePremium")
         TapeFactors = TapeFactors.rename(columns={'BasePremium': 'Premium per auto:'}).drop(columns='Constant')
+        TapeFactors = TapeFactors.astype(object)
         TapeFactors.iloc[:, 1:] = TapeFactors.iloc[:, 1:].map(lambda x: f"{x:.2f}")
 
         return TapeFactors
@@ -4974,6 +5061,7 @@ class Auto:
         SnowMobileOtherFactors['Premium'] = "Use PPT Rates"
         SnowMobileFactors = pd.concat([SnowMobileLiabFactors, SnowMobileMedFactors,SnowMobileOTCFactors,SnowMobileCollFactors,SnowMobileOtherFactors])
 
+        SnowMobileFactors = SnowMobileFactors.astype(object)
         SnowMobileFactors.iloc[:-1,1:] = SnowMobileFactors.iloc[:-1,1:].astype(float).map(lambda x: f"{x:.2f}")
 
         return SnowMobileFactors
@@ -5017,6 +5105,7 @@ class Auto:
             output_table = output_table[output_table['Coverage'] != "PIP"]
         if self.StateAbb in self.no_med_states.values:
             output_table = output_table[output_table['Coverage'] != "Medical"]
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -5060,6 +5149,7 @@ class Auto:
         if self.StateAbb in self.no_med_states.values:
             output_table = output_table[output_table['Coverage'] != "Medical"]
 
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -5085,6 +5175,7 @@ class Auto:
         output_table = pd.merge(mobile_table, farm_table, on="TypeCoverage", how="left")
         output_table.columns = ["Coverage", "Mobile Equipment", "Farm Equipment"]
 
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6365,11 +6456,13 @@ class Auto:
                                                     replace_values, filter_values=orig_values)
         table = table.rename(columns={table.columns[0]: 'Coverage', table.columns[1]: 'Factor'})
 
+        table = table.astype(object)
         table.iloc[:,1:] = table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         # UM is hardcoded to be 1 in the old pages, so it is here too
         um_table = pd.DataFrame({'Coverage': ['UM:'],'Factor': ['1']})
         um_table = um_table.rename(columns={um_table.columns[0]: 'Coverage', um_table.columns[1]: 'Factor'})
+        um_table = um_table.astype(object)
         um_table.iloc[:,1:] = um_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         output_table = pd.concat([table,um_table], ignore_index=True)
@@ -6384,6 +6477,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.0f}")
 
         return output_table
@@ -6396,6 +6490,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6408,6 +6503,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6422,6 +6518,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6435,6 +6532,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6447,6 +6545,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6459,6 +6558,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6471,6 +6571,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6484,6 +6585,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ''})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.2f}")
 
         return output_table
@@ -6521,6 +6623,7 @@ class Auto:
             'Fee': ''
         })
 
+        final_df = final_df.astype(object)
         final_df.iloc[:, 1:] = final_df.iloc[:, 1:].astype(float).map(lambda x: f"{x:.2f}")
 
         return final_df
@@ -6558,6 +6661,7 @@ class Auto:
             'Fee': ''
         })
 
+        final_df = final_df.astype(object)
         final_df.iloc[:, 1:] = final_df.iloc[:, 1:].astype(float).map(lambda x: f"{x:.2f}")
 
         return final_df
@@ -6569,6 +6673,7 @@ class Auto:
 
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, 'Coverage', orig_values, replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ''})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.2f}")
 
         return output_table
@@ -6596,6 +6701,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: 'Passive Restraint System', output_table.columns[1]: 'Factor'})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6608,6 +6714,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -6626,6 +6733,7 @@ class Auto:
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,
                                                     replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: ' '})
+        output_table = output_table.astype(object)
         output_table.iloc[:,1:] = output_table.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
@@ -10434,6 +10542,7 @@ class Auto:
         if self.StateAbb in self.no_med_states.values:
             data = data[data["Coverage"] != "Medical"]
 
+        data = data.astype(object)
         data.iloc[:,1:] = data.iloc[:,1:].astype(float).map(lambda x: f"{x:.3f}")
 
         tables = [data]

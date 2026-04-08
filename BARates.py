@@ -4957,7 +4957,7 @@ class Auto:
         # Filtering state specific coverages
         um_info = pd.read_excel(BA_INPUT_FILE, sheet_name = "297 Map")
         um_info = um_info[um_info["State"] == self.StateAbb]
-        combined_text = um_info.astype(str).apply(lambda x: ' '.join(x), axis=1).str.cat(sep=' ').lower()
+        combined_text = um_info.apply(lambda x: ' '.join(str(v) for v in x), axis=1).str.cat(sep=' ').lower()
 
         UM_flag = "uninsured" in combined_text
         UIM_flag = "underinsured" in combined_text
@@ -10531,7 +10531,7 @@ class Auto:
         um_info = pd.read_excel(BA_INPUT_FILE, sheet_name = "297 Map")
         um_info = um_info[um_info["State"] == self.StateAbb]
 
-        combined_text = um_info.astype(str).apply(lambda x: ' '.join(x), axis=1).str.cat(sep=' ').lower()
+        combined_text = um_info.apply(lambda x: ' '.join(str(v) for v in x), axis=1).str.cat(sep=' ').lower()
 
         UM_flag = "uninsured" in combined_text
         UIM_flag = "underinsured" in combined_text

@@ -17,6 +17,7 @@ import copy
 
 from config.constants import BA_INPUT_FILE
 
+
 # Define custom warning classes. Makes custom warnings when key functions fail more user friendly.
 # Search up the warning names to see use cases if interested.
 class PIPWarning(UserWarning):
@@ -134,6 +135,7 @@ class Auto:
                 # Filter the rows to only include the row with the key '<company_code>_ext' in the UnderwritingCompanyCode column
                 company_specific_dev = company_dev[company_dev['UnderwritingCompanyCode'] == f'{company_code.lower()}_ext']
 
+
                 # Check that code only runs for MM companies that are present
                 if not company_specific_dev.empty:
                     # Update the CompanyDeviationFactor_Ext sheet in the company table
@@ -150,6 +152,7 @@ class Auto:
         else:
             for company_code in company_codes:
                 self.rateTables[company_code] = None
+
 
     # Builds a dataframe for the given table code
     # The hierarchy is as follows: NGIC > Migration > CW
@@ -172,6 +175,7 @@ class Auto:
         #if tableCode in self.rateTables['NAICS'].keys(): # Checking if NAICS Table
         #    return pd.DataFrame(data=self.rateTables['NAICS'][tableCode][1:], index=None, columns=self.rateTables['NAICS'][tableCode][0])
         return pd.DataFrame(data=self.rateTables['CW'][tableCode][1:], index=None, columns=self.rateTables['CW'][tableCode][0]) # Returning the country-wide table if it wasn't found in any other company
+
 
     def process_ratebook(self, name, rateTables):
         # Nesting protocol. Assign books to levels. If a lower level doesn't have a sheet, take it from the higher level.
@@ -398,6 +402,7 @@ class Auto:
 
         return ExpenseConstant.filter(items=['Rate'])
 
+
     def simple_long_table_build(self, rate_tables, company, sheet_names, new_column_name, orig_values, replace_values, filter_values=None):
         """
         Processes multiple sheets from a rate table, renames the first column, replaces values, and concatenates the results.
@@ -464,6 +469,7 @@ class Auto:
             tables.append(table)
         output_table = pd.concat(tables)
         return output_table
+
 
     # Builds the general Base Rate table
     # Returns a dataframe
@@ -823,6 +829,7 @@ class Auto:
                 output_table[liability_col] * npobe_factors
             )
 
+
         for column in output_table.columns:
             if output_table[column].dtype == 'float64' or output_table[column].dtype == 'int64':
                 output_table[column] = output_table[column].apply(lambda x: f"{x:.2f}")
@@ -830,6 +837,7 @@ class Auto:
         # Replacing 0's with NAs. Mainly for taxi pip.
         output_table = output_table.map(lambda x: "NA" if isinstance(x, (int, float)) and (abs(x) < 1e-6) else x)
         output_table = output_table.map(lambda x: "NA" if x == "0.00" else x)
+
 
         return output_table
 
@@ -872,6 +880,7 @@ class Auto:
         TTTSCoLFleetFactors = TTTSCoLFleetFactors.query(f'VehicleType == "Trucks, Tractors And Trailers"').drop(columns='VehicleType').rename(columns={'Factor' : 'Other Than Collision (All Vehicle Types)'})
         TTTCollFleetFactors = pd.merge(TTTCollTruckFleetFactors, TTTCollTrailerFleetFactors, on = 'NumberOfPoweredVehicles', how = 'inner')
         TTTFleetFactors = pd.merge(TTTCollFleetFactors, TTTSCoLFleetFactors, on = 'NumberOfPoweredVehicles', how = 'inner').rename(columns={'NumberOfPoweredVehicles' : 'Number of Powered Vehicles', 'Commercial' : 'Commercial Use', 'Not Applicable_x' : 'Extra-Heavy Vehicles (All Uses)', 'Retail': 'Retail Use', 'Service' : 'Service Use', 'Not Applicable_y' : 'Trailer Types'}).filter(items=['Number of Powered Vehicles', 'Service Use', 'Retail Use', 'Commercial Use', 'Extra-Heavy Vehicles (All Uses)', 'Trailer Types', 'Other Than Collision (All Vehicle Types)'])
+
 
         TTTFleetFactors["Number of Powered Vehicles"] = self.self_propelled_vehicles
         TTTFleetFactors = TTTFleetFactors.drop(columns = 'Other Than Collision (All Vehicle Types)') # This is for ISO Currency where it has been moved to the below table.
@@ -1011,6 +1020,7 @@ class Auto:
 
             TTTPrimaryFactorsLiab = pd.DataFrame(self.rateTables[company]['ZoneRatedLiabilityPrimaryFactorNumeric'][1:], index=None, columns=self.rateTables[company]['ZoneRatedLiabilityPrimaryFactorNumeric'][0]).query(f'TruckPrimaryClassCodeNumeric == 213 | TruckPrimaryClassCodeNumeric == 223 | TruckPrimaryClassCodeNumeric == 233 | TruckPrimaryClassCodeNumeric == 313 | TruckPrimaryClassCodeNumeric == 323 | TruckPrimaryClassCodeNumeric == 333 | TruckPrimaryClassCodeNumeric == 403 | TruckPrimaryClassCodeNumeric == 343 | TruckPrimaryClassCodeNumeric == 353 | TruckPrimaryClassCodeNumeric == 363 | TruckPrimaryClassCodeNumeric == 503 | TruckPrimaryClassCodeNumeric == 673 | TruckPrimaryClassCodeNumeric == 683 |TruckPrimaryClassCodeNumeric == 693')
             TTTPrimaryFactorsOTC = pd.DataFrame(self.rateTables[company]['ZoneRatedPhysicalDamagePrimaryFactorNumeric'][1:], index=None, columns=self.rateTables[company]['ZoneRatedPhysicalDamagePrimaryFactorNumeric'][0]).query(f'TruckPrimaryClassCodeNumeric == 213 | TruckPrimaryClassCodeNumeric == 223 | TruckPrimaryClassCodeNumeric == 233 | TruckPrimaryClassCodeNumeric == 313 | TruckPrimaryClassCodeNumeric == 323 | TruckPrimaryClassCodeNumeric == 333 | TruckPrimaryClassCodeNumeric == 403 | TruckPrimaryClassCodeNumeric == 343 | TruckPrimaryClassCodeNumeric == 353 | TrucskPrimaryClassCodeNumeric == 363 | TruckPrimaryClassCodeNumeric == 503 | TruckPrimaryClassCodeNumeric == 673 | TruckPrimaryClassCodeNumeric == 683 |TruckPrimaryClassCodeNumeric == 693')
+
 
             TTTPrimaryFactorsLiab.loc[
                 TTTPrimaryFactorsLiab['TruckPrimaryClassCodeNumeric'] == 213, 'Class (Non-Fleet, Fleet)'] = '213, 216'
@@ -1271,6 +1281,7 @@ class Auto:
 
         return SecondaryFactors
 
+
     # Builds the Zone Base Rate table
     # Returns a dataframe
     @log_exceptions
@@ -1328,6 +1339,7 @@ class Auto:
         except (KeyError, IndexError):
             pass
 
+
         master_table_list = [] # List of unjoined tables: [[Zone1Liab, Zone1Coll],[Zone2liab,Zone2Coll]]
         zones = liabTable["GaragingZone"].unique()
         for zone in zones:
@@ -1361,6 +1373,7 @@ class Auto:
         # Attempting to build med factor
         med_factor = None
         pip_factor = None
+
 
         if self.StateAbb in self.no_med_states["states"].values:
             # Michigan has the sheet but not any values.
@@ -1396,10 +1409,12 @@ class Auto:
                 if pip_factor[column].dtype == 'float64' or pip_factor[column].dtype == 'int64':
                     pip_factor[column] = pip_factor[column].apply(lambda x: f"{x:.3f}")
 
+
         for output_table in output_tables:
             for column in output_table.columns:
                 if output_table[column].dtype == 'float64' or output_table[column].dtype == 'int64':
                     output_table[column] = output_table[column].apply(lambda x: f"{x:.2f}")
+
 
         return_dict = {"Zones" : zones,
                        "Output Tables" : output_tables,
@@ -1407,6 +1422,7 @@ class Auto:
                        "Pip Factor" : pip_factor}
 
         return return_dict
+
 
     # Builds the Showroom Factors table
     # Returns a dataframe
@@ -1496,6 +1512,7 @@ class Auto:
         ShowRoom4Factors = pd.concat([ShowRoom4firstFactors, ShowRoom4secondFactors])
         return ShowRoom4Factors
 
+
     # Builds the Auto Layup Factors table
     # Returns a dataframe
     @log_exceptions
@@ -1513,6 +1530,16 @@ class Auto:
         LayupFactors.iloc[:, 1:] = LayupFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return LayupFactors
+
+    # Builds the PPT NAICS table
+    # Returns a dataframe
+    @log_exceptions
+    def buildPPTNAICSFactors(self, company):
+        NAICSReference = pd.DataFrame(data=self.NAICSDescriptions).astype({'NAICS Six-Digit Code': 'int64'})
+        NAICSCoverages = pd.DataFrame(self.rateTables[company]['NAICSFactors_Ext'][1:], index=None, columns=self.rateTables[company]['NAICSFactors_Ext'][0]).pivot(index='NAICSCode', columns='VehicleAndCoverageType', values='Factor').reset_index('NAICSCode').rename(columns={'NAICSCode' : 'NAICS Six-Digit Code'}).filter(items=['NAICS Six-Digit Code', 'NAICS Category', 'Private Passenger Types Liability', 'Private Passenger Types Collision', 'Private Passenger Types Comprehensive']).astype({'NAICS Six-Digit Code': 'int64'})
+        #NAICSCoverages = self.buildDataFrame("NAICSFactors_Ext").pivot(index='NAICSCode', columns='VehicleAndCoverageType', values='Factor').reset_index('NAICSCode').rename(columns={'NAICSCode' : 'NAICS Six-Digit Code'}).filter(items=['NAICS Six-Digit Code', 'NAICS Category', 'Private Passenger Types Liability', 'Private Passenger Types Collision', 'Private Passenger Types Comprehensive']).astype({'NAICS Six-Digit Code': 'int64'})
+        PPTNAICSFactors = pd.merge(NAICSReference, NAICSCoverages, on = 'NAICS Six-Digit Code', how = 'inner')
+        return PPTNAICSFactors
 
     # Builds the PPT Liability Fleet Size Factors table
     # Returns a dataframe
@@ -1646,6 +1673,7 @@ class Auto:
         publicPrimaryLiab = pd.DataFrame(self.rateTables[company]['PublicTransportationLiabilityPrimaryFactor'][1:], index=None, columns=self.rateTables[company]['PublicTransportationLiabilityPrimaryFactor'][0]).rename(columns={'Factor' : 'Liability'})
         publicPrimaryPhys = pd.DataFrame(self.rateTables[company]['PublicTransportationPhysicalDamagePrimaryFactor'][1:], index=None, columns=self.rateTables[company]['PublicTransportationPhysicalDamagePrimaryFactor'][0]).rename(columns={'Factor' : 'Physical Damage'})
 
+
         non_fleet = [5718,5719,4118,4119,5178,615,625,635,515,525,535,545,555,565,645,655,4398,585,5728,5729,4128,4129,5278,616,626,636,516,526,536,546,556,566,646,656,4498,586,5738,5739,4138,4139,5378,617,627,637,5279,5379,5479,5579,5679,6479,6579,5879]
         fleet = [5748,5749,4218,4219,5478,618,628,638,518,528,538,548,558,568,648,658,4338,588,5758,5759,4228,4229,5578,619,629,639,519,529,539,549,559,569,649,659,4438,589,5768,5769,4238,4239,5678,610,620,630,5209,5309,5409,5509,5609,6409,6509,5809]
 
@@ -1759,6 +1787,8 @@ class Auto:
         ])
 
         return class_code_map
+
+
 
     # Builds the Driver Based Rating table
     # Returns a dataframe
@@ -2199,6 +2229,7 @@ class Auto:
 
             return final_df
 
+
         # Regular calcualtion for almost all states. Though MI was made a bit better,
         rate_table = pd.DataFrame(self.rateTables[company]['GarageDealersCollisionBlanketRate'][1:], index=None, columns=self.rateTables[company]['GarageDealersCollisionBlanketRate'][0])
         deduct_table = pd.DataFrame(self.rateTables[company]['GarageDealersCollisionBlanketDeductibleFactor'][1:], index=None, columns=self.rateTables[company]['GarageDealersCollisionBlanketDeductibleFactor'][0])
@@ -2247,6 +2278,7 @@ class Auto:
         data = pd.DataFrame({"Factor" : ["1.000"]})
 
         return data
+
 
     # Builds the Driver Based Rating table
     # Returns a dataframe
@@ -2481,6 +2513,7 @@ class Auto:
 
         factor_table = pd.DataFrame(self.rateTables[company]['PhysicalDamageDeductibleFactors_Ext'][1:], index=None, columns=self.rateTables[company]['PhysicalDamageDeductibleFactors_Ext'][0])
 
+
         # Function to clean the Factor column
         # Super weird bug, Factor column reads in "=Round(0.XXXXXXXXXX,3)" instead of the rounded float. This is a function to fix that.
         def clean_factor(value):
@@ -2537,6 +2570,7 @@ class Auto:
         otc_factors = pd.merge(otc_factors, otc_deduc_map, left_on='Deductible', right_on='Limit', how='inner').drop(columns = "Limit").rename(columns = {"Factor" : "OTC"})
         otc_fg_factors = pd.merge(otc_fg_factors, otc_fg_deduc_map, left_on='Deductible', right_on='Limit', how='inner').drop(columns = "Limit").rename(columns = {"Factor" : "OTC FG"})
 
+
         collision_factors['Collision'] = collision_factors['Collision'].astype(float).round(3) # Very weird things are happening...
         otc_factors['OTC'] = otc_factors['OTC'].astype(float).round(3)
         otc_fg_factors['OTC FG'] = otc_fg_factors['OTC FG'].astype(float).round(3)
@@ -2577,6 +2611,7 @@ class Auto:
         """Deductibles on this rule are very inconsistent state by state. Additionally, full glass states get an extra column."""
 
         factor_table = pd.DataFrame(self.rateTables[company]['PhysicalDamageDeductibleFactors_Ext'][1:], index=None, columns=self.rateTables[company]['PhysicalDamageDeductibleFactors_Ext'][0])
+
 
         # Function to clean the Factor column
         # Super weird bug, Factor column reads in "=Round(0.XXXXXXXXXX,3)" instead of the rounded float. This is a function to fix that.
@@ -2636,6 +2671,7 @@ class Auto:
         otc_factors = pd.merge(otc_factors, otc_deduc_map, left_on='Deductible', right_on='Limit', how='inner').drop(columns = "Limit").rename(columns = {"Factor" : "Comp All Perils"})
         otc_fg_factors = pd.merge(otc_fg_factors, otc_fg_deduc_map, left_on='Deductible', right_on='Limit', how='inner').drop(columns = "Limit").rename(columns = {"Factor" : "Comp All Perils FG"})
         spec_all_peril_factors = pd.merge(specified_all_perils_factors, otc_deduc_map, left_on='Deductible', right_on='Limit', how='inner').drop(columns = "Limit").rename(columns = {"Factor" : "Spec All Perils"})
+
 
         trucks_collision_factors['Truck-Tractor Collision'] = trucks_collision_factors['Truck-Tractor Collision'].astype(float).round(3)
         trailers_collision_factors['Trailer Collision'] = trailers_collision_factors['Trailer Collision'].astype(float).round(3)
@@ -2737,6 +2773,7 @@ class Auto:
         otc_deduc_map['Limit'] = otc_deduc_map['Limit'].apply(lambda x: "{:,}".format(x)) # Limit column loses it's commas for some reason, need to add back.
         otc_fg_deduc_map['Limit'] = otc_fg_deduc_map['Limit'].apply(lambda x: "{:,}".format(x)) # Limit column loses it's commas for some reason, need to add back.
 
+
         # Collision factors get inner joined -> drop unneeded new limits column ->  rename factor column -> repeat for remaining coverages.
         trucks_collision_factors = pd.merge(trucks_collision_factors, coll_deduc_map, left_on='Deductible Amount', right_on='Limit', how='inner').drop(columns = "Limit").rename(columns = {"Factor" : "Truck-Tractor Collision"})
         trailers_collision_factors = pd.merge(trailer_collision_factors, coll_deduc_map, left_on='Deductible Amount', right_on='Limit', how='inner').drop(columns = "Limit").rename(columns = {"Factor" : "Trailer Collision"})
@@ -2810,6 +2847,7 @@ class Auto:
         factor_table.iloc[:, 1:] = factor_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
         factor_table = factor_table[factor_table["Deductible"] != "100"]
 
+
         return factor_table
 
     @log_exceptions
@@ -2855,6 +2893,7 @@ class Auto:
         output_table.fillna("NA", inplace = True)
 
         return output_table
+
 
     # Builds the Driver Based Rating table
     # Returns a dataframe
@@ -3118,6 +3157,328 @@ class Auto:
 
         return MedPaymentsZone
 
+    # Builds RULE 101.A.4.a. TRUCKS AND TRUCK TRACTORS TYPE COLLISION VEHICLE AGE AND PRICE BRACKET FACTOR
+    # Returns a dataframe
+    @log_exceptions
+    def build101A11(self, company):
+        Table101PublicOTC = pd.DataFrame(
+            self.rateTables[company]['PublicTransportationOtherThanCollisionCostNewRelativity'][1:], index=None,
+            columns=self.rateTables[company]['PublicTransportationOtherThanCollisionCostNewRelativity'][0])
+        # Table101PublicOTC = self.buildDataFrame("PublicTransportationOtherThanCollisionCostNewRelativity")
+        Table101PublicOTC = Table101PublicOTC.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Other Than Collision'})
+        Table101PublicOTC = Table101PublicOTC.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                             6001: "6,001 to 8,000",
+                                                                             8001: "8,001 to 10,000",
+                                                                             10001: "10,001 to 15,000", \
+                                                                             15001: "15,001 to 20,000",
+                                                                             20001: "20,001 to 25,000",
+                                                                             25001: "25,001 to 40,000",
+                                                                             40001: "40,001 to 65,000",
+                                                                             65001: "65,001 to 90,000"}})
+
+        Table101PublicColl = pd.DataFrame(
+            self.rateTables[company]['PublicTransportationCollisionCostNewRelativity'][1:], index=None,
+            columns=self.rateTables[company]['PublicTransportationCollisionCostNewRelativity'][0])
+        # Table101PublicColl = self.buildDataFrame("PublicTransportationCollisionCostNewRelativity")
+        Table101PublicColl = Table101PublicColl.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Collision'})
+        Table101PublicColl = Table101PublicColl.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                               6001: "6,001 to 8,000",
+                                                                               8001: "8,001 to 10,000",
+                                                                               10001: "10,001 to 15,000", \
+                                                                               15001: "15,001 to 20,000",
+                                                                               20001: "20,001 to 25,000",
+                                                                               25001: "25,001 to 40,000",
+                                                                               40001: "40,001 to 65,000",
+                                                                               65001: "65,001 to 90,000"}})
+
+        Table101ZoneOTC = pd.DataFrame(self.rateTables[company]['ZoneRatedOtherThanCollisionCostNewRelativity'][1:],
+                                       index=None,
+                                       columns=self.rateTables[company]['ZoneRatedOtherThanCollisionCostNewRelativity'][
+                                           0])
+        Table101ZoneOTC = self.buildDataFrame("ZoneRatedOtherThanCollisionCostNewRelativity")
+        Table101ZoneOTC = Table101ZoneOTC.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Other Than Collision'})
+        Table101ZoneOTC = Table101ZoneOTC.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                         6001: "6,001 to 8,000",
+                                                                         8001: "8,001 to 10,000",
+                                                                         10001: "10,001 to 15,000", \
+                                                                         15001: "15,001 to 20,000",
+                                                                         20001: "20,001 to 25,000",
+                                                                         25001: "25,001 to 40,000",
+                                                                         40001: "40,001 to 65,000",
+                                                                         65001: "65,001 to 90,000"}})
+
+        Table101ZoneColl = pd.DataFrame(self.rateTables[company]['ZoneRatedCollisionCostNewRelativity'][1:], index=None,
+                                        columns=self.rateTables[company]['ZoneRatedCollisionCostNewRelativity'][0])
+        # Table101ZoneColl = self.buildDataFrame("ZoneRatedCollisionCostNewRelativity")
+        Table101ZoneColl = Table101ZoneColl.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Collision'})
+        Table101ZoneColl = Table101ZoneColl.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                           6001: "6,001 to 8,000",
+                                                                           8001: "8,001 to 10,000",
+                                                                           10001: "10,001 to 15,000", \
+                                                                           15001: "15,001 to 20,000",
+                                                                           20001: "20,001 to 25,000",
+                                                                           25001: "25,001 to 40,000",
+                                                                           40001: "40,001 to 65,000",
+                                                                           65001: "65,001 to 90,000"}})
+
+        Table101TTTOTC = pd.DataFrame(self.rateTables[company]['TruckOtherThanCollisionCostNewRelativity'][1:],
+                                      index=None,
+                                      columns=self.rateTables[company]['TruckOtherThanCollisionCostNewRelativity'][0])
+        # Table101TTTOTC = self.buildDataFrame("TruckOtherThanCollisionCostNewRelativity")
+        Table101TTTOTC = Table101TTTOTC.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Other Than Collision'})
+        Table101TTTOTC = Table101TTTOTC.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                       6001: "6,001 to 8,000", 8001: "8,001 to 10,000",
+                                                                       10001: "10,001 to 15,000", \
+                                                                       15001: "15,001 to 20,000",
+                                                                       20001: "20,001 to 25,000",
+                                                                       25001: "25,001 to 40,000",
+                                                                       40001: "40,001 to 65,000",
+                                                                       65001: "65,001 to 90,000"}})
+
+        Table101TTTColl = pd.DataFrame(self.rateTables[company]['TruckCollisionCostNewRelativity'][1:], index=None,
+                                       columns=self.rateTables[company]['TruckCollisionCostNewRelativity'][0])
+        # Table101TTTColl = self.buildDataFrame("TruckCollisionCostNewRelativity")
+        Table101TTTColl = Table101TTTColl.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Collision'})
+        Table101TTTColl = Table101TTTColl.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                         6001: "6,001 to 8,000",
+                                                                         8001: "8,001 to 10,000",
+                                                                         10001: "10,001 to 15,000", \
+                                                                         15001: "15,001 to 20,000",
+                                                                         20001: "20,001 to 25,000",
+                                                                         25001: "25,001 to 40,000",
+                                                                         40001: "40,001 to 65,000",
+                                                                         65001: "65,001 to 90,000"}})
+
+        Table101PPTOTC = pd.DataFrame(
+            self.rateTables[company]['PrivatePassengerOtherThanCollisionCostNewRelativity'][1:], index=None,
+            columns=self.rateTables[company]['PrivatePassengerOtherThanCollisionCostNewRelativity'][0])
+        # Table101PPTOTC = self.buildDataFrame("PrivatePassengerOtherThanCollisionCostNewRelativity")
+        Table101PPTOTC = Table101PPTOTC.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Other Than Collision'})
+        Table101PPTOTC = Table101PPTOTC.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                       6001: "6,001 to 8,000", 8001: "8,001 to 10,000",
+                                                                       10001: "10,001 to 15,000", \
+                                                                       15001: "15,001 to 20,000",
+                                                                       20001: "20,001 to 25,000",
+                                                                       25001: "25,001 to 40,000",
+                                                                       40001: "40,001 to 65,000",
+                                                                       65001: "65,001 to 90,000"}})
+
+        Table101PPTColl = pd.DataFrame(self.rateTables[company]['PrivatePassengerCollisionCostNewRelativity'][1:],
+                                       index=None,
+                                       columns=self.rateTables[company]['PrivatePassengerCollisionCostNewRelativity'][
+                                           0])
+        # Table101PPTColl = self.buildDataFrame("PrivatePassengerCollisionCostNewRelativity")
+        Table101PPTColl = Table101PPTColl.rename(
+            columns={'OriginalCostNew': 'Original Cost New', 'Factor': 'Collision'})
+        Table101PPTColl = Table101PPTColl.replace({'Original Cost New': {0: "0 to 4,500", 4501: "4,501 to 6,000",
+                                                                         6001: "6,001 to 8,000",
+                                                                         8001: "8,001 to 10,000",
+                                                                         10001: "10,001 to 15,000", \
+                                                                         15001: "15,001 to 20,000",
+                                                                         20001: "20,001 to 25,000",
+                                                                         25001: "25,001 to 40,000",
+                                                                         40001: "40,001 to 65,000",
+                                                                         65001: "65,001 to 90,000"}})
+
+        Table101Public = pd.merge(Table101PublicOTC, Table101PublicColl, on='Original Cost New', how='inner')
+        Table101Zone = pd.merge(Table101ZoneOTC, Table101ZoneColl, on='Original Cost New', how='inner')
+        Table101TTT = pd.merge(Table101TTTOTC, Table101TTTColl, on='Original Cost New', how='inner')
+        Table101PPT = pd.merge(Table101PPTOTC, Table101PPTColl, on='Original Cost New', how='inner')
+
+        Table101PublicZone = pd.merge(Table101Public, Table101Zone, on='Original Cost New', how='inner')
+        Table101PublicZoneTTT = pd.merge(Table101PublicZone, Table101TTT, on='Original Cost New', how='inner')
+        Table101PublicZoneTTTPPT = pd.merge(Table101PublicZoneTTT, Table101PPT, on='Original Cost New', how='inner', suffixes= (f'x2', f'_y2'))
+
+        return Table101PublicZoneTTTPPT
+
+    # Builds RULE 101.A.4.a. TRUCKS AND TRUCK TRACTORS TYPE COLLISION VEHICLE AGE AND PRICE BRACKET FACTOR
+    # Returns a dataframe
+    @log_exceptions
+    def build101A12(self, company):
+        Table101PublicOTC = pd.DataFrame(
+            self.rateTables[company]['PublicTransportationOtherThanCollisionAgeGroupRelativity'][1:], index=None,
+            columns=self.rateTables[company]['PublicTransportationOtherThanCollisionAgeGroupRelativity'][0])
+        # Table101PublicOTC = self.buildDataFrame("PublicTransportationOtherThanCollisionAgeGroupRelativity")
+        Table101PublicOTC = Table101PublicOTC.rename(
+            columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Other Than Collision'})
+        Table101PublicOTC = Table101PublicOTC.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101PublicColl = pd.DataFrame(
+            self.rateTables[company]['PublicTransportationCollisionAgeGroupRelativity'][1:], index=None,
+            columns=self.rateTables[company]['PublicTransportationCollisionAgeGroupRelativity'][0])
+        # Table101PublicColl = self.buildDataFrame("PublicTransportationCollisionAgeGroupRelativity")
+        Table101PublicColl = Table101PublicColl.rename(columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Collision'})
+        Table101PublicColl = Table101PublicColl.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101ZoneOTC = pd.DataFrame(self.rateTables[company]['ZoneRatedOtherThanCollisionAgeGroupRelativity'][1:],
+                                       index=None, columns=
+                                       self.rateTables[company]['ZoneRatedOtherThanCollisionAgeGroupRelativity'][0])
+        # Table101ZoneOTC = self.buildDataFrame("ZoneRatedOtherThanCollisionAgeGroupRelativity")
+        Table101ZoneOTC = Table101ZoneOTC.rename(columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Other Than Collision'})
+        Table101ZoneOTC = Table101ZoneOTC.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101ZoneColl = pd.DataFrame(self.rateTables[company]['ZoneRatedCollisionAgeGroupRelativity'][1:],
+                                        index=None,
+                                        columns=self.rateTables[company]['ZoneRatedCollisionAgeGroupRelativity'][0])
+        # Table101ZoneColl = self.buildDataFrame("ZoneRatedCollisionAgeGroupRelativity")
+        Table101ZoneColl = Table101ZoneColl.rename(columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Collision'})
+        Table101ZoneColl = Table101ZoneColl.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101TTTOTC = pd.DataFrame(self.rateTables[company]['TruckOtherThanCollisionAgeGroupRelativity'][1:],
+                                      index=None,
+                                      columns=self.rateTables[company]['TruckOtherThanCollisionAgeGroupRelativity'][0])
+        # Table101TTTOTC = self.buildDataFrame("TruckOtherThanCollisionAgeGroupRelativity")
+        Table101TTTOTC = Table101TTTOTC.rename(columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Other Than Collision'})
+        Table101TTTOTC = Table101TTTOTC.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101TTTColl = pd.DataFrame(self.rateTables[company]['TruckCollisionAgeGroupRelativity'][1:], index=None,
+                                       columns=self.rateTables[company]['TruckCollisionAgeGroupRelativity'][0])
+        # Table101TTTColl = self.buildDataFrame("TruckCollisionAgeGroupRelativity")
+        Table101TTTColl = Table101TTTColl.rename(columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Collision'})
+        Table101TTTColl = Table101TTTColl.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101PPTOTC = pd.DataFrame(
+            self.rateTables[company]['PrivatePassengerOtherThanCollisionAgeGroupRelativity'][1:], index=None,
+            columns=self.rateTables[company]['PrivatePassengerOtherThanCollisionAgeGroupRelativity'][0])
+        # Table101PPTOTC = self.buildDataFrame("PrivatePassengerOtherThanCollisionAgeGroupRelativity")
+        Table101PPTOTC = Table101PPTOTC.rename(columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Other Than Collision'})
+        Table101PPTOTC = Table101PPTOTC.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101PPTColl = pd.DataFrame(self.rateTables[company]['PrivatePassengerCollisionAgeGroupRelativity'][1:],
+                                       index=None,
+                                       columns=self.rateTables[company]['PrivatePassengerCollisionAgeGroupRelativity'][
+                                           0])
+        # Table101PPTColl = self.buildDataFrame("PrivatePassengerCollisionAgeGroupRelativity")
+        Table101PPTColl = Table101PPTColl.rename(columns={'AgeGroup': 'Vehicle Age', 'Factor': 'Collision'})
+        Table101PPTColl = Table101PPTColl.replace(
+            {'Vehicle Age': {1: "Current Model Year", 2: "First Preceding Year", 3: "2nd", 4: "3rd", 5: "4th", \
+                             6: "5th", 7: "6th", 8: "7th", 9: "8th", 10: "9th", 11: "10th", 12: "All Other"}})
+
+        Table101Public = pd.merge(Table101PublicOTC, Table101PublicColl, on='Vehicle Age', how='inner')
+        Table101Zone = pd.merge(Table101ZoneOTC, Table101ZoneColl, on='Vehicle Age', how='inner')
+        Table101TTT = pd.merge(Table101TTTOTC, Table101TTTColl, on='Vehicle Age', how='inner')
+        Table101PPT = pd.merge(Table101PPTOTC, Table101PPTColl, on='Vehicle Age', how='inner')
+
+        Table101PublicZone = pd.merge(Table101Public, Table101Zone, on='Vehicle Age', how='inner')
+        Table101PublicZoneTTT = pd.merge(Table101PublicZone, Table101TTT, on='Vehicle Age', how='inner')
+        Table101PublicZoneTTTPPT = pd.merge(Table101PublicZoneTTT, Table101PPT, on='Vehicle Age', how='inner', suffixes= (f'x2', f'_y2'))
+
+        return Table101PublicZoneTTTPPT
+
+    # Builds the Retention Grade table
+    # Returns a dataframe
+    @log_exceptions
+    def build101b1(self, company):
+        table101b1 = pd.DataFrame(self.rateTables[company]['TrucksAndTruckTractorsCollisionVehicleValueFactorsStatedAmountVehicles_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksAndTruckTractorsCollisionVehicleValueFactorsStatedAmountVehicles_Ext'][0]).rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        #table101b1 = self.buildDataFrame("TrucksAndTruckTractorsCollisionVehicleValueFactorsStatedAmountVehicles_Ext").rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        table101b1 = table101b1.replace({'Price Bracket (OCN Range)' : {0 : "0 to 999", 1000 : "1,000 to 1,999", 2000 : "2,000 to 2,999", 3000 : "3,000 to 3,999", 4000 : "4,000 to 4,999", \
+                                                                        5000 : "5,000 to 5,999", 6000 : "6,000 to 7,999", 8000 : "8,000 to 9,999", 10000 : "10,000 to 11,999", 12000 : "12,000 to 13,999", \
+                                                                        14000 : "14,000 to 15,999", 16000 : "16,000 to 17,999", 18000 : "18,000 to 19,999", 20000 : "20,000 to 24,999", 25000 : "25,000 to 29,999", \
+                                                                        30000 : "30,000 to 34,999", 35000 : "35,000 to 39,999", 40000 : "40,000 to 44,999", 45000 : "45,000 to 49,999", 50000 : "50,000 to 54,999", \
+                                                                        55000 : "55,000 to 64,999", 65000 : "65,000 to 74,999", 75000 : "75,000 to 84,999", 85000 : "85,000 to 99,999", 100000 : "100,000 to 114,999", \
+                                                                        115000 : "115,000 to 129,999", 130000 : "130,000 to 149,999", 150000 : "150,000 to 174,999", 175000 : "175,000 to 199,999", 200000 : "200,000 to 229,999", \
+                                                                        230000 : "230,000 to 259,999", 260000 : "260,000 to 299,999", 300000 : "300,000 to 349,999", 350000 : "350,000 to 399,999", 400000 : "400,000 to 449,999", \
+                                                                        450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
+                                                                        900000 : "900,000+"}})
+        #for ind in table101b1.index:
+        #    table101b1['Price Bracket (OCN Range)'][ind] = (table101b1['Price Bracket (OCN Range)'][ind]).astype(str)[:-2] + " to " + (table101b1['Price Bracket (OCN Range)'][ind] + 1).astype(str)[:-2]
+
+        #if table101b1['Price Bracket (OCN Range)'][ind] == 0:
+        #    table101b1['Price Bracket (OCN Range)'][ind] = (table101b1['Price Bracket (OCN Range)'][ind]).astype(str)[:-2] + " to " + (table101b1['Price Bracket (OCN Range)'][ind] + 1).astype(str)[:-2]
+        #else:
+        #    table101b1['Number'][ind] = table101b1['NumberOfUnitsMinimum'][ind].astype(str) + " to " + table101b1['NumberofUnitsMaximum'][ind].astype(str)[:-2]
+        return table101b1
+
+    # Builds the Retention Grade table
+    # Returns a dataframe)
+    @log_exceptions
+    def build101b2(self, company):
+        table101b2 = pd.DataFrame(self.rateTables[company]['TrailerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext'][1:], index=None, columns=self.rateTables[company]['TrailerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext'][0]).rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        #table101b2 = self.buildDataFrame("TrailerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext").rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        table101b2 = table101b2.replace({'Price Bracket (OCN Range)' : {0 : "0 to 999", 1000 : "1,000 to 1,999", 2000 : "2,000 to 2,999", 3000 : "3,000 to 3,999", 4000 : "4,000 to 4,999", \
+                                                                        5000 : "5,000 to 5,999", 6000 : "6,000 to 7,999", 8000 : "8,000 to 9,999", 10000 : "10,000 to 11,999", 12000 : "12,000 to 13,999", \
+                                                                        14000 : "14,000 to 15,999", 16000 : "16,000 to 17,999", 18000 : "18,000 to 19,999", 20000 : "20,000 to 24,999", 25000 : "25,000 to 29,999", \
+                                                                        30000 : "30,000 to 34,999", 35000 : "35,000 to 39,999", 40000 : "40,000 to 44,999", 45000 : "45,000 to 49,999", 50000 : "50,000 to 54,999", \
+                                                                        55000 : "55,000 to 64,999", 65000 : "65,000 to 74,999", 75000 : "75,000 to 84,999", 85000 : "85,000 to 99,999", 100000 : "100,000 to 114,999", \
+                                                                        115000 : "115,000 to 129,999", 130000 : "130,000 to 149,999", 150000 : "150,000 to 174,999", 175000 : "175,000 to 199,999", 200000 : "200,000 to 229,999", \
+                                                                        230000 : "230,000 to 259,999", 260000 : "260,000 to 299,999", 300000 : "300,000 to 349,999", 350000 : "350,000 to 399,999", 400000 : "400,000 to 449,999", \
+                                                                        450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
+                                                                        900000 : "900,000+"}})
+        return table101b2
+
+    # Builds the Retention Grade table
+    # Returns a dataframe
+    @log_exceptions
+    def build101b3(self, company):
+        table101b3 = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersOtherThanCollisionVehicleValueFactorStatedAmountVehicle_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersOtherThanCollisionVehicleValueFactorStatedAmountVehicle_Ext'][0]).rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        #table101b3 = self.buildDataFrame("TrucksTractorsAndTrailersOtherThanCollisionVehicleValueFactorStatedAmountVehicle_Ext").rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        table101b3 = table101b3.replace({'Price Bracket (OCN Range)' : {0 : "0 to 999", 1000 : "1,000 to 1,999", 2000 : "2,000 to 2,999", 3000 : "3,000 to 3,999", 4000 : "4,000 to 4,999", \
+                                                                        5000 : "5,000 to 5,999", 6000 : "6,000 to 7,999", 8000 : "8,000 to 9,999", 10000 : "10,000 to 11,999", 12000 : "12,000 to 13,999", \
+                                                                        14000 : "14,000 to 15,999", 16000 : "16,000 to 17,999", 18000 : "18,000 to 19,999", 20000 : "20,000 to 24,999", 25000 : "25,000 to 29,999", \
+                                                                        30000 : "30,000 to 34,999", 35000 : "35,000 to 39,999", 40000 : "40,000 to 44,999", 45000 : "45,000 to 49,999", 50000 : "50,000 to 54,999", \
+                                                                        55000 : "55,000 to 64,999", 65000 : "65,000 to 74,999", 75000 : "75,000 to 84,999", 85000 : "85,000 to 99,999", 100000 : "100,000 to 114,999", \
+                                                                        115000 : "115,000 to 129,999", 130000 : "130,000 to 149,999", 150000 : "150,000 to 174,999", 175000 : "175,000 to 199,999", 200000 : "200,000 to 229,999", \
+                                                                        230000 : "230,000 to 259,999", 260000 : "260,000 to 299,999", 300000 : "300,000 to 349,999", 350000 : "350,000 to 399,999", 400000 : "400,000 to 449,999", \
+                                                                        450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
+                                                                        900000 : "900,000+"}})
+        return table101b3
+
+    # Builds the Retention Grade table
+    # Returns a dataframe
+    @log_exceptions
+    def build101b4(self, company):
+        table101b4 = pd.DataFrame(self.rateTables[company]['PrivatePassengerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext'][1:], index=None, columns=self.rateTables[company]['PrivatePassengerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext'][0]).rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        #table101b4 = self.buildDataFrame("PrivatePassengerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext").rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        table101b4 = table101b4.replace({'Price Bracket (OCN Range)' : {0 : "0 to 999", 1000 : "1,000 to 1,999", 2000 : "2,000 to 2,999", 3000 : "3,000 to 3,999", 4000 : "4,000 to 4,999", \
+                                                                        5000 : "5,000 to 5,999", 6000 : "6,000 to 7,999", 8000 : "8,000 to 9,999", 10000 : "10,000 to 11,999", 12000 : "12,000 to 13,999", \
+                                                                        14000 : "14,000 to 15,999", 16000 : "16,000 to 17,999", 18000 : "18,000 to 19,999", 20000 : "20,000 to 24,999", 25000 : "25,000 to 29,999", \
+                                                                        30000 : "30,000 to 34,999", 35000 : "35,000 to 39,999", 40000 : "40,000 to 44,999", 45000 : "45,000 to 49,999", 50000 : "50,000 to 54,999", \
+                                                                        55000 : "55,000 to 64,999", 65000 : "65,000 to 74,999", 75000 : "75,000 to 84,999", 85000 : "85,000 to 99,999", 100000 : "100,000 to 114,999", \
+                                                                        115000 : "115,000 to 129,999", 130000 : "130,000 to 149,999", 150000 : "150,000 to 174,999", 175000 : "175,000 to 199,999", 200000 : "200,000 to 229,999", \
+                                                                        230000 : "230,000 to 259,999", 260000 : "260,000 to 299,999", 300000 : "300,000 to 349,999", 350000 : "350,000 to 399,999", 400000 : "400,000 to 449,999", \
+                                                                        450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
+                                                                        900000 : "900,000+"}})
+        return table101b4
+
+    # Builds the Retention Grade table
+    # Returns a dataframe
+    @log_exceptions
+    def build101b5(self, company):
+        table101b5 = pd.DataFrame(self.rateTables[company]['PrivatePassengerTypesComprehensiveVehicleValueFactorsStatedAmountVehicles_Ext'][1:], index=None, columns=self.rateTables[company]['PrivatePassengerTypesComprehensiveVehicleValueFactorsStatedAmountVehicles_Ext'][0]).rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        #table101b5 = self.buildDataFrame("PrivatePassengerTypesComprehensiveVehicleValueFactorsStatedAmountVehicles_Ext").rename(columns={'PriceBracket' : 'Price Bracket (OCN Range)', 'Factor' : 'All Stated Amount Vehicles'})
+        table101b5 = table101b5.replace({'Price Bracket (OCN Range)' : {0 : "0 to 999", 1000 : "1,000 to 1,999", 2000 : "2,000 to 2,999", 3000 : "3,000 to 3,999", 4000 : "4,000 to 4,999", \
+                                                                        5000 : "5,000 to 5,999", 6000 : "6,000 to 7,999", 8000 : "8,000 to 9,999", 10000 : "10,000 to 11,999", 12000 : "12,000 to 13,999", \
+                                                                        14000 : "14,000 to 15,999", 16000 : "16,000 to 17,999", 18000 : "18,000 to 19,999", 20000 : "20,000 to 24,999", 25000 : "25,000 to 29,999", \
+                                                                        30000 : "30,000 to 34,999", 35000 : "35,000 to 39,999", 40000 : "40,000 to 44,999", 45000 : "45,000 to 49,999", 50000 : "50,000 to 54,999", \
+                                                                        55000 : "55,000 to 64,999", 65000 : "65,000 to 74,999", 75000 : "75,000 to 84,999", 85000 : "85,000 to 99,999", 100000 : "100,000 to 114,999", \
+                                                                        115000 : "115,000 to 129,999", 130000 : "130,000 to 149,999", 150000 : "150,000 to 174,999", 175000 : "175,000 to 199,999", 200000 : "200,000 to 229,999", \
+                                                                        230000 : "230,000 to 259,999", 260000 : "260,000 to 299,999", 300000 : "300,000 to 349,999", 350000 : "350,000 to 399,999", 400000 : "400,000 to 449,999", \
+                                                                        450000 : "450,000 to 499,999", 500000 : "500,000 to 599,999", 600000 : "600,000 to 699,999", 700000 : "700,000 to 799,999", 800000 : "800,000 to 899,999", \
+                                                                        900000 : "900,000+"}})
+        return table101b5
+
+
     def buildZoneRatedTrailersVVFColl(self, company):
         # RULE 301.C.1.A.(1). ZONE-RATED TRAILERS VEHICLE VALUE FACTORS - COLLISION WITH STATED AMOUNT RATING
 
@@ -3176,6 +3537,7 @@ class Auto:
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
+
 
     def buildZoneRatedNonTrailersVVFColl(self, company):
         # RULE 301.C.1.A.(2). ZONE-RATED NON-TRAILERS VEHICLE VALUE FACTORS - COLLISION WITH STATE AMOUNT RATING
@@ -3236,6 +3598,7 @@ class Auto:
 
         return output_table
 
+
     def buildZoneRatedVehiclesVVFOTC(self, company):
         # RULE 301.C.1.B.(1). ZONE-RATED VEHICLES VEHICLE VALUE FACTORS - OTHER THAN COLLISION WITH STATE AMOUNT RATING
 
@@ -3293,6 +3656,7 @@ class Auto:
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
+
 
     def buildPPTVVFColl(self, company):
         # RULE 301.C.1.A.(3). PRIVATE PASSENGER TYPES VEHICLE VALUE FACTORS - COLLISIONS WITH STATE AMOUNT RATING
@@ -3355,6 +3719,7 @@ class Auto:
 
         return output_table
 
+
     def buildNonZoneRatedNonTrailersVVFColl(self, company):
         # RULE 301.C.1.A.(4) NON-ZONE-RATED TRAILERS VEHICLE VALUE FACTORS - COLLISION WITH STATED AMOUNT RATING
 
@@ -3412,6 +3777,7 @@ class Auto:
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
+
 
     def buildAllOtherVehiclesVVFColl(self, company):
         # 301.C.1.A.(5). ALL OTHER VEHICLES VEHICLE VALUE FACTORS - COLLISIONS WITH STATED AMOUNT RATING
@@ -3473,6 +3839,7 @@ class Auto:
 
         return output_table
 
+
     def buildPPTVehiclesVVFOTC(self, company):
         # RULE 301.C.1.B.(2). PRIVATE PASSENGER TYPES VEHICLE VALUE FACTORS - OTHER THAN COLLISION WITH STATED AMOUNT RATING
 
@@ -3531,6 +3898,7 @@ class Auto:
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
+
 
     def buildAllOtherVehiclesVVFOTC(self, company):
         # RULE 301.C.1.B.(3) ALL OTHER VEHICLES VEHICLE VALUE FACTORS - OTHER THAN COLLISION WITH STATED AMOUNT RATING
@@ -3675,6 +4043,7 @@ class Auto:
         AntiqueAutoLiabFactors.iloc[:, 1:] = AntiqueAutoLiabFactors.iloc[:, 1:].round(3)
 
         return AntiqueAutoLiabFactors
+
 
     @log_exceptions
     def buildAntiqueAutoPDRates(self, company):
@@ -4140,6 +4509,7 @@ class Auto:
         HiredAutoLiabFactors.iloc[1, 0] = 'Minimum Premium - Non Truckers'
         return HiredAutoLiabFactors
 
+
     @log_exceptions
     # Rule 290
     def buildHiredAutoPDFactors(self, company):
@@ -4166,6 +4536,7 @@ class Auto:
         HiredAutoPDFactors = HiredAutoPDFactors.pivot(index=['Deductible'],columns='Coverage', values='Rate').reset_index(['Deductible'])
         HiredAutoPDFactors = HiredAutoPDFactors[['Deductible', 'Comprehensive', 'Specified Causes of Loss','Collision']]
         HiredAutoPDFactors = HiredAutoPDFactors.sort_values(by=['Comprehensive'], ascending=False)
+
 
         # Move "Minimum Premium" row to the bottom
         min_premium_row = HiredAutoPDFactors[HiredAutoPDFactors['Deductible'] == 'Minimum Premium']
@@ -4200,6 +4571,7 @@ class Auto:
         BusinessInterruptionFactors.iloc[:, 1:] = BusinessInterruptionFactors.iloc[:, 1:].astype(float).map(lambda x: f"{x:.2f}")
 
         return BusinessInterruptionFactors
+
 
     @log_exceptions
     def buildExtendedBusinessFactors(self, company):
@@ -4466,6 +4838,7 @@ class Auto:
 
         return output_table
 
+
     def build301D3(self, company):
         # 301.D.2.b Liability Vehicle Age Factors - Original Cost New Vehicles
         # Stole this code from a different function.
@@ -4568,6 +4941,7 @@ class Auto:
 
         return ILF
 
+
     # Builds RULE 288. DRIVE OTHER CAR
     # Returns a dataframe
     @log_exceptions
@@ -4624,6 +4998,7 @@ class Auto:
         RentalFactors.iloc[:,1:] = RentalFactors.iloc[:,1:].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return RentalFactors
+
 
     # Builds RULE 295. AUDIO, VISUAL, AND DATA ELECTRONIC EQUIPMENT
     # Returns a dataframe
@@ -5065,6 +5440,7 @@ class Auto:
                                                "AddedPIPLimitText" : "Limit"}, inplace = True)
                 output_table.columns = pd.MultiIndex.from_tuples([("Rate Per Auto", col) for col in output_table.columns])
 
+
             # 293.F.1. Broadened Personal Injury Protection For Named Individuals
             elif rule_order == 7:
                 sheet_names = ['BroadenedPIPPremium']
@@ -5365,6 +5741,7 @@ class Auto:
                 output_table["PIP Deductible"] = output_table["PIP Deductible"].astype(int)
                 output_table = output_table.sort_values(by = "PIP Deductible") # Sorting
 
+
             # 293.C.4.b.(2). Garages And Van Pools Combined Options Factor
             elif rule_order == 8:
                 sheet_names = ['GarageDealersCombinedOptionsFactor']
@@ -5433,6 +5810,7 @@ class Auto:
 
                 # Adding line breaks for the excel formatting later. Column names are too long for regular print.
                 output_table.columns = ['\n'.join(col.split()) for col in output_table.columns]
+
 
             # 293.D.2. Resident Relative Added Personal Injury Protection
             elif rule_order == 12:
@@ -5878,9 +6256,11 @@ class Auto:
 
             output_table.set_index(output_table.columns[0], inplace = True)
 
+
             # Special case for OR table 10 (PD) having only PPT.
             if sheet_1 == sheet_2:
                 output_table = output_table.drop(columns = [output_table.columns[-1]])
+
 
         except KeyError as e:
             warnings.warn("297 unstacked has encountered an error! One or more tables may be blank/missing.", Um_Unstacked_Warning)
@@ -6076,6 +6456,7 @@ class Auto:
                 if output_table[column].dtype == 'float64' or output_table[column].dtype == 'int64':
                     output_table[column] = output_table[column].apply(lambda x: f"{x:.2f}")
 
+
             return output_table
 
         except KeyError as e:
@@ -6145,6 +6526,7 @@ class Auto:
         output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
         return output_table
+
 
     def buildFL_DriveAwayContractors(self, company):
         """FL Rule 269"""
@@ -6567,6 +6949,7 @@ class Auto:
         ws.column_dimensions['G'].width = self.pixelsToInches(150)
         ws.column_dimensions['H'].width = self.pixelsToInches(150)
 
+
         rules = {"Trucks, Tractors, And Trailers Liability" : "Liability \n(223.C.2.e.)",
                  "Trucks, Tractors, And Trailers Comprehensive And Specified Causes Of Loss": "Comprehensive and Specified Causes of Loss\n(223.C.3.h.)",
                  "Trucks And Truck-tractors Collision": "Collision\n(223.C.3.h.)",
@@ -6843,6 +7226,7 @@ class Auto:
         """The following is a deletion of part of the table. Since ISO Updates moved the zone rated portion to another sheet,
             it is easier to delete it from this position than to edit the code earlier."""
 
+
         start_cell = "K11"
         end_cell = "N25"
         # Unmerge cells in the specified range
@@ -6920,6 +7304,7 @@ class Auto:
                         cell.number_format = "0.000"
                         cell.border = border
 
+
     def format225D(self,ws):
 
         ws.insert_rows(27)
@@ -6952,6 +7337,7 @@ class Auto:
                         cell.alignment = Alignment(horizontal='center', vertical='center')
                         cell.border = border
 
+
     #Format Towing and Labor Rate Table
     def format31C(self, ws):
         ws["A4"] = "Class Code"
@@ -6975,6 +7361,7 @@ class Auto:
         ws.row_breaks.append(Break(id=25))
         ws['A26'].alignment = Alignment(wrap_text=False)
 
+
         # Format PPP Classifications - Farm
     def format33(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(125)
@@ -6990,6 +7377,7 @@ class Auto:
         italic = Font(bold=False, italic=True, name='Arial', size=10)
         bold = Font(bold=True, name='Arial', size=10)
 
+
         align_down = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
         align_center = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
@@ -6998,6 +7386,7 @@ class Auto:
         ws.column_dimensions['C'].width = self.pixelsToInches(100)
         ws.column_dimensions['D'].width = self.pixelsToInches(100)
         ws.column_dimensions['E'].width = self.pixelsToInches(100)
+
 
         border = Border(left=Side(border_style='thin', color='C1C1C1'),
                         right=Side(border_style='thin', color='C1C1C1'),
@@ -7272,6 +7661,7 @@ class Auto:
         ws.insert_rows(34)
         ws.insert_rows(34)
 
+
         ws['A35'] = "Apply a factor of 0.74 for Legal Liability Option."
         ws['A36'] = "Apply a factor of 1.15 to the Legal Liability premium for Direct Excess Option."
         ws['A38'] = "255.D. Deductibles"
@@ -7369,6 +7759,7 @@ class Auto:
         cell_de.font = bold
         cell_de.alignment = align_center
         cell_de.border = border
+
 
     def format267(self, ws):
         """FL 267"""
@@ -7649,6 +8040,7 @@ class Auto:
         ws.insert_rows(8)
         ws.insert_rows(14)
 
+
         ws['A4'] = "Per Auto"
         ws['B4'] = "Min. Premium"
         ws['A9'] = "279.B.2. Physical Damage"
@@ -7792,6 +8184,7 @@ class Auto:
                         cell.alignment = align_center
                         cell.border = border
 
+
     def format284(self,ws):
         italic = Font(bold=False, italic=True, name='Arial', size=10)
         bold = Font(bold=True, name='Arial', size=10)
@@ -7825,6 +8218,7 @@ class Auto:
                         cell.font = Font(name='Arial', size=10)
                         cell.alignment = align_center
                         cell.border = border
+
 
     # Format Towing and Labor Rate Table
     def format88(self, ws):
@@ -7884,6 +8278,7 @@ class Auto:
         ws['F4'].value = "Taxicabs and Limousines"
         ws['G4'].value = "Private Passenger Types"
 
+
         ws.column_dimensions['A'].width = self.pixelsToInches(150)
         ws.column_dimensions['B'].width = self.pixelsToInches(140)
         ws.column_dimensions['C'].width = self.pixelsToInches(100)
@@ -7902,6 +8297,8 @@ class Auto:
                         top=Side(border_style='thin', color='C1C1C1'),
                         bottom=Side(border_style='thin', color='C1C1C1'))
 
+
+
         # Set column A width to 175 pixels
         ws.column_dimensions['A'].width = 175 / 7  # openpyxl uses width in characters, not pixels
         for col_idx in range(2, 8):  # B=2, H=8
@@ -7918,6 +8315,7 @@ class Auto:
                     row_idx = cell.row
                     # Delete the above two rows
                     ws.delete_rows(row_idx - 2, 2)
+
 
         for row in ws.iter_rows():
             for cell in row:
@@ -8062,6 +8460,7 @@ class Auto:
         ws.column_dimensions['E'].width = self.pixelsToInches(125)
         ws.column_dimensions['F'].width = self.pixelsToInches(125)
 
+
         for row in ws.iter_rows():
             for cell in row:
                 if cell.value:
@@ -8087,6 +8486,7 @@ class Auto:
                         cell.font = Font(name='Arial', size=10)
                         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                         cell.border = border
+
 
         ws["A17"] = "For Physical Damage premium computations, when the Deductible Discount Factor is subtracted from the Vehicle Value Factor,"
         ws["A18"] = "the resulting value (Vehicle Value Factor – Deductible Discount Factor) is subject to a minimum value of 0.10"
@@ -8133,6 +8533,7 @@ class Auto:
             col_letter = get_column_letter(col_idx)
             ws.column_dimensions[col_letter].width = self.pixelsToInches(110)
 
+
         border = Border(left=Side(border_style='thin', color='C1C1C1'),
                         right=Side(border_style='thin', color='C1C1C1'),
                         top=Side(border_style='thin', color='C1C1C1'),
@@ -8165,6 +8566,7 @@ class Auto:
         ws.column_dimensions['C'].width = self.pixelsToInches(85)
         ws.column_dimensions['D'].width = self.pixelsToInches(85)
 
+
         border = Border(left=Side(border_style='thin', color='C1C1C1'),
                         right=Side(border_style='thin', color='C1C1C1'),
                         top=Side(border_style='thin', color='C1C1C1'),
@@ -8189,6 +8591,7 @@ class Auto:
                         cell.alignment = Alignment(horizontal='center', vertical='center')
                         cell.border = border
 
+
         for col in range(2, ws.max_column + 1):
             char = get_column_letter(col)  # Letter representing the current column
             for row in range(5, ws.max_row + 1):
@@ -8208,6 +8611,7 @@ class Auto:
                         right=Side(border_style='thin', color='C1C1C1'),
                         top=Side(border_style='thin', color='C1C1C1'),
                         bottom=Side(border_style='thin', color='C1C1C1'))
+
 
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
@@ -8266,6 +8670,12 @@ class Auto:
         ws['A3'].value = 'Premium per Auto Per-disablement limit'
         ws['A3'].alignment = Alignment(wrap_text=False)
 
+    #Format School Bus Operations Rate Table
+    def formatMedPayments(self, ws):
+        ws.column_dimensions['A'].width = self.pixelsToInches(150)
+        ws.column_dimensions['B'].width = self.pixelsToInches(100)
+        #ws['A9'] = Territory92a
+
     # Format ILFs
     def format100(self, ws):
         ws.column_dimensions['A'].width = 20
@@ -8274,6 +8684,7 @@ class Auto:
         ws.column_dimensions['D'].width = 20
         ws.column_dimensions['E'].width = 20
         ws.column_dimensions['F'].width = 20
+
 
     def format301(self, ws):
         ws.column_dimensions['A'].width = 21
@@ -8294,6 +8705,7 @@ class Auto:
         "8th", "9th", "10th", "11th", "12th", "13th", "14th", "15th", "16th", "17th", "18th", "19th", "20th",
         "21st", "22nd", "23rd", "24th", "25th", "26th", "27th and older", "Vehicles","Trucks","Private",
         ]
+
 
         for row in ws.iter_rows():
             for cell in row:
@@ -8335,6 +8747,7 @@ class Auto:
         "21st", "22nd", "23rd", "24th", "25th", "26th", "27th and older", "Vehicles","Trucks","Private",
         ]
 
+
         for row in ws.iter_rows():
             for cell in row:
                 if cell.value:
@@ -8355,6 +8768,8 @@ class Auto:
                         cell.alignment = Alignment(horizontal='center', vertical='center')
                         cell.border = border
 
+
+
     def format301D1(self, ws):
         ws.column_dimensions['A'].width = 21
         ws.column_dimensions['B'].width = 13
@@ -8369,6 +8784,7 @@ class Auto:
         ws.column_dimensions['k'].width = 13
         ws.column_dimensions['L'].width = 13
 
+
         border = Border(left=Side(border_style='thin', color='C1C1C1'),
                         right=Side(border_style='thin', color='C1C1C1'),
                         top=Side(border_style='thin', color='C1C1C1'),
@@ -8377,6 +8793,7 @@ class Auto:
         bold_cells = [
         "Vehicle","Truck","Private","All Ages","Factor","Trailer","Semitrailer","Price"
         ]
+
 
         # this is pretty messy, but was in a rush.
         for row in ws.iter_rows():
@@ -8399,10 +8816,13 @@ class Auto:
                         cell.alignment = Alignment(horizontal='center', vertical='center',wrap_text=True)
                         cell.border = border
 
+
+
     def format301D2(self, ws):
         ws.column_dimensions['A'].width = 21
         ws.column_dimensions['B'].width = 13
         ws.column_dimensions['C'].width = 13
+
 
         border = Border(left=Side(border_style='thin', color='C1C1C1'),
                         right=Side(border_style='thin', color='C1C1C1'),
@@ -8412,6 +8832,7 @@ class Auto:
         bold_cells = [
         "Vehicle","Truck","Private","All Ages","Factor","Trailer","Semitrailer","Price"
         ]
+
 
         # this is pretty messy, but was in a rush.
         for row in ws.iter_rows():
@@ -8614,6 +9035,7 @@ class Auto:
                             if cell.row > 9:
                                 cell.number_format = "0.000"
 
+
         for col in range(2, 3):
             char = get_column_letter(col)  # Letter representing the current column
             for row in range(5, 10):
@@ -8638,6 +9060,7 @@ class Auto:
             for cell in row:
                 if isinstance(cell.value, (int, float)):  # Check if the cell contains a number
                     cell.number_format = openpyxl.styles.numbers.FORMAT_CURRENCY_USD_SIMPLE  # Apply simple USD currency format
+
 
         for row in ws.iter_rows(min_col=1, max_col=1):
             for cell in row:
@@ -8696,6 +9119,7 @@ class Auto:
         ws['A4'] = 'Coverage is provided at no cost.'
         ws['A4'].font = Font(name='Arial', size=10)
 
+
     # Format RULE 125
     def format125(self, ws):
         ws.column_dimensions['A'].width = 53
@@ -8716,6 +9140,8 @@ class Auto:
             for row in range(5, 9):
                 cell = ws[char + str(row)]
                 cell.number_format = cell.number_format = '$#,0'
+
+
 
     # Format RULE 126
     def format126(self, ws):
@@ -9147,6 +9573,7 @@ class Auto:
         else:
             ws.oddFooter.left.text = ""
 
+
     def overideHeaderFL(self, AutoPages):
         # In FL space is needed within the right sided header for a stamp. This code moves the right header to the left header.
         # Couldn't think of a better solution that took 30 seconds to implement.
@@ -9176,6 +9603,7 @@ class Auto:
 
         return base_name
 
+
     # Sets up the Auto Service Excel file using the Excel class
     # A separate worksheet is generated for each table, and most worksheets are manually formatted afterwards
     # Returns the Excel file
@@ -9202,6 +9630,7 @@ class Auto:
         self.nesting()
         # Grabbing input for file for sheets that vary
         state_sheet_exceptions = pd.read_excel(BA_INPUT_FILE, sheet_name=None, engine='openpyxl')
+
 
         if self.StateAbb == "MT":
             print("Warning: Rule 297 will not be correct.")
@@ -9416,6 +9845,7 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 222 E'+ self.title_company_name, 'RULE 222.E PREMIUM DEVELOPMENT - TRUCK, TRACTOR, TRAILER TYPES ' + self.title_company_name, subtitles, tables,False, True)
             self.overideFooter(RatePages.getWB()['Rule 222 E' + self.title_company_name],CompanyTest)
 
+
         #Rule 223 B.5
         # Below has been adjusted such that the zone is deleted in the format function. It's easier than rewriting the function.
         self.compareCompanies("TrucksTractorsAndTrailersPrimaryFactors_Ext")
@@ -9429,6 +9859,7 @@ class Auto:
             RatePages.generateWorksheet23B('Rule 223 B.5 '+ self.title_company_name, 'RULE 223. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION ' + self.title_company_name, '223.B.5. Primary Classification Factors and Statistical Codes - Truck, Tractors, and Trailers', self.buildPrimaryFactors(comp_name), self.buildZonePrimaryFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 223 B.5 '+ self.title_company_name],CompanyTest)
 
+
         #Rule 223 C
         self.compareCompanies("TrucksTractorsAndTrailersSecondaryFactorsLiabilityComprehensiveAndSCOL_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -9440,6 +9871,7 @@ class Auto:
 
             RatePages.generateWorksheet('Rule 223 C '+ self.title_company_name, 'RULE 223. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION ' + self.title_company_name, '223.C.4. Secondary Classification Factors ', self.buildTTTSecondaryFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 223 C '+ self.title_company_name],CompanyTest)
+
 
         #Rule 225 C.2
         self.compareCompanies("TrucksTractorsAndTrailersPrimaryFactors_Ext")
@@ -9457,6 +9889,7 @@ class Auto:
 
             RatePages.generateWorksheetTablesX('Rule 225.C.2 ' + self.title_company_name,title_start + self.title_company_name, subtitles, tables,False, True)
             self.overideFooter(RatePages.getWB()['Rule 225.C.2 ' + self.title_company_name],CompanyTest)
+
 
         # Rule 225 C.3
         self.compareCompanies("Secondary Classification Factors Zone Rated_Ext")
@@ -9573,6 +10006,7 @@ class Auto:
             RatePages.generateWorksheet2tables('Rule 232 B '+ self.title_company_name, 'RULE 232. PREMIUM DEVELOPMENT - PRIVATE PASSENGER TYPES ' + self.title_company_name, '232.B.1.b. Liability Fleet Size Factors', self.buildPPTLiabFleetFactors(comp_name), '232.B.4.d. Physical Damage Fleet Size Factors', self.buildPPTPhysDamFleetFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 232 B ' + self.title_company_name], CompanyTest)
 
+
         #Rule 233
         self.compareCompanies("PrivatePassengerFarmFactor2")
         for CompanyTest in self.CompanyListDif:
@@ -9584,6 +10018,7 @@ class Auto:
 
             RatePages.generateWorksheet('Rule 233 '+ self.title_company_name, 'RULE 233. PRIVATE PASSENGER TYPES CLASSIFICATIONS - FARM ' + self.title_company_name, '233.B.2. Farm Use - Fleet Vehicle Factors (class code 7399)', self.buildPPTFarmTypes(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 233 ' + self.title_company_name], CompanyTest)
+
 
         #Rule 239 School Bus Premium
         sheet_to_compare = sheet_fetch("239 School Buses")
@@ -9611,6 +10046,7 @@ class Auto:
             RatePages.generateWorksheet('Rule 239 OB BR '+ self.title_company_name, 'RULE 239. ALL OTHER BUSES BASE RATES ' + self.title_company_name, ' ', self.buildBaseRates(comp_name, "Other Buses"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 239 OB BR '+ self.title_company_name], CompanyTest)
 
+
         #Rule 239 Van Bus Premium
         sheet_to_compare = sheet_fetch("239 Van Pools")
 
@@ -9623,6 +10059,7 @@ class Auto:
 
             RatePages.generateWorksheet('Rule 239 VP BR '+ self.title_company_name, 'RULE 239. VAN POOLS BASE RATES ' + self.title_company_name, ' ', self.buildBaseRates(comp_name, "Van Pools"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 239 VP BR ' + self.title_company_name], CompanyTest)
+
 
         #Rule 239 Taxi Premium
         sheet_to_compare = sheet_fetch("239 Taxis")
@@ -9660,6 +10097,7 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 239 C '+ self.title_company_name, 'RULE 239. PUBLIC AUTO PREMIUM DEVELOPMENT - OTHER THAN ZONE-RATED AUTOS ' + self.title_company_name, subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 239 C ' + self.title_company_name], CompanyTest)
 
+
         #Rule 239 D
 
         self.compareCompanies("AutoLayUpFactor_Ext")
@@ -9693,6 +10131,7 @@ class Auto:
 
             RatePages.generateWorksheetTablesX('Rule 240 '+ self.title_company_name, 'RULE 240. PUBLIC AUTO CLASSIFICATIONS' + self.title_company_name, subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 240 '+ self.title_company_name], CompanyTest)
+
 
         #Rule 241
         self.compareCompanies(["AutoLayUpFactor_Ext","MechanicalLiftFactorOtherThanZoneRated"])
@@ -9876,6 +10315,7 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 272 '+ self.title_company_name], CompanyTest)
 
+
         #Rule 273
         self.compareCompanies("SpecialTypesGolfCartsAndLowSpeedVehiclesFactor")
         for CompanyTest in self.CompanyListDif:
@@ -9935,6 +10375,7 @@ class Auto:
                                             self.buildLeasingOrRentalConcernsFactors(comp_name), False, True)
                 self.overideFooter(RatePages.getWB()['Rule 275 ' + self.title_company_name], CompanyTest)
 
+
         #Rule 276
 
         self.compareCompanies(["SpecialTypesMobileHomeFactor","MobileHomesAdditionalCoveragesFactor"])
@@ -9975,6 +10416,7 @@ class Auto:
                                                tables, False, True)
 
             self.overideFooter(RatePages.getWB()['Rule 277 '+ self.title_company_name], CompanyTest)
+
 
         #Rule 278
         self.compareCompanies("SpecialTypesRegistrationPlatesFactor_Ext")
@@ -10048,6 +10490,7 @@ class Auto:
                                                tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 281 '+ self.title_company_name], CompanyTest)
 
+
         #Rule 283
         table_codes = ["GarageDealersOtherThanCollisionRate",
                       "GarageDealersCollisionBlanketRate",
@@ -10104,6 +10547,7 @@ class Auto:
         UIM_flag = "underinsured" in combined_text
         UMPD_flag = "property damage" in combined_text
         inlcudes_underinsured = "(includes underinsured)" in combined_text
+
 
         data = pd.DataFrame(data)
         if not UM_flag:
@@ -10319,6 +10763,7 @@ class Auto:
                                         self.buildRentalFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 294 ' + self.title_company_name], CompanyTest)
 
+
         #Rule 295
 
         self.compareCompanies("AudioVisualDataEquipmentBasePremium2")
@@ -10434,6 +10879,7 @@ class Auto:
                          "298.B.4.b. Auto Dealers and Garagekeepers Other Than Collision Deductible Factors (Applicable to Theft, Mischief, and Vandalism)",
                          "298.B.4.b. Auto Dealers and Garagekeepers Other Than Collision Deductible Factors (All Perils)"]
 
+
             self.title_company_name = CompanyTest
             if len(self.CompanyListDif) == 1:
                 self.title_company_name = ""  # Every Company, no point in putting in sheet name.
@@ -10455,6 +10901,7 @@ class Auto:
                                         '300.B. Increased Limit Factors', self.buildILF(comp_name), False, True)
 
             self.overideFooter(RatePages.getWB()['Rule 300 ' + self.title_company_name], CompanyTest)
+
 
         # 301.C
         # VA uses different numbers, but this is the contents of most other states rule 301.C
@@ -10509,6 +10956,7 @@ class Auto:
 
                 self.overideFooter(RatePages.getWB()['Rule 301.B ' + self.title_company_name], CompanyTest)
 
+
         else:
             self.compareCompanies(["TrailerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext",
                                    "TrucksAndTruckTractorsCollisionVehicleValueFactorsStatedAmountVehicles_Ext",
@@ -10542,6 +10990,7 @@ class Auto:
                           self.build101B3(comp_name)
                           ]
 
+
                 subtitles = [
                     "301.C.1.A.(1) Zone-Rated Trailers Vehicle Value Factors - Collision with Stated Amount Rating",
                     "301.C.1.A.(2) Zone-Rated Non-Trailers Vehicle Value Factors - Collision with State Amount Rating",
@@ -10561,6 +11010,7 @@ class Auto:
                     "301.C.2.B.3  All Other Vehicles Vehicle Value Factors - Other Than Collision With Actual Cash Value Rating"
                 ]
 
+
                 self.title_company_name = CompanyTest
                 if len(self.CompanyListDif) == 1:
                     self.title_company_name = ""  # Every Company, no point in putting in sheet name.
@@ -10570,6 +11020,8 @@ class Auto:
                                                    False, True)
 
                 self.overideFooter(RatePages.getWB()['Rule 301.C ' + self.title_company_name], CompanyTest)
+
+
 
         # 301.D.1
         if self.StateAbb != "VA":
@@ -10644,6 +11096,7 @@ class Auto:
                                                    False, True)
 
                 self.overideFooter(RatePages.getWB()['Rule 301.C.2 and 301.C.3' + self.title_company_name], CompanyTest)
+
 
         #Rule 303
 
@@ -10884,6 +11337,7 @@ class Auto:
                     RatePages.generateWorksheetTablesX('Rule 451 ' + self.title_company_name, 'RULE 451. TRANSITION CAPPING PROGRAM ' + self.title_company_name, subtitles, tables, False, True )
                     self.overideFooter(RatePages.getWB()['Rule 451 ' + self.title_company_name], company_group)
 
+
         #Rule 452
 
         leaf_list = pd.read_excel(BA_INPUT_FILE, sheet_name="452 Leaf")
@@ -10904,6 +11358,7 @@ class Auto:
                 self.overideFooter(RatePages.getWB()['Rule 452 ' + self.title_company_name], CompanyTest)
 
         #Rule 453
+
 
         self.compareCompanies(["TieringLiabilityFactor_Ext","TieringCollisionFactor_Ext","TieringOtherThanCollisionFactor_Ext"])
         for CompanyTest in self.CompanyListDif:
@@ -10958,6 +11413,7 @@ class Auto:
         #         self.overideFooter(RatePages.getWB()['Rule T1 ' + self.title_company_name], CompanyTest)
         # else:
         #     pass
+
 
         # Below begins the list of non standard rules starting with a letter.
         if self.StateAbb == "CT":
@@ -11103,14 +11559,18 @@ class Auto:
 
                 self.overideFooter(RatePages.getWB()['Rule A2'], self.default_company)
 
+
         ################################################################################################################################################################################
         #End of Rate Page Creation
         #Formatting of specific rate pages below:
         ################################################################################################################################################################################
 
+
         RatePages.createIndex()
         AutoPages = RatePages.getWB()
         excel_Sheet_names = AutoPages.sheetnames
+
+
 
         Rule22_TTTBaseRates = [name for name in excel_Sheet_names if name.startswith('Rule 222 TTT')]
         for Rule in Rule22_TTTBaseRates:

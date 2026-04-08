@@ -3,7 +3,8 @@
     "allow": [
       "Bash(sed:*)",
       "Bash(python3:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

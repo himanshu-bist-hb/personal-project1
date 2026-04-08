@@ -117,7 +117,7 @@ class Auto:
         company_codes = ["AICOA", "NMIC", "NICOA", "NPCIC"]
 
         #check that MM is in use
-        if self.rateTables["MM"] != "Not found":
+        if self.rateTables.get("MM") is not None:
             for company_code in company_codes:
                 # Copy the entire MM rate book
                 company_table = copy.deepcopy(self.rateTables["MM"])
@@ -10316,12 +10316,12 @@ class Auto:
 
         ### An alteration of the 293 code.
         #Rule 297 (Varies by state)
-        available_companies = []
-        available_books = []
+        ratebook_names_297 = ['NGIC', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
 
-        for company, book in zip(ratebook_names, ratebooks):
+        available_companies = []
+        for company in ratebook_names_297:
+            book = self.rateTables.get(company)
             if book != "Not found" and book is not None:
-                available_books.append(book)
                 available_companies.append(company)
 
         map_297 = pd.read_excel('BA Input File.xlsx', sheet_name="297 Map", engine='openpyxl')

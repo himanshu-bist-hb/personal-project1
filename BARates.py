@@ -6158,7 +6158,7 @@ class Auto:
         limits_list = pd.read_excel(BA_INPUT_FILE, sheet_name="UM-UIM-UMPD Limits", header=[0, 1])
 
         # Fill forward the merged state names (top-level headers)
-        limits_list.columns = limits_list.columns.to_frame().fillna(method='ffill').apply(tuple, axis=1)
+        limits_list.columns = limits_list.columns.to_frame().ffill().apply(tuple, axis=1)
 
         # Combine the two header levels into a single string for each column
         limits_list.columns = [f"{state}_{coverage}" for state, coverage in limits_list.columns]
@@ -6312,7 +6312,7 @@ class Auto:
         limits_list = pd.read_excel(BA_INPUT_FILE, sheet_name="UM-UIM-UMPD Limits", header=[0, 1])
 
         # Fill forward the merged state names (top-level headers)
-        limits_list.columns = limits_list.columns.to_frame().fillna(method='ffill').apply(tuple, axis=1)
+        limits_list.columns = limits_list.columns.to_frame().ffill().apply(tuple, axis=1)
 
         # Combine the two header levels into a single string for each column
         limits_list.columns = [f"{state}_{coverage}" for state, coverage in limits_list.columns]

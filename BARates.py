@@ -2108,7 +2108,7 @@ class Auto:
 
         # Replace values in Rule83Table1a based on mapping
         Rule83Table2a.replace(mapping_dict, inplace=True)
-        Rule83Table2a = Rule83Table2a.rename(columns={'SpecialTypesOtherThanCollisionCoverageType' : 'CoverageType', 'SpecialTypesSupplementaryType' : 'SuppType'}).replace({"Stated Amount - Specified Perils","Stated Amount - Limited Specified Causes of Loss"}).query(f'CoverageType == "Stated Amount - Limited Specified Causes of Loss"')
+        Rule83Table2a = Rule83Table2a.rename(columns={'SpecialTypesOtherThanCollisionCoverageType' : 'CoverageType', 'SpecialTypesSupplementaryType' : 'SuppType'}).replace({"Stated Amount - Specified Perils": "Stated Amount - Limited Specified Causes of Loss"}).query(f'CoverageType == "Stated Amount - Limited Specified Causes of Loss"')
 
         Rule83Table2a = Rule83Table2a.pivot(index=['Territory', 'CoverageType'], columns='SuppType', values='Factor').reset_index(['Territory', 'CoverageType']).filter(items=['Territory', 'Miscellaneous Type Vehicles Buildings', 'Miscellaneous Type Vehicles Open Lots', 'Personal Auto Type Vehicles Buildings', 'Personal Auto Type Vehicles Non-Standard Open Lots', 'Personal Auto Type Vehicles Standard Open Lots'])
         Rule83Table2a = Rule83Table2a.astype(object)

@@ -881,12 +881,26 @@ class Excel:
 
     def createIndex(self) -> None:
         """Populate the Index tab with hyperlinks to every other sheet."""
+        ws_index = self.wb["Index"]
+        ws_index["A1"] = f"{self.State} - {self.StateAbb} - INDEX"
+        ws_index["A1"].font = self.fontBold
+
         sheet_names = self.wb.sheetnames
+        # Start from 1 because Index is sheet 0
         for i in range(1, len(sheet_names)):
             name = sheet_names[i]
-            self.wb["Index"][f"A{i}"].hyperlink = f"#'{name}'!A1"
-            self.wb["Index"][f"A{i}"].value = self.wb[name]["A1"].value
-            self.wb["Index"][f"A{i}"].font  = self.font
+            row = i + 2  # Start listing from row 3
+            cell = ws_index[f"A{row}"]
+            
+            # Use the value from A1 of the target sheet as the display text
+            target_title = self.wb[name]["A1"].value
+            cell.value = target_title if target_title else name
+            
+            cell.hyperlink = f"#'{name}'!A1"
+            cell.font = self.font
+            cell.style = "Hyperlink"  # Optional: use standard Excel hyperlink style
+
+        ws_index.column_dimensions["A"].width = 100
 
     def getWB(self):
         return self.wb

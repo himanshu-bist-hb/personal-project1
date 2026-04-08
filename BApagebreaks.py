@@ -454,11 +454,10 @@ def process_pagebreaks(dest_filename1: str, dest_filename2: str) -> None:
             ws_com.PageSetup.PrintTitleRows = "$1:$1"   # universal default
             _apply_sheet_rules(ws_com.Name, ws_com, xl_app, dest_filename1)
 
-        # Hide index and save
-        xl_book.Sheets("Index").Visible = False
+        # Save without hiding the index
         xl_book.Save()
 
-        # Export all visible sheets as PDF (Index is already hidden above)
+        # Export all visible sheets as PDF (Index is now visible)
         xl_book.ExportAsFixedFormat(0, dest_filename2, Quality=0)
         print(f"PDF saved: {dest_filename2}")
 

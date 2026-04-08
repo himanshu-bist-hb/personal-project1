@@ -61,8 +61,10 @@ import time
 
 
 try:
+    import pythoncom
     import win32com.client
 except ImportError:
+    pythoncom = None
     win32com = None   # allows importing this module on non-Windows without crash
 
 
@@ -431,11 +433,15 @@ def process_pagebreaks(dest_filename1: str, dest_filename2: str) -> None:
     _kill_excel_instances()
     time.sleep(2)
 
-    xl_app = win32com.client.DispatchEx("Excel.Application")
-    xl_app.Visible = False
-    xl_app.DisplayAlerts = False
+    if pythoncom:
+        pythoncom.CoInitialize()
 
+    xl_app = None
     try:
+        xl_app = win32com.client.DispatchEx("Excel.Application")
+        xl_app.Visible = False
+        xl_app.DisplayAlerts = False
+
         xl_book = xl_app.Workbooks.Open(dest_filename1)
 
         # Truncate tab names exceeding Excel's 31-character sheet-name limit
@@ -462,10 +468,14 @@ def process_pagebreaks(dest_filename1: str, dest_filename2: str) -> None:
 
     except Exception as exc:
         print(f"Error during page break processing: {exc}")
-        try:
-            xl_app.Quit()
-        except Exception:
-            pass
-        del xl_app
+        if xl_app:
+            try:
+                xl_app.Quit()
+            except Exception:
+                pass
+            del xl_app
         gc.collect()
         raise
+    finally:
+        if pythoncom:
+            pythoncom.CoUninitialize()

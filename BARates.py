@@ -151,28 +151,6 @@ class Auto:
             for company_code in company_codes:
                 self.rateTables[company_code] = None
 
-    # Builds a dataframe for the given table code
-    # The hierarchy is as follows: NGIC > Migration > CW
-    # Returns the dataframe that was built
-    def buildDataFrame(self, tableCode):
-        if tableCode in self.rateTables['NGIC'].keys(): # Checking if table exists in the NGIC ratebook
-            return pd.DataFrame(data=self.rateTables['NGIC'][tableCode][1:], index=None, columns=self.rateTables['NGIC'][tableCode][0])
-        if 'NACO' in self.rateTables.keys(): # Checking if NACO file was given
-            if tableCode in self.rateTables['NACO'].keys(): # Checking if table exists in NACO
-                return pd.DataFrame(data=self.rateTables['NACO'][tableCode][1:], index=None, columns=self.rateTables['NACO'][tableCode][0])
-        if 'NAFF' in self.rateTables.keys(): # Checking if NAFF file was given
-            if tableCode in self.rateTables['NAFF'].keys(): # Checking if table exists in NAFF
-                return pd.DataFrame(data=self.rateTables['NAFF'][tableCode][1:], index=None, columns=self.rateTables['NAFF'][tableCode][0])
-        if 'NICOF' in self.rateTables.keys(): # Checking if NICOF file was given
-            if tableCode in self.rateTables['NICOF'].keys(): # Checking if table exists in NICOF
-                return pd.DataFrame(data=self.rateTables['NICOF'][tableCode][1:], index=None, columns=self.rateTables['NICOF'][tableCode][0])
-        if 'MM' in self.rateTables.keys(): # Checking if NICOF file was given
-            if tableCode in self.rateTables['MM'].keys(): # Checking if table exists in NICOF
-                return pd.DataFrame(data=self.rateTables['MM'][tableCode][1:], index=None, columns=self.rateTables['MM'][tableCode][0])
-        #if tableCode in self.rateTables['NAICS'].keys(): # Checking if NAICS Table
-        #    return pd.DataFrame(data=self.rateTables['NAICS'][tableCode][1:], index=None, columns=self.rateTables['NAICS'][tableCode][0])
-        return pd.DataFrame(data=self.rateTables['CW'][tableCode][1:], index=None, columns=self.rateTables['CW'][tableCode][0]) # Returning the country-wide table if it wasn't found in any other company
-
     def process_ratebook(self, name, rateTables):
         # Nesting protocol. Assign books to levels. If a lower level doesn't have a sheet, take it from the higher level.
         # Some sheets are naturally ignored. It is important that deep copies are used.

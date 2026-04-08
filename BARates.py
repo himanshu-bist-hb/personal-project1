@@ -902,6 +902,7 @@ class Auto:
         TTTPrimaryFactorsLocal = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0]).query(f'TruckRadiusClass == "Local"')
         #TTTPrimaryFactorsLocal = self.buildDataFrame("TrucksTractorsAndTrailersPrimaryFactors_Ext").query(f'TruckRadiusClass == "Local"')
         TTTPrimaryFactorsLocal['ClassCode'] = TTTPrimaryFactorsLocal['TruckSizeClass'] + "-" + TTTPrimaryFactorsLocal['TruckBusinessUseClass']
+        TTTPrimaryFactorsLocal = TTTPrimaryFactorsLocal.astype(object)
         TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Light Truck-Service", 'Class (Non-Fleet, Fleet)'] = '011, 014'
         TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Light Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '021, 024'
         TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Light Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '031, 034'
@@ -926,6 +927,7 @@ class Auto:
         TTTPrimaryFactorsInt = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0]).query(f'TruckRadiusClass == "Intermediate"')
         #TTTPrimaryFactorsInt = self.buildDataFrame("TrucksTractorsAndTrailersPrimaryFactors_Ext").query(f'TruckRadiusClass == "Intermediate"')
         TTTPrimaryFactorsInt['ClassCode'] = TTTPrimaryFactorsInt['TruckSizeClass'] + "-" + TTTPrimaryFactorsInt['TruckBusinessUseClass']
+        TTTPrimaryFactorsInt = TTTPrimaryFactorsInt.astype(object)
         TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Light Truck-Service", 'Class (Non-Fleet, Fleet)'] = '012, 015'
         TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Light Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '022, 025'
         TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Light Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '032, 035'
@@ -949,6 +951,7 @@ class Auto:
         TTTPrimaryFactorsLong = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0]).query(f'TruckRadiusClass == "Long Distance"')
         #TTTPrimaryFactorsLong = self.buildDataFrame("TrucksTractorsAndTrailersPrimaryFactors_Ext").query(f'TruckRadiusClass == "Long Distance"')
         TTTPrimaryFactorsLong['ClassCode'] = TTTPrimaryFactorsLong['TruckSizeClass'] + "-" + TTTPrimaryFactorsLong['TruckBusinessUseClass']
+        TTTPrimaryFactorsLong = TTTPrimaryFactorsLong.astype(object)
         TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Service", 'Class (Non-Fleet, Fleet)'] = '013, 016'
         TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '023, 026'
         TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '033, 036'
@@ -987,6 +990,7 @@ class Auto:
             TTTPrimaryFactorsLong = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0]).query(f'TruckRadiusClass == "Long Distance"')
             #TTTPrimaryFactorsLong = self.buildDataFrame("TrucksTractorsAndTrailersPrimaryFactors_Ext").query(f'TruckRadiusClass == "Long Distance"')
             TTTPrimaryFactorsLong['ClassCode'] = TTTPrimaryFactorsLong['TruckSizeClass'] + "-" + TTTPrimaryFactorsLong['TruckBusinessUseClass']
+            TTTPrimaryFactorsLong = TTTPrimaryFactorsLong.astype(object)
             # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Service", 'Class (Non-Fleet, Fleet)'] = '013, 016'
             # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '023, 026'
             # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '033, 036'
@@ -1114,6 +1118,7 @@ class Auto:
         SecondaryFactorsColl = SecondaryFactorsColl.pivot(index='TruckSecondaryClassification', columns='Coverage', values='Factor').reset_index('TruckSecondaryClassification').rename(columns={'TruckSecondaryClassification' : 'Secondary Class', 'Trucks And Truck-tractors Collision' : 'Collision'})
         SecondaryFactorsColl = SecondaryFactorsColl[['Secondary Class', 'Collision', 'Trailers Collision']]
         SecondaryFactors = pd.merge(SecondaryFactorsLiabOTC, SecondaryFactorsColl, on='Secondary Class', how='left')
+        SecondaryFactors = SecondaryFactors.astype(object)
 
         #Class Code Hardcoded based on Descriptions below:
         SecondaryFactors.loc[SecondaryFactors['Secondary Class'] == "Truckers - Carrier Both Private Carriage & Transport Goods/Materials/Commodities", '4th-5th Digits of Class Code'] = '02'
@@ -2281,6 +2286,7 @@ class Auto:
     def buildRule89table1(self, company):
         Rule89Table1 = pd.DataFrame(self.rateTables[company]['NonOwnedBasePremium'][1:], index=None, columns=self.rateTables[company]['NonOwnedBasePremium'][0]).rename(columns={'BasePremium' : 'Liability Limit'})
         #Rule89Table1 = self.buildDataFrame("NonOwnedBasePremium").rename(columns={'BasePremium' : '$100,000 Liability Limit *'})
+        Rule89Table1 = Rule89Table1.astype(object)
         Rule89Table1.loc[Rule89Table1['NumberOfEmployees'] == 0, 'Total Number of Employees:'] = '0-9'
         Rule89Table1.loc[Rule89Table1['NumberOfEmployees'] == 10, 'Total Number of Employees:'] = '10-19'
         Rule89Table1.loc[Rule89Table1['NumberOfEmployees'] == 20, 'Total Number of Employees:'] = '20-25'
@@ -4441,6 +4447,7 @@ class Auto:
         MobileHomeFactorsRaw1 = pd.DataFrame(self.rateTables[company]['SpecialTypesMobileHomeFactor'][1:], index=None, columns=self.rateTables[company]['SpecialTypesMobileHomeFactor'][0]).query(f'TypeCoverage == "Liability" | TypeCoverage == "PhysDamCollSA" | TypeCoverage == "UM/UIM" ')
         #MobileHomeFactorsRaw1= self.buildDataFrame("SpecialTypesMobileHomeFactor").query(f'TypeCoverage == "Liability" | TypeCoverage == "PhysDamCollSA" | TypeCoverage == "UM/UIM" ')
         MobileHomeFactorsRaw2 = MobileHomeFactorsRaw1.query(f'SpecialTypesClassCode == "7960" | SpecialTypesClassCode == "7961" | SpecialTypesClassCode == "7962" | SpecialTypesClassCode == "7963" ')
+        MobileHomeFactorsRaw2 = MobileHomeFactorsRaw2.astype(object)
         MobileHomeFactorsRaw2.loc[MobileHomeFactorsRaw2['SpecialTypesClassCode'] == '7960', 'Class Description'] = 'Motor Homes-Self Propelled Up to 22 feet'
         MobileHomeFactorsRaw2.loc[MobileHomeFactorsRaw2['SpecialTypesClassCode'] == '7961', 'Class Description'] = 'Motor Homes-Self Propelled More than 22 feet'
         MobileHomeFactorsRaw2.loc[MobileHomeFactorsRaw2['SpecialTypesClassCode'] == '7962', 'Class Description'] = 'Pickup Trucks with Camper Bodies'
@@ -4514,6 +4521,7 @@ class Auto:
         #HiredAutoCollFactors = self.buildDataFrame("CollisionVehicleWithDriverCostOfHireRate_Ext").rename(columns={'HiredAutoCollisionDeductible': 'Deductible'})
         HiredAutoCollFactors.iloc[:, 1] = HiredAutoCollFactors.iloc[:, 1]
         HiredAutoCollFactors['Coverage'] = "Collision"
+        HiredAutoCollFactors = HiredAutoCollFactors.astype(object)
         HiredAutoCollFactors.loc[HiredAutoCollFactors['Deductible'] == '100', 'Rate'] = 'N/A'
         HiredAutoPDFactors = pd.concat([HiredAutoCompFactors, HiredAutoCollFactors])
         #add min premium to the table
@@ -4854,6 +4862,8 @@ class Auto:
         #FellowEmployeeAllFactors = self.buildDataFrame("FellowEmployeeBaseRate_v2_Ext").rename(columns={'Premium': 'All Employees'})
         FellowEmployeeScheduleFactors = pd.DataFrame(self.rateTables[company]['FellowEmployeeCoverageForDesignatedEmployeesPositionsBaseRate_v2_Ext'][1:], index=None, columns=self.rateTables[company]['FellowEmployeeCoverageForDesignatedEmployeesPositionsBaseRate_v2_Ext'][0]).rename(columns={'Premium': 'Scheduled Employees'})
         #FellowEmployeeScheduleFactors = self.buildDataFrame("FellowEmployeeCoverageForDesignatedEmployeesPositionsBaseRate_v2_Ext").rename(columns={'Premium': 'Scheduled Employees'})
+        FellowEmployeeAllFactors = FellowEmployeeAllFactors.astype(object)
+        FellowEmployeeScheduleFactors = FellowEmployeeScheduleFactors.astype(object)
         FellowEmployeeAllFactors.loc[FellowEmployeeAllFactors['BusinessAutoProtectionType'] == 'Platinum', 'All Employees'] = 'N/A'
         FellowEmployeeScheduleFactors.loc[FellowEmployeeScheduleFactors['BusinessAutoProtectionType'] == 'Platinum', 'Scheduled Employees'] = 'N/A'
         FellowEmployeeFactors = pd.merge(FellowEmployeeAllFactors, FellowEmployeeScheduleFactors,on='BusinessAutoProtectionType', how='inner').rename(columns={'BusinessAutoProtectionType': 'Option'})

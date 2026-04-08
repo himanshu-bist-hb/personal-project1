@@ -1,5 +1,6 @@
 # ba_rate_pages_app.py  —  streamlit run app.py
 
+import io
 import streamlit as st
 from pathlib import Path
 
@@ -50,7 +51,7 @@ def has_ngic(): return bool(st.session_state["file_NGIC"])
 
 def chip(f):
     if f:
-        return f'<span class="chip-ok">&#10003; {Path(f.name).stem[:17]}</span>'
+        return f'<span class="chip-ok">&#10003; {Path(f["name"]).stem[:17]}</span>'
     return '<span class="chip-none">&#8212; none</span>'
 
 def browse_folder():
@@ -568,7 +569,7 @@ if active_lob == "Business Auto":
                 row, col = divmod(idx, 4)
                 with [r1, r2][row][col]:
                     up = st.file_uploader(key, type=["xlsx","xlsm","xls"], key=f"up_{key}", label_visibility="visible")
-                    if up: st.session_state[f"file_{key}"] = up
+                    if up: st.session_state[f"file_{key}"] = {"name": up.name, "bytes": up.read()}
                     st.markdown(chip(st.session_state[f"file_{key}"]), unsafe_allow_html=True)
                     spacer(4)
 
@@ -580,7 +581,7 @@ if active_lob == "Business Auto":
             cw_c, _, _ = st.columns([1,1,1])
             with cw_c:
                 cw_up = st.file_uploader("CW", type=["xlsx","xlsm","xls"], key="up_CW", label_visibility="visible")
-                if cw_up: st.session_state["file_CW"] = cw_up
+                if cw_up: st.session_state["file_CW"] = {"name": cw_up.name, "bytes": cw_up.read()}
                 st.markdown(chip(st.session_state["file_CW"]), unsafe_allow_html=True)
             spacer(6)
 
@@ -736,14 +737,18 @@ if active_lob == "Business Auto":
             from BARatePages import run as run_rate_pages
             try:
                 # Set skip_pdf=True as we want to separate PDF generation
+                def _rb(key):
+                    f = st.session_state.get(f"file_{key}")
+                    return io.BytesIO(f["bytes"]) if f else None
+
                 xlsx_out, pdf_out = run_rate_pages(
-                    NGICRatebook=st.session_state["file_NGIC"], MMRatebook=st.session_state["file_MM"],
-                    NACORatebook=st.session_state["file_NACO"], NICOFRatebook=st.session_state["file_NICOF"],
-                    NAFFRatebook=st.session_state["file_NAFF"], HICNJRatebook=st.session_state["file_HICNJ"],
-                    CCMICRatebook=st.session_state["file_CCMIC"], NWAGRatebook=st.session_state["file_NWAG"],
+                    NGICRatebook=_rb("NGIC"), MMRatebook=_rb("MM"),
+                    NACORatebook=_rb("NACO"), NICOFRatebook=_rb("NICOF"),
+                    NAFFRatebook=_rb("NAFF"), HICNJRatebook=_rb("HICNJ"),
+                    CCMICRatebook=_rb("CCMIC"), NWAGRatebook=_rb("NWAG"),
                     folder_selected=st.session_state.save_dir,
                     SchedRatingMod=int(st.session_state.sched_mod) or None,
-                    CWRatebook=st.session_state["file_CW"],
+                    CWRatebook=_rb("CW"),
                     progress_callback=update_progress,
                     skip_pdf=True
                 )

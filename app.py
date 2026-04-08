@@ -4,12 +4,7 @@ import io
 import streamlit as st
 from pathlib import Path
 
-try:
-    import tkinter as tk
-    from tkinter import filedialog
-    _TK_OK = True
-except Exception:
-    _TK_OK = False
+import subprocess, sys
 
 st.set_page_config(
     page_title="RatePage Builder · Nationwide",
@@ -55,13 +50,17 @@ def chip(f):
     return '<span class="chip-none">&#8212; none</span>'
 
 def browse_folder():
-    if not _TK_OK:
-        return None
+    # Run tkinter in a separate process — calling tk.Tk() from a Streamlit
+    # background thread on Windows crashes the server process entirely.
     try:
-        root = tk.Tk(); root.withdraw()
-        root.wm_attributes("-topmost", True)
-        folder = filedialog.askdirectory(title="Select Save Location")
-        root.destroy()
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "import tkinter as tk; from tkinter import filedialog; "
+             "root=tk.Tk(); root.withdraw(); root.wm_attributes('-topmost',True); "
+             "print(filedialog.askdirectory(title='Select Save Location') or '', end='')"],
+            capture_output=True, text=True, timeout=120,
+        )
+        folder = result.stdout.strip()
         return folder or None
     except Exception:
         return None

@@ -41,7 +41,7 @@ COM API TRANSLATION REFERENCE
   ws.page_setup.fitToWidth  = 1        ws_com.PageSetup.Zoom = False
   ws.page_setup.fitToHeight = 1          ws_com.PageSetup.FitToPagesWide = 1
                                           ws_com.PageSetup.FitToPagesTall = 1
-  ws.page_setup.fitToHeight = False     ws_com.PageSetup.FitToPagesTall = 0
+  ws.page_setup.fitToHeight = False     ws_com.PageSetup.FitToPagesTall = False
   ws.page_setup.orientation="landscape" ws_com.PageSetup.Orientation = 2
   ws.print_title_rows = "1:3"          ws_com.PageSetup.PrintTitleRows = "$1:$3"
   ws.print_area = "A1:Jn"             ws_com.PageSetup.PrintArea = "$A$1:$J$n"
@@ -88,7 +88,7 @@ def _handle_index(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$J${max_row}"
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
-    ws_com.PageSetup.FitToPagesTall = 0   # 0 = automatic height (unlimited pages)
+    ws_com.PageSetup.FitToPagesTall = False   # False = automatic height (unlimited pages)
 
 
 def _handle_rule_222b(ws_com, xl_app, dest_filename):
@@ -395,7 +395,8 @@ def _apply_sheet_rules(sheet_name: str, ws_com, xl_app, dest_filename: str) -> N
 def _kill_excel_instances() -> None:
     """Force-kill any running Excel processes so COM dispatch can proceed."""
     import subprocess
-    subprocess.call("taskkill /f /im excel.exe", shell=True)
+    # /t 2>NUL suppresses the "process not found" error message
+    subprocess.call("taskkill /f /im excel.exe 2>NUL", shell=True)
 
 
 # ===========================================================================

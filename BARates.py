@@ -10794,45 +10794,36 @@ class Auto:
 
         ### An alteration of the 293 code.
         #Rule 297 (Varies by state)
-        # Re-establish the full list of companies for 297 as 293 might have filtered them
-        ratebook_names_297 = ['NGIC', 'NAFF', 'NACO','CCMIC','HICNJ', 'NICOF','NMIC','NICOA','NPCIC','AICOA']
-        ratebooks_297 = [self.NGICRatebook, self.NAFFRatebook, self.NACORatebook, self.rateTables['CCMIC'], self.rateTables['HICNJ'], self.NICOFRatebook, self.rateTables["NMIC"],self.rateTables["NICOA"],self.rateTables["NPCIC"],self.rateTables["AICOA"]]
-
         available_companies = []
         available_books = []
 
-        for company, book in zip(ratebook_names_297, ratebooks_297):
+        for company, book in zip(ratebook_names, ratebooks):
             if book != "Not found" and book is not None:
                 available_books.append(book)
                 available_companies.append(company)
 
-        map_297 = pd.read_excel(BA_INPUT_FILE, sheet_name="297 Map", engine='openpyxl')
+        map_297 = pd.read_excel('BA Input File.xlsx', sheet_name="297 Map", engine='openpyxl')
 
         # Create a tables_list for each company
         company_tables_list = {name: [] for name in available_companies}
 
         non_blank_cols = map_297.loc[map_297['State'] == self.StateAbb].dropna(axis=1).columns[1:]  # Exclude the 'State' column
 
-        # The below has a try except at a request from support. This function breaks more than intended and causes a headache.
-        # This makes it such that if it fails, it doesn't break the process.
+        # Removed try/except to surface errors if Rule 297 fails to build
         for company in available_companies:
             tables = []
             for col in non_blank_cols:
-                try:
-                    table_num = int(col.split(' ')[-1])  # Assuming column names are like 'Table 1', 'Table 2', etc.
-                    table = None
-                    if table_num in [1, 2, 3, 4, 5, 6, 10]:
-                        table = self.build297Table_unstacked(company, table_num)
-                    elif table_num in [7, 8, 9]:
-                        table = self.build297Table_stacked(company, table_num)
-                    if table is not None:
-                        tables.append(table)
-                except:
-                    pass
+                table_num = int(col.split(' ')[-1])  # Assuming column names are like 'Table 1', 'Table 2', etc.
+                table = None
+                if table_num in [1, 2, 3, 4, 5, 6, 10]:
+                    table = self.build297Table_unstacked(company, table_num)
+                elif table_num in [7, 8, 9]:
+                    table = self.build297Table_stacked(company, table_num)
+                if table is not None:
+                    tables.append(table)
 
-            # Only create the list if exists.
-            if len(company_tables_list) != 0:
-                company_tables_list[company] = tables  # Store tables directly
+            # Store tables directly
+            company_tables_list[company] = tables
 
         # Prevents code from breaking by trying to compare/insert empty dataframes.
         if company_tables_list:

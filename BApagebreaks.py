@@ -461,8 +461,8 @@ def process_pagebreaks(dest_filename1: str, dest_filename2: str) -> None:
         xl_book.ExportAsFixedFormat(0, dest_filename2, Quality=0)
         print(f"PDF saved: {dest_filename2}")
 
-        xl_app.DisplayAlerts = True
-        xl_app.Visible = True
+        xl_book.Close(True)
+        xl_app.Quit()
         print("Stage 3: Page Breaks applied and file saved.")
 
     except Exception as exc:

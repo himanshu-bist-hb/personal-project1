@@ -10794,10 +10794,14 @@ class Auto:
 
         ### An alteration of the 293 code.
         #Rule 297 (Varies by state)
+        # Re-establish the full list of companies for 297 as 293 might have filtered them
+        ratebook_names_297 = ['NGIC', 'NAFF', 'NACO','CCMIC','HICNJ', 'NICOF','NMIC','NICOA','NPCIC','AICOA']
+        ratebooks_297 = [self.NGICRatebook, self.NAFFRatebook, self.NACORatebook, self.rateTables['CCMIC'], self.rateTables['HICNJ'], self.NICOFRatebook, self.rateTables["NMIC"],self.rateTables["NICOA"],self.rateTables["NPCIC"],self.rateTables["AICOA"]]
+
         available_companies = []
         available_books = []
 
-        for company, book in zip(ratebook_names, ratebooks):
+        for company, book in zip(ratebook_names_297, ratebooks_297):
             if book != "Not found" and book is not None:
                 available_books.append(book)
                 available_companies.append(company)

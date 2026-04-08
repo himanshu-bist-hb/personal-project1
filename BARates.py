@@ -1593,7 +1593,7 @@ class Auto:
         TowingAndLabor = pd.DataFrame(self.rateTables[company]['TowingLaborRate'][1:], index=None, columns=self.rateTables[company]['TowingLaborRate'][0])
         TowingAndLabor = TowingAndLabor.rename(columns = {TowingAndLabor.columns[0] : "Limit", TowingAndLabor.columns[1] : "Rate"})
         TowingAndLabor = TowingAndLabor.astype(object)
-        TowingAndLabor.iloc[:, 1:] = TowingAndLabor.iloc[:, 1:].map(lambda x: f"{x:.2f}")
+        TowingAndLabor.iloc[:, 1:] = TowingAndLabor.iloc[:, 1:].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return TowingAndLabor
 
@@ -2268,7 +2268,7 @@ class Auto:
         output_table.iloc[1:,1:] = output_table.iloc[1:,1:] * [low_250_factor, med_250_factor, high_250_factor]
 
         output_table = output_table.astype(object)
-        output_table.iloc[:,1:] = output_table.iloc[:,1:].map(lambda x: f"{x:.2f}")
+        output_table.iloc[:,1:] = output_table.iloc[:,1:].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return output_table
 
@@ -2299,7 +2299,7 @@ class Auto:
         Rule89Table1['Liability Limit'] = Rule89Table1['Liability Limit']
 
         Rule89Table1 = Rule89Table1.astype(object)
-        Rule89Table1.iloc[:,1:] = Rule89Table1.iloc[:,1:].map(lambda x: f"{x:.0f}")
+        Rule89Table1.iloc[:,1:] = Rule89Table1.iloc[:,1:].map(lambda x: f"{x:.0f}" if isinstance(x, (int, float)) else x)
 
         return Rule89Table1
 
@@ -2378,7 +2378,7 @@ class Auto:
         Rule89Table7 = Rule89Table7[['Volunteer', 'Minimum Premium']] # Edited to only have minimum premium.
         Rule89Table7 = Rule89Table7.rename(columns = {"Volunteer" : "Coverage"})
         Rule89Table7 = Rule89Table7.astype(object)
-        Rule89Table7.iloc[:, 1:] = Rule89Table7.iloc[:,1:].map(lambda x: f"{x:.0f}")
+        Rule89Table7.iloc[:, 1:] = Rule89Table7.iloc[:,1:].map(lambda x: f"{x:.0f}" if isinstance(x, (int, float)) else x)
 
         return Rule89Table7
 
@@ -2388,7 +2388,7 @@ class Auto:
         #Rule89Table3 = self.buildDataFrame("GarageServicesLiabilityEmployeesFactor").query(f'Constant == "Y"').rename(columns={'EmployeeLiabilityFactor' : 'Factor'}).filter(items=['Factor'])
 
         Rule89Table8 = Rule89Table8.astype(object)
-        Rule89Table8.iloc[:, :] = Rule89Table8.iloc[:, :].map(lambda x: f"{x:.3f}")
+        Rule89Table8.iloc[:, :] = Rule89Table8.iloc[:, :].map(lambda x: f"{x:.3f}" if isinstance(x, (int, float)) else x)
 
         return Rule89Table8
 
@@ -2397,7 +2397,7 @@ class Auto:
         output_table = pd.DataFrame(self.rateTables[company]['VolunteersAsInsuredsBasePremium'][1:], index=None, columns=self.rateTables[company]['VolunteersAsInsuredsBasePremium'][0]).query(f'Constant == "Y"').filter(items=['Factor']).rename(columns={'Factor' : 'Liability Limit'})
         output_table = output_table.rename(columns = {"Liability Limit" : "Rate"})
         output_table = output_table.astype(object)
-        output_table.iloc[:, :] = output_table.iloc[:, :].map(lambda x: f"{x:.2f}")
+        output_table.iloc[:, :] = output_table.iloc[:, :].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return output_table
 
@@ -2406,7 +2406,7 @@ class Auto:
         output_table = pd.DataFrame(self.rateTables[company]['NonOwnedVolunteersBasePremium'][1:], index=None, columns=self.rateTables[company]['NonOwnedVolunteersBasePremium'][0]).query(f'Constant == "Y"').filter(items=['Factor']).rename(columns={'Factor' : 'Liability Limit'})
         output_table = output_table.rename(columns={"Liability Limit": "Rate"})
         output_table = output_table.astype(object)
-        output_table.iloc[:, :] = output_table.iloc[:, :].map(lambda x: f"{x:.2f}")
+        output_table.iloc[:, :] = output_table.iloc[:, :].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return output_table
 
@@ -4876,7 +4876,7 @@ class Auto:
         FellowEmployeeFactors['Option'] = pd.Categorical(FellowEmployeeFactors['Option'], categories=category_order, ordered=True)
         FellowEmployeeFactors = FellowEmployeeFactors.sort_values('Option')
         FellowEmployeeFactors = FellowEmployeeFactors.astype(object)
-        FellowEmployeeFactors.iloc[:3, 1:] = FellowEmployeeFactors.iloc[:3, 1:].map(lambda x: f"{x:.2f}")
+        FellowEmployeeFactors.iloc[:3, 1:] = FellowEmployeeFactors.iloc[:3, 1:].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return FellowEmployeeFactors
 
@@ -4995,7 +4995,7 @@ class Auto:
         RentalFactors.iloc[:,1] = RentalFactors.iloc[:,1]
         RentalFactors = RentalFactors.rename(columns={'CoverageIndicator': '','Factor': ''})
         RentalFactors = RentalFactors.astype(object)
-        RentalFactors.iloc[:,1:] = RentalFactors.iloc[:,1:].map(lambda x: f"{x:.2f}")
+        RentalFactors.iloc[:,1:] = RentalFactors.iloc[:,1:].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return RentalFactors
 
@@ -5009,7 +5009,7 @@ class Auto:
         AudioFactors = AudioFactors.rename(columns={'CostOfNew': 'Cost of Equipment', 'Premium': 'Rate'}) \
             .sort_values(by=['Rate'])
         AudioFactors = AudioFactors.astype(object)
-        AudioFactors.iloc[:, 1:] = AudioFactors.iloc[:, 1:].map(lambda x: f"{x:.0f}")
+        AudioFactors.iloc[:, 1:] = AudioFactors.iloc[:, 1:].map(lambda x: f"{x:.0f}" if isinstance(x, (int, float)) else x)
 
         return AudioFactors
 
@@ -5021,7 +5021,7 @@ class Auto:
         #TapeFactors = self.buildDataFrame("TapesRecordsAndDiscsBasePremium")
         TapeFactors = TapeFactors.rename(columns={'BasePremium': 'Premium per auto:'}).drop(columns='Constant')
         TapeFactors = TapeFactors.astype(object)
-        TapeFactors.iloc[:, 1:] = TapeFactors.iloc[:, 1:].map(lambda x: f"{x:.2f}")
+        TapeFactors.iloc[:, 1:] = TapeFactors.iloc[:, 1:].map(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
 
         return TapeFactors
 

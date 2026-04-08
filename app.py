@@ -28,6 +28,9 @@ st.session_state.setdefault("save_dir",    "")
 st.session_state.setdefault("sched_mod",   0)
 st.session_state.setdefault("run_status",  "idle")
 st.session_state.setdefault("run_msg",     "")
+st.session_state.setdefault("xlsx_path",   "")
+st.session_state.setdefault("pdf_path",    "")
+st.session_state.setdefault("pdf_status",  "idle")
 st.session_state.setdefault("lob",         "Business Auto")
 st.session_state.setdefault("confirm_step", "idle")
 
@@ -711,7 +714,7 @@ if active_lob == "Business Auto":
         # ── Step: processing → inline spinner below button ─────────────────
         elif st.session_state.confirm_step == "processing":
             st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-            st.button("Processing…", key="run_btn_proc", use_container_width=True, disabled=True)
+            st.button("Processing Excel...", key="run_btn_proc", use_container_width=True, disabled=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
             loader_placeholder = st.empty()
@@ -721,7 +724,7 @@ if active_lob == "Business Auto":
                 <div class="inline-loader">
                   <div class="spin-ring"></div>
                   <div>
-                    <div class="loader-label">Creating rate pages…</div>
+                    <div class="loader-label">Creating Excel rate pages…</div>
                     <div class="loader-sub">{msg}</div>
                   </div>
                 </div>
@@ -732,7 +735,8 @@ if active_lob == "Business Auto":
 
             from BARatePages import run as run_rate_pages
             try:
-                run_rate_pages(
+                # Set skip_pdf=True as we want to separate PDF generation
+                xlsx_out, pdf_out = run_rate_pages(
                     NGICRatebook=st.session_state["file_NGIC"], MMRatebook=st.session_state["file_MM"],
                     NACORatebook=st.session_state["file_NACO"], NICOFRatebook=st.session_state["file_NICOF"],
                     NAFFRatebook=st.session_state["file_NAFF"], HICNJRatebook=st.session_state["file_HICNJ"],
@@ -741,19 +745,76 @@ if active_lob == "Business Auto":
                     SchedRatingMod=int(st.session_state.sched_mod) or None,
                     CWRatebook=st.session_state["file_CW"],
                     progress_callback=update_progress,
+                    skip_pdf=True
                 )
+                st.session_state.xlsx_path = xlsx_out
+                st.session_state.pdf_path = pdf_out
                 st.session_state.run_status = "success"
+                st.session_state.pdf_status = "idle"
             except Exception as e:
                 import traceback
-                traceback.print_exc()  # Also log it out for easier debugging
+                traceback.print_exc()
                 st.session_state.run_status = "error"
                 st.session_state.run_msg = str(e)
 
             st.session_state.confirm_step = "idle"
             st.rerun()
 
-        if   st.session_state.run_status == "success": spacer(10); st.success("&#10003;  Rate pages created successfully.")
-        elif st.session_state.run_status == "error":   spacer(10); st.error(st.session_state.run_msg)
+        # ── Step: pdf_processing → inline spinner for PDF ─────────────────
+        elif st.session_state.confirm_step == "pdf_processing":
+            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+            st.button("Generating PDF...", key="pdf_btn_proc", use_container_width=True, disabled=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            loader_placeholder = st.empty()
+
+            def update_pdf_progress(msg: str):
+                loader_placeholder.markdown(f"""
+                <div class="inline-loader">
+                  <div class="spin-ring"></div>
+                  <div>
+                    <div class="loader-label">Converting to PDF…</div>
+                    <div class="loader-sub">{msg}</div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            from BARatePages import generate_pdf_only
+            try:
+                generate_pdf_only(
+                    st.session_state.xlsx_path,
+                    st.session_state.pdf_path,
+                    progress_callback=update_pdf_progress
+                )
+                st.session_state.pdf_status = "success"
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                st.session_state.pdf_status = "error"
+                st.session_state.run_msg = str(e)
+
+            st.session_state.confirm_step = "idle"
+            st.rerun()
+
+        if st.session_state.run_status == "success":
+            spacer(10)
+            st.success(f"&#10003;  Excel Rate pages created: {Path(st.session_state.xlsx_path).name}")
+            
+            # Show PDF generation button only if PDF hasn't been successfully generated yet
+            if st.session_state.pdf_status != "success":
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                if st.button("Generate PDF Document", key="gen_pdf_btn", use_container_width=True):
+                    st.session_state.confirm_step = "pdf_processing"
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+                if st.session_state.pdf_status == "error":
+                    st.error(f"PDF Error: {st.session_state.run_msg}")
+            else:
+                st.success(f"&#10003;  PDF Document created: {Path(st.session_state.pdf_path).name}")
+
+        elif st.session_state.run_status == "error":
+            spacer(10)
+            st.error(st.session_state.run_msg)
 
         spacer(24)
         st.markdown("""<div style="padding-top:14px;border-top:1px solid var(--border);">

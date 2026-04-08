@@ -369,42 +369,26 @@ def run(
     SchedRatingMod:  Optional[int],
     CWRatebook:      Optional[str],
     progress_callback: Optional[Callable[[str], None]] = None,
-) -> None:
+    skip_pdf:        bool = False,
+) -> Tuple[str, str]:
     """
     Orchestrate the full rate-page generation pipeline.
 
-    Called by BARatePageUserInterface.py via:
-        args = self.inputs.as_tuple_for_run()
-        run_rate_pages(*args)
-
-    The parameter order and names are UNCHANGED from the original so the UI
-    requires no modifications.
-
-    Pipeline steps:
-        1.  Open every ratebook file (returns ExcelFile or "Not found").
-        2.  Read Rate Book Details → state name, abbreviation, effective dates.
-        3.  Resolve CW ratebook (fall back to network default if not supplied).
-        4.  Load NAICS descriptions.
-        5.  Extract all rate tables from every open ratebook (sequential).
-        6.  Build the Excel workbook via BARates.Auto / buildBAPages().
-        7.  Save .xlsx to the user-selected folder.
-        8.  Convert to .pdf via process_pagebreaks.
+    Returns:
+        (xlsx_out, pdf_out) paths.
     """
     import time
     t_start = time.perf_counter()
     if progress_callback: progress_callback("Initializing...")
     print("Creating Rate Pages")
 
-    # Suppress noisy openpyxl style / deprecation warnings during processing
+    # ... (rest of the function setup remains the same)
     warnings.simplefilter("ignore")
-
-    # Pandas display: show all columns, no line-wrap, no SettingWithCopyWarning
     pd.set_option("display.max_columns", None)
     pd.options.display.width = None
     pd.options.mode.chained_assignment = None
 
     # ── 1. Open every ratebook ─────────────────────────────────────────────────
-    # Each call returns pd.ExcelFile (success) or "Not found" (optional/missing)
     ratebooks = {
         "NGICRatebook":  load_ratebook(NGICRatebook),
         "MMRatebook":    load_ratebook(MMRatebook),
@@ -416,40 +400,26 @@ def run(
         "NWAGRatebook":  load_ratebook(NWAGRatebook),
     }
 
-    # NGIC is mandatory — fail immediately with a clear message if missing
     if ratebooks["NGICRatebook"] == "Not found":
-        raise ValueError(
-            "NGIC ratebook is required but could not be loaded. "
-            "Please upload a valid NGIC ratebook file and try again."
-        )
+        raise ValueError("NGIC ratebook is required.")
 
     # ── 2. Extract state / date metadata ──────────────────────────────────────
     info = get_rate_book_info(
         ngic_loaded=ratebooks["NGICRatebook"],
         mm_loaded=ratebooks["MMRatebook"],
     )
-    # info.state       → e.g. "New York"
-    # info.state_abb   → e.g. "NY"
-    # info.n_effective → e.g. "01-01-2025"
-    # info.r_effective → e.g. "01-01-2025"
 
     # ── 3. Resolve CW ratebook ────────────────────────────────────────────────
-    # If no CW file was uploaded, fall back to the path in config/constants.py.
     cw_source = CWRatebook if CWRatebook else str(CW_RATEBOOK_DEFAULT)
     cw_file   = load_ratebook(cw_source)
     if cw_file == "Not found":
-        raise ValueError(
-            f"CW (Countrywide) ratebook could not be loaded.\n"
-            f"Upload a CW file, or ensure this path is accessible:\n"
-            f"  {CW_RATEBOOK_DEFAULT}"
-        )
+        raise ValueError(f"CW ratebook could not be loaded: {CW_RATEBOOK_DEFAULT}")
 
     # ── 4. Load NAICS descriptions ────────────────────────────────────────────
     if progress_callback: progress_callback("Loading NAICS descriptions...")
     naics_descriptions = load_naics_descriptions()
 
     # ── 5. Assemble the rate_books dict & extract all tables ──────────────────
-    # Short keys here must match what BARates.Auto expects.
     rate_books: Dict[str, Union[pd.ExcelFile, str]] = {
         "CW":    cw_file,
         "NGIC":  ratebooks["NGICRatebook"],
@@ -461,28 +431,18 @@ def run(
         "CCMIC": ratebooks["CCMICRatebook"],
         "NWAG":  ratebooks["NWAGRatebook"],
     }
-
     rate_tables = load_all_ratebooks(rate_books, progress_callback)
 
     # ── 6. Build the Excel output ─────────────────────────────────────────────
-    if progress_callback: progress_callback("Building Excel rate pages (this may take a moment)...")
+    if progress_callback: progress_callback("Building Excel rate pages...")
     rate_pages_obj = BA.Auto(
-        info.state_abb,
-        info.state,
-        rate_tables,
-        info.n_effective,
-        info.r_effective,
-        rate_books["NGIC"],
-        rate_books["NAFF"],
-        rate_books["NACO"],
-        rate_books["NICOF"],
-        rate_books["NWAG"],
-        rate_books["MM"],
-        naics_descriptions,
-        SchedRatingMod,
+        info.state_abb, info.state, rate_tables,
+        info.n_effective, info.r_effective,
+        rate_books["NGIC"], rate_books["NAFF"], rate_books["NACO"],
+        rate_books["NICOF"], rate_books["NWAG"], rate_books["MM"],
+        naics_descriptions, SchedRatingMod,
     )
     ba_workbook = rate_pages_obj.buildBAPages()
-    print("Stage 1: Excel Build File Complete")
 
     # ── 7. Determine file names and save ──────────────────────────────────────
     if progress_callback: progress_callback("Saving Excel file...")
@@ -496,10 +456,20 @@ def run(
     ba_workbook.save(filename=xlsx_out)
     print("Stage 2: Excel file saved.")
 
-    # ── 8. Generate PDF ───────────────────────────────────────────────────────
-    if progress_callback: progress_callback("Generating PDF document...")
-    process_pagebreaks(xlsx_out, pdf_out)
+    # ── 8. Generate PDF (Optional) ────────────────────────────────────────────
+    if not skip_pdf:
+        if progress_callback: progress_callback("Generating PDF document...")
+        process_pagebreaks(xlsx_out, pdf_out)
 
     elapsed = time.perf_counter() - t_start
     if progress_callback: progress_callback(f"Successfully completed in {elapsed:0.1f} seconds! 🎉")
     print(f"This program ran in {elapsed:0.4f} seconds")
+
+    return xlsx_out, pdf_out
+
+
+def generate_pdf_only(xlsx_path: str, pdf_path: str, progress_callback: Optional[Callable[[str], None]] = None) -> None:
+    """Helper to run only the PDF conversion on an existing .xlsx file."""
+    if progress_callback: progress_callback("Generating PDF from Excel...")
+    process_pagebreaks(xlsx_path, pdf_path)
+    if progress_callback: progress_callback("PDF generation complete! 🎉")

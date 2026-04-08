@@ -438,8 +438,6 @@ def run(
     rate_pages_obj = BA.Auto(
         info.state_abb, info.state, rate_tables,
         info.n_effective, info.r_effective,
-        rate_books["NGIC"], rate_books["NAFF"], rate_books["NACO"],
-        rate_books["NICOF"], rate_books["NWAG"], rate_books["MM"],
         naics_descriptions, SchedRatingMod,
     )
     ba_workbook = rate_pages_obj.buildBAPages()

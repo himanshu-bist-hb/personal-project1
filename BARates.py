@@ -71,17 +71,12 @@ def log_exceptions(func):
     return wrapper
 
 class Auto:
-    def __init__(self, StateAbb, State, rateTables, nEffective, rEffective, NGICRatebook, NAFFRatebook, NACORatebook, NICOFRatebook, NWAGRatebook, MMRatebook,NAICSDescriptions, SchedRatingMod) -> None:
+    def __init__(self, StateAbb, State, rateTables, nEffective, rEffective, NAICSDescriptions, SchedRatingMod) -> None:
         self.StateAbb = StateAbb
         self.State = State
         self.rateTables = rateTables
         self.nEffective = nEffective # New business effective date
         self.rEffective = rEffective # Renewal business effective date
-        self.NGICRatebook = NGICRatebook
-        self.NAFFRatebook = NAFFRatebook
-        self.NACORatebook = NACORatebook
-        self.NICOFRatebook = NICOFRatebook
-        self.MMRatebook = MMRatebook
 
         self.NAICSDescriptions = NAICSDescriptions
         self.SchedRatingMod = SchedRatingMod
@@ -122,7 +117,7 @@ class Auto:
         company_codes = ["AICOA", "NMIC", "NICOA", "NPCIC"]
 
         #check that MM is in use
-        if self.MMRatebook != "Not found":
+        if self.rateTables["MM"] != "Not found":
             for company_code in company_codes:
                 # Copy the entire MM rate book
                 company_table = copy.deepcopy(self.rateTables["MM"])
@@ -252,14 +247,12 @@ class Auto:
 
             LCM Protocol: Goes through list of sheets that are flagged as LCM/Company Dev applicable. Then apply the multipliers.
         """
-        ratebook_names = ['NAFF', 'NACO', 'NICOF', 'CCMIC', 'HICNJ', 'NICOA', 'AICOA', 'NPCIC', 'NMIC','NWAG','NGIC'] # Level 2 company needs to be last.
-        ratebooks = [self.NAFFRatebook, self.NACORatebook, self.NICOFRatebook, self.rateTables['CCMIC'], self.rateTables['HICNJ'], self.rateTables["NICOA"], self.rateTables["AICOA"], self.rateTables["NPCIC"],self.rateTables["NMIC"], self.rateTables["NWAG"], self.NGICRatebook] # level2 needs to be last
+        ratebook_names = ['NAFF', 'NACO', 'NICOF', 'CCMIC', 'HICNJ', 'NICOA', 'AICOA', 'NPCIC', 'NMIC', 'NWAG', 'NGIC'] # Level 2 company needs to be last.
 
         available_names = []
-        available_books = []
-        for name, book in zip(ratebook_names, ratebooks):
+        for name in ratebook_names:
+            book = self.rateTables.get(name)
             if book != "Not found" and book is not None:
-                available_books.append(book)
                 available_names.append(name)
 
         for name in available_names:
@@ -270,7 +263,6 @@ class Auto:
         # Same thing for CCMIC.
         if (self.rateTables["NMIC"] is not None) or (self.rateTables["CCMIC"] is not None):
             self.rateTables["NGIC"] = None
-            self.NGICRatebook = None
 
     def compareCompanies(self, tableCode):
         """
@@ -10209,15 +10201,12 @@ class Auto:
         # state to state. This was made before the current comparison system. It is much more powerful than even the current but also more rule specific.
         # This approach is probably overkill, but it's what I could make work with the current system.
         #Rule 293 (Varies by state)
-        ratebook_names = ['NGIC', 'NAFF', 'NACO','CCMIC','HICNJ', 'NICOF','NMIC','NICOA','NPCIC','AICOA']
-        ratebooks = [self.NGICRatebook, self.NAFFRatebook, self.NACORatebook, self.rateTables['CCMIC'], self.rateTables['HICNJ'], self.NICOFRatebook, self.rateTables["NMIC"],self.rateTables["NICOA"],self.rateTables["NPCIC"],self.rateTables["AICOA"]]  # Replace with actual ratebooks
+        ratebook_names = ['NGIC', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
 
         available_companies = []
-        available_books = []
-
-        for company, book in zip(ratebook_names, ratebooks):
+        for company in ratebook_names:
+            book = self.rateTables.get(company)
             if book != "Not found" and book is not None:
-                available_books.append(book)
                 available_companies.append(company)
 
         map_293 = pd.read_excel(BA_INPUT_FILE, sheet_name="293 Map", engine='openpyxl')

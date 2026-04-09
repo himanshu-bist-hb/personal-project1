@@ -30,6 +30,13 @@ st.session_state.setdefault("pdf_status",  "idle")
 st.session_state.setdefault("lob",          "Business Auto")
 st.session_state.setdefault("confirm_step", "idle")
 st.session_state.setdefault("upload_reset", 0)
+st.session_state.setdefault("mode",          "individual")
+st.session_state.setdefault("multi_src_dir", "")
+st.session_state.setdefault("multi_save_dir","")
+st.session_state.setdefault("multi_gen_pdf", False)
+st.session_state.setdefault("multi_step",    "idle")
+st.session_state.setdefault("multi_results", [])
+st.session_state.setdefault("multi_sched",   0)
 
 LOB_NAV = [("Business Auto","🚗"),
     ("General Liability", "⚖️"),
@@ -388,6 +395,12 @@ div.btn-wait  > div > button { background:var(--border) !important; color:var(--
 .coming-soon .cs-title { font-family:'Libre Baskerville',serif; font-size:22px; font-weight:700; color:var(--nw-deep); margin-bottom:8px; }
 .coming-soon .cs-sub   { font-size:13px; color:var(--muted); max-width:380px; line-height:1.6; }
 .coming-soon .cs-tag   { margin-top:20px; display:inline-block; background:var(--nw-lt); color:var(--nw-blue); border:1px solid var(--border); border-radius:20px; font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; padding:5px 14px; }
+
+/* ── multi-state progress card ── */
+.multi-progress-card { display:flex; align-items:center; gap:14px; padding:14px 18px; border:1.5px solid var(--border); border-radius:10px; background:var(--surface); margin-top:10px; }
+.mp-label { font-size:9px; font-weight:700; letter-spacing:1.8px; text-transform:uppercase; color:var(--muted); flex-shrink:0; }
+.mp-state { font-size:15px; font-weight:700; color:var(--nw-deep); flex:1; }
+.mp-count { font-size:11px; color:var(--muted); flex-shrink:0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -582,316 +595,435 @@ spacer(28)
 # ─── BUSINESS AUTO ────────────────────────────────────────────────────────────
 if active_lob == "Business Auto":
 
-    L, R = st.columns([13, 7], gap="large")
+    DETECT_ORDER = ["HICNJ", "CCMIC", "NICOF", "NWAG", "NACO", "NAFF", "NGIC", "MM", "CW"]
 
-    with L:
-        st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
+    def scan_states(src_path):
+        states = []
+        try:
+            for item in sorted(Path(src_path).iterdir()):
+                if item.is_dir() and not item.name.startswith(('.', '_')):
+                    books = {}
+                    for f in item.iterdir():
+                        if f.is_file() and f.suffix.lower() in ('.xlsx', '.xlsm', '.xls'):
+                            name_up = f.name.upper()
+                            matched = next((k for k in DETECT_ORDER if k in name_up), None)
+                            if matched:
+                                books.setdefault(matched, []).append(f)
+                    has_ngic  = "NGIC" in books and len(books["NGIC"]) == 1
+                    conflicts = [k for k, v in books.items() if len(v) > 1]
+                    states.append({"name": item.name, "path": item, "books": books,
+                                   "ready": has_ngic and not conflicts,
+                                   "conflicts": conflicts, "has_ngic": has_ngic})
+        except Exception:
+            pass
+        return states
 
-        # ── Multi-file uploader ─────────────────────────────────────────────
-        uploaded = st.file_uploader(
+    # ── Mode toggle ────────────────────────────────────────────────────────────
+    mode = st.session_state.mode
+    tc1, tc2, _ = st.columns([2, 2, 8])
+    with tc1:
+        if st.button("Individual State", key="btn_ind", use_container_width=True,
+                     type="primary" if mode == "individual" else "secondary"):
+            if mode != "individual":
+                st.session_state.mode = "individual"
+                st.session_state.confirm_step = "idle"
+                st.rerun()
+    with tc2:
+        if st.button("Multiple States", key="btn_mul", use_container_width=True,
+                     type="primary" if mode == "multiple" else "secondary"):
+            if mode != "multiple":
+                st.session_state.mode = "multiple"
+                st.session_state.multi_step = "idle"
+                st.rerun()
+
+    spacer(16)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # INDIVIDUAL STATE MODE
+    # ══════════════════════════════════════════════════════════════════════════
+    if mode == "individual":
+        L, R = st.columns([13, 7], gap="large")
+
+        with L:
+            st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
+
+            uploaded = st.file_uploader(
             "Select all ratebook files at once — filenames must contain the company code (NGIC, MM, NACO, …)",
             type=["xlsx", "xlsm", "xls"],
             accept_multiple_files=True,
             key=f"multi_up_{st.session_state.upload_reset}",
         )
 
-        # ── Auto-detect & assign ────────────────────────────────────────────
-        # Check longer/more-specific codes first to avoid false matches
-        DETECT_ORDER = ["HICNJ", "CCMIC", "NICOF", "NWAG", "NACO", "NAFF", "NGIC", "MM", "CW"]
+            # ── Auto-detect & assign ───────────────────────────────────────
+            if uploaded:
+                grouped = {}
+                for f in uploaded:
+                    name_up = f.name.upper()
+                    matched = next((k for k in DETECT_ORDER if k in name_up), None)
+                    grouped.setdefault(matched or "__unknown__", []).append(f)
+                for key in ALL_KEYS:
+                    files = grouped.get(key, [])
+                    if len(files) == 1:
+                        st.session_state[f"file_{key}"] = {"name": files[0].name, "bytes": files[0].read()}
+                    elif len(files) > 1:
+                        st.session_state[f"file_{key}"] = {"error": "multiple", "names": [f.name for f in files]}
 
-        if uploaded:
-            grouped = {}
-            for f in uploaded:
-                name_up = f.name.upper()
-                matched = next((k for k in DETECT_ORDER if k in name_up), None)
-                grouped.setdefault(matched or "__unknown__", []).append(f)
-
+            # ── Assignment table ───────────────────────────────────────────
+            LABELS = {"NGIC": "Required", "CW": "Optional"}
+            rows_html = ""; n_ok = n_err = 0
             for key in ALL_KEYS:
-                files = grouped.get(key, [])
-                if len(files) == 1:
-                    st.session_state[f"file_{key}"] = {"name": files[0].name, "bytes": files[0].read()}
-                elif len(files) > 1:
-                    st.session_state[f"file_{key}"] = {"error": "multiple", "names": [f.name for f in files]}
+                val = st.session_state.get(f"file_{key}")
+                bh = '<span class="ab-req">Required</span>' if LABELS.get(key) == "Required" else ('<span class="ab-opt">Optional</span>' if LABELS.get(key) == "Optional" else "")
+                if val is None:
+                    rows_html += f'<div class="arow arow-empty"><span class="aco">{key} {bh}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
+                elif "error" in val:
+                    n_err += 1
+                    rows_html += f'<div class="arow arow-error"><span class="aco">{key} {bh}</span><span class="afile afile-err">&#9888;&nbsp; Multiple files: {", ".join(val["names"])}</span><span class="astat astat-err">&#10005;</span></div>'
+                else:
+                    n_ok += 1
+                    rows_html += f'<div class="arow arow-ok"><span class="aco">{key} {bh}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+            summary = f'{n_ok} assigned' + (f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err>1 else ""}</span>' if n_err else '')
+            st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>', unsafe_allow_html=True)
 
-        # ── Assignment table ────────────────────────────────────────────────
-        LABELS = {"NGIC": "Required", "CW": "Optional"}
-        rows_html = ""
-        n_ok = n_err = 0
+            if any(st.session_state[f"file_{k}"] for k in ALL_KEYS):
+                spacer(8)
+                _, clr = st.columns([5, 1])
+                with clr:
+                    if st.button("Clear all", type="secondary"):
+                        for k in ALL_KEYS: st.session_state[f"file_{k}"] = None
+                        st.session_state.upload_reset += 1
+                        st.session_state.run_status = "idle"
+                        st.rerun()
 
-        for key in ALL_KEYS:
-            val = st.session_state.get(f"file_{key}")
-            badge_text = LABELS.get(key)
-            badge_html = ""
-            if badge_text == "Required":
-                badge_html = '<span class="ab-req">Required</span>'
-            elif badge_text == "Optional":
-                badge_html = '<span class="ab-opt">Optional</span>'
-
-            if val is None:
-                rows_html += f'<div class="arow arow-empty"><span class="aco">{key} {badge_html}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
-            elif "error" in val:
-                n_err += 1
-                names_str = ", ".join(val["names"])
-                rows_html += f'<div class="arow arow-error"><span class="aco">{key} {badge_html}</span><span class="afile afile-err">&#9888;&nbsp; Multiple files matched: {names_str}</span><span class="astat astat-err">&#10005;</span></div>'
+        with R:
+            st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
+            typed = st.text_input("save_path", value=st.session_state.save_dir, placeholder="Paste path or click Browse", label_visibility="collapsed")
+            if typed != st.session_state.save_dir: st.session_state.save_dir = typed
+            if st.button("Browse", key="browse_btn"):
+                folder = browse_folder()
+                if folder: st.session_state.save_dir = folder; st.rerun()
+            if st.session_state.save_dir:
+                p = st.session_state.save_dir
+                st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
             else:
-                n_ok += 1
-                rows_html += f'<div class="arow arow-ok"><span class="aco">{key} {badge_html}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+                st.markdown('<p class="f-hint">Browse your device or paste the full folder path</p>', unsafe_allow_html=True)
 
-        summary = f'{n_ok} assigned'
-        if n_err:
-            summary += f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err > 1 else ""}</span>'
+            spacer(6)
+            st.markdown('<p class="f-label">&#128202; &nbsp;Schedule Rating Mod</p>', unsafe_allow_html=True)
+            nc, pc = st.columns([3, 1])
+            with nc:
+                tm = st.number_input("mod_num", min_value=0, max_value=100, value=st.session_state.sched_mod, step=1, label_visibility="collapsed")
+                if tm != st.session_state.sched_mod: st.session_state.sched_mod = int(tm)
+            with pc:
+                st.markdown(f'<div style="display:flex;align-items:center;height:42px;padding-left:4px;"><span style="font-size:22px;font-weight:700;color:#1A5DAB;line-height:1;">{st.session_state.sched_mod}<span style="font-size:13px;font-weight:400;color:#6B7A9E;">%</span></span></div>', unsafe_allow_html=True)
+            spacer(6)
+            sv = st.slider("mod_slider", 0, 100, value=st.session_state.sched_mod, step=1, format="%d%%", label_visibility="collapsed")
+            if sv != st.session_state.sched_mod: st.session_state.sched_mod = sv; st.rerun()
+            st.markdown('<p class="f-hint">Rule 417 &middot; State Schedule Rating Maximum Modification Threshold</p>', unsafe_allow_html=True)
 
-        st.markdown(
-            f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>',
-            unsafe_allow_html=True,
-        )
+            spacer(6)
+            st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
+            has_files = any_req(); save_ok = bool(st.session_state.save_dir)
+            nr_now = n_req(); sdv = st.session_state.save_dir; mv = st.session_state.sched_mod
+            req_sub  = f"All {len(REQUIRED)} ratebooks uploaded" if all_req() else f"{nr_now} of {len(REQUIRED)} ratebooks uploaded"
+            save_sub = (("…"+sdv[-36:]) if len(sdv)>38 else sdv) if save_ok else "Not yet selected"
 
-        # ── Clear all ────────────────────────────────────────────────────────
-        if any(st.session_state[f"file_{k}"] for k in ALL_KEYS):
-            spacer(8)
-            _, clr = st.columns([5, 1])
-            with clr:
-                if st.button("Clear all", type="secondary"):
-                    for k in ALL_KEYS:
-                        st.session_state[f"file_{k}"] = None
-                    st.session_state.upload_reset += 1
-                    st.session_state.run_status = "idle"
-                    st.rerun()
+            def rdy(ok, title, sub):
+                d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
+                return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
 
-    with R:
-        st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
+            ngic_uploaded = has_ngic(); ngic_sub = "Uploaded" if ngic_uploaded else "Required — please upload NGIC"
+            st.markdown('<div class="rdy-card">'
+                + rdy(ngic_uploaded, 'NGIC Ratebook <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', ngic_sub)
+                + rdy(has_files, f'Other Ratebooks &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{nr_now}/{len(REQUIRED)}</span>', req_sub)
+                + rdy(save_ok, "Save location", save_sub)
+                + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{mv}%</span>', "Rule 417 threshold")
+                + '</div>', unsafe_allow_html=True)
 
-        st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
-        typed = st.text_input("save_path", value=st.session_state.save_dir,
-                              placeholder="Paste path or click Browse", label_visibility="collapsed")
-        if typed != st.session_state.save_dir:
-            st.session_state.save_dir = typed
+            ngic_ok = has_ngic(); ready = ngic_ok and save_ok
 
-        if st.button("Browse", key="browse_btn"):
-            folder = browse_folder()
-            if folder:
-                st.session_state.save_dir = folder
+            if st.session_state.confirm_step == "idle":
+                if ready:
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button("&#129413;  Create Rate Pages", key="run_btn", use_container_width=True):
+                        st.session_state.confirm_step = "confirm"; st.session_state.run_status = "idle"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    missing = (["NGIC ratebook"] if not ngic_ok else []) + (["save location"] if not save_ok else [])
+                    st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                    st.button(f"Waiting \u2014 {', '.join(missing)}", key="run_btn_dis", use_container_width=True, disabled=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            elif st.session_state.confirm_step == "confirm":
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                st.button("&#129413;  Create Rate Pages", key="run_btn_cfm", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
+                spacer(8)
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("Cancel", key="cancel_btn", use_container_width=True, type="secondary"):
+                        st.session_state.confirm_step = "idle"; st.rerun()
+                with bc2:
+                    if st.button("Proceed", key="proceed_btn", use_container_width=True, type="primary"):
+                        st.session_state.confirm_step = "processing"; st.rerun()
+
+            elif st.session_state.confirm_step == "processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Processing Excel...", key="run_btn_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph = st.empty()
+                def update_progress(msg):
+                    loader_ph.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Creating Excel rate pages…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                update_progress("Please wait while the workbooks are processed.")
+                from BARatePages import run as run_rate_pages
+                try:
+                    def _rb(k):
+                        f = st.session_state.get(f"file_{k}")
+                        return io.BytesIO(f["bytes"]) if f and "error" not in f else None
+                    xlsx_out, pdf_out = run_rate_pages(
+                        NGICRatebook=_rb("NGIC"), MMRatebook=_rb("MM"), NACORatebook=_rb("NACO"),
+                        NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"), HICNJRatebook=_rb("HICNJ"),
+                        CCMICRatebook=_rb("CCMIC"), NWAGRatebook=_rb("NWAG"), CWRatebook=_rb("CW"),
+                        folder_selected=st.session_state.save_dir,
+                        SchedRatingMod=int(st.session_state.sched_mod) or None,
+                        progress_callback=update_progress, skip_pdf=True)
+                    st.session_state.xlsx_path = xlsx_out; st.session_state.pdf_path = pdf_out
+                    st.session_state.run_status = "success"; st.session_state.pdf_status = "idle"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.run_status = "error"; st.session_state.run_msg = str(e)
+                st.session_state.confirm_step = "idle"; st.rerun()
+
+            elif st.session_state.confirm_step == "pdf_processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Generating PDF...", key="pdf_btn_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph2 = st.empty()
+                def update_pdf_progress(msg):
+                    loader_ph2.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting to PDF…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                from BARatePages import generate_pdf_only
+                try:
+                    generate_pdf_only(st.session_state.xlsx_path, st.session_state.pdf_path, progress_callback=update_pdf_progress)
+                    st.session_state.pdf_status = "success"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.pdf_status = "error"; st.session_state.run_msg = str(e)
+                st.session_state.confirm_step = "idle"; st.rerun()
+
+            if st.session_state.run_status == "success":
+                spacer(10)
+                st.success(f"&#10003;  Excel created: {Path(st.session_state.xlsx_path).name}")
+                if st.session_state.pdf_status != "success":
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button("Generate PDF Document", key="gen_pdf_btn", use_container_width=True):
+                        st.session_state.confirm_step = "pdf_processing"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    if st.session_state.pdf_status == "error":
+                        st.error(f"PDF Error: {st.session_state.run_msg}")
+                else:
+                    st.success(f"&#10003;  PDF created: {Path(st.session_state.pdf_path).name}")
+            elif st.session_state.run_status == "error":
+                spacer(10); st.error(st.session_state.run_msg)
+
+            spacer(24)
+            st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # MULTIPLE STATES MODE
+    # ══════════════════════════════════════════════════════════════════════════
+    else:
+        L, R = st.columns([13, 7], gap="large")
+
+        with L:
+            st.markdown('<div class="sec-label">&#128194; &nbsp;Source Folder</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-label">&#128193; &nbsp;Main Ratebooks Folder</p>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Select the folder that contains one subfolder per state. Each subfolder must contain that state\'s ratebook files.</p>', unsafe_allow_html=True)
+            spacer(4)
+            typed_src = st.text_input("multi_src_path", value=st.session_state.multi_src_dir, placeholder="Paste path or click Browse", label_visibility="collapsed", key="multi_src_input")
+            if typed_src != st.session_state.multi_src_dir:
+                st.session_state.multi_src_dir = typed_src; st.session_state.multi_step = "idle"; st.session_state.multi_results = []
+            if st.button("Browse", key="browse_src_btn"):
+                folder = browse_folder()
+                if folder: st.session_state.multi_src_dir = folder; st.session_state.multi_step = "idle"; st.session_state.multi_results = []; st.rerun()
+
+            if st.session_state.multi_src_dir:
+                src_path = Path(st.session_state.multi_src_dir)
+                if src_path.exists() and src_path.is_dir():
+                    p = str(src_path)
+                    st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
+                    spacer(14)
+                    states = scan_states(src_path)
+                    if not states:
+                        st.markdown('<p class="f-hint">No state subfolders found in this directory.</p>', unsafe_allow_html=True)
+                    else:
+                        n_ready  = sum(1 for s in states if s["ready"])
+                        n_issues = len(states) - n_ready
+                        issue_txt = f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_issues} issue{"s" if n_issues>1 else ""}</span>' if n_issues else ''
+                        state_rows = ""
+                        for s in states:
+                            found_str = ", ".join(sorted(s["books"].keys())) or "—"
+                            if s["ready"]:
+                                state_rows += f'<div class="arow arow-ok" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile afile-assigned">{found_str}</span><span class="astat astat-ok">&#10003;</span></div>'
+                            elif s["conflicts"]:
+                                state_rows += f'<div class="arow arow-error" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile afile-err">&#9888;&nbsp; Conflicts: {", ".join(s["conflicts"])}</span><span class="astat astat-err">&#9888;</span></div>'
+                            elif not s["has_ngic"]:
+                                state_rows += f'<div class="arow arow-error" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile afile-err">Missing NGIC &nbsp;({found_str})</span><span class="astat astat-err">&#10005;</span></div>'
+                            else:
+                                state_rows += f'<div class="arow arow-empty" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile">{found_str}</span><span class="astat astat-empty">—</span></div>'
+                        st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>States Detected &nbsp;({len(states)})</span><span>{n_ready} ready{issue_txt}</span></div>{state_rows}</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<p style="font-size:11px;color:#C8102E;margin:4px 0;">Path not found or not a directory.</p>', unsafe_allow_html=True)
+
+        with R:
+            st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Each state\'s Excel will be saved in <code>Save Location / State /</code></p>', unsafe_allow_html=True)
+            spacer(4)
+            typed_save = st.text_input("multi_save_path", value=st.session_state.multi_save_dir, placeholder="Paste path or click Browse", label_visibility="collapsed", key="multi_save_input")
+            if typed_save != st.session_state.multi_save_dir: st.session_state.multi_save_dir = typed_save
+            if st.button("Browse", key="browse_save_btn"):
+                folder = browse_folder()
+                if folder: st.session_state.multi_save_dir = folder; st.rerun()
+            if st.session_state.multi_save_dir:
+                p = st.session_state.multi_save_dir
+                st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
+            else:
+                st.markdown('<p class="f-hint">Choose where all output files will be saved.</p>', unsafe_allow_html=True)
+
+            spacer(6)
+            st.markdown('<p class="f-label">&#128202; &nbsp;Schedule Rating Mod</p>', unsafe_allow_html=True)
+            nc2, pc2 = st.columns([3, 1])
+            with nc2:
+                tm2 = st.number_input("multi_mod_num", min_value=0, max_value=100, value=st.session_state.multi_sched, step=1, label_visibility="collapsed")
+                if tm2 != st.session_state.multi_sched: st.session_state.multi_sched = int(tm2)
+            with pc2:
+                st.markdown(f'<div style="display:flex;align-items:center;height:42px;padding-left:4px;"><span style="font-size:22px;font-weight:700;color:#1A5DAB;line-height:1;">{st.session_state.multi_sched}<span style="font-size:13px;font-weight:400;color:#6B7A9E;">%</span></span></div>', unsafe_allow_html=True)
+            spacer(4)
+            sv2 = st.slider("multi_mod_slider", 0, 100, value=st.session_state.multi_sched, step=1, format="%d%%", label_visibility="collapsed")
+            if sv2 != st.session_state.multi_sched: st.session_state.multi_sched = sv2; st.rerun()
+            st.markdown('<p class="f-hint">Rule 417 &middot; Applied to all states</p>', unsafe_allow_html=True)
+
+            spacer(6)
+            gen_pdf = st.checkbox("Generate PDF for each state", value=st.session_state.multi_gen_pdf, key="multi_pdf_chk")
+            if gen_pdf != st.session_state.multi_gen_pdf: st.session_state.multi_gen_pdf = gen_pdf
+            if gen_pdf:
+                st.markdown('<p class="f-hint">PDFs saved to <code>Save Location / PDF /</code></p>', unsafe_allow_html=True)
+
+            spacer(6)
+            st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
+            src_ok      = bool(st.session_state.multi_src_dir) and Path(st.session_state.multi_src_dir).is_dir()
+            save_ok_m   = bool(st.session_state.multi_save_dir)
+            states_list = scan_states(st.session_state.multi_src_dir) if src_ok else []
+            n_ready_m   = sum(1 for s in states_list if s["ready"])
+            ready_m     = src_ok and save_ok_m and n_ready_m > 0
+
+            def rdy(ok, title, sub):
+                d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
+                return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
+
+            src_sub  = (f"{len(states_list)} folders, {n_ready_m} ready" if states_list else "No states found") if src_ok else "Not selected"
+            save_sub = (("…"+st.session_state.multi_save_dir[-36:]) if len(st.session_state.multi_save_dir)>38 else st.session_state.multi_save_dir) if save_ok_m else "Not yet selected"
+            st.markdown('<div class="rdy-card">'
+                + rdy(src_ok and bool(states_list), "Source Folder", src_sub)
+                + rdy(n_ready_m > 0, f'States Ready &nbsp;<span style="font-size:10px;color:#6B7A9E;">{n_ready_m}/{len(states_list)}</span>', f"{n_ready_m} state{'s' if n_ready_m!=1 else ''} with valid NGIC ratebook")
+                + rdy(save_ok_m, "Save Location", save_sub)
+                + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;">{st.session_state.multi_sched}%</span>', "Rule 417 — applied to all states")
+                + '</div>', unsafe_allow_html=True)
+
+            if st.session_state.multi_step == "idle":
+                if ready_m:
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button(f"&#129413;  Create Rate Pages for {n_ready_m} State{'s' if n_ready_m!=1 else ''}", key="multi_run_btn", use_container_width=True):
+                        st.session_state.multi_step = "confirm"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    missing_m = (["source folder"] if not src_ok else (["no ready states"] if not n_ready_m else [])) + (["save location"] if not save_ok_m else [])
+                    st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                    st.button(f"Waiting \u2014 {', '.join(missing_m)}", key="multi_run_dis", use_container_width=True, disabled=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            elif st.session_state.multi_step == "confirm":
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                st.button(f"&#129413;  Create Rate Pages for {n_ready_m} State{'s' if n_ready_m!=1 else ''}", key="multi_run_cfm", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to all workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
+                spacer(8)
+                mc1, mc2 = st.columns(2)
+                with mc1:
+                    if st.button("Cancel", key="multi_cancel_btn", use_container_width=True, type="secondary"):
+                        st.session_state.multi_step = "idle"; st.rerun()
+                with mc2:
+                    if st.button("Proceed", key="multi_proceed_btn", use_container_width=True, type="primary"):
+                        st.session_state.multi_step = "processing"; st.rerun()
+
+            elif st.session_state.multi_step == "processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Processing states...", key="multi_proc_btn", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                from BARatePages import run as run_rate_pages, generate_pdf_only
+                src_path_m   = Path(st.session_state.multi_src_dir)
+                save_path_m  = Path(st.session_state.multi_save_dir)
+                states_to_run = [s for s in scan_states(src_path_m) if s["ready"]]
+                pdf_dir = save_path_m / "PDF"
+                if st.session_state.multi_gen_pdf: pdf_dir.mkdir(parents=True, exist_ok=True)
+
+                prog_bar    = st.progress(0.0)
+                state_ph    = st.empty()
+                results = []
+
+                for idx, s in enumerate(states_to_run):
+                    sname = s["name"]
+                    state_ph.markdown(f'<div class="multi-progress-card"><div class="mp-label">Processing</div><div class="mp-state">{sname}</div><div class="mp-count">{idx+1} of {len(states_to_run)}</div></div>', unsafe_allow_html=True)
+                    out_dir = save_path_m / sname
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    def _p(k): files = s["books"].get(k); return files[0] if files and len(files)==1 else None
+                    try:
+                        xlsx_out, _ = run_rate_pages(
+                            NGICRatebook=_p("NGIC"), MMRatebook=_p("MM"), NACORatebook=_p("NACO"),
+                            NAFFRatebook=_p("NAFF"), NICOFRatebook=_p("NICOF"), HICNJRatebook=_p("HICNJ"),
+                            CCMICRatebook=_p("CCMIC"), NWAGRatebook=_p("NWAG"), CWRatebook=None,
+                            folder_selected=str(out_dir), SchedRatingMod=int(st.session_state.multi_sched) or None, skip_pdf=True)
+                        pdf_out = None
+                        if st.session_state.multi_gen_pdf:
+                            pdf_file = pdf_dir / (Path(xlsx_out).stem + ".pdf")
+                            generate_pdf_only(xlsx_out, str(pdf_file))
+                            pdf_out = str(pdf_file)
+                        results.append({"state": sname, "xlsx": xlsx_out, "pdf": pdf_out, "error": None})
+                    except Exception as e:
+                        import traceback; traceback.print_exc()
+                        results.append({"state": sname, "xlsx": None, "pdf": None, "error": str(e)})
+                    prog_bar.progress((idx + 1) / len(states_to_run))
+
+                state_ph.empty()
+                st.session_state.multi_results = results
+                st.session_state.multi_step = "done"
                 st.rerun()
 
-        if st.session_state.save_dir:
-            p = st.session_state.save_dir
-            st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
-        else:
-            st.markdown('<p class="f-hint">Browse your device or paste the full folder path</p>', unsafe_allow_html=True)
+            elif st.session_state.multi_step == "done":
+                results   = st.session_state.multi_results
+                n_success = sum(1 for r in results if not r["error"])
+                n_failed  = len(results) - n_success
+                if n_failed == 0:
+                    st.success(f"&#10003;  All {n_success} state{'s' if n_success!=1 else ''} completed successfully")
+                else:
+                    st.warning(f"{n_success} completed &nbsp;&middot;&nbsp; {n_failed} failed")
+                result_rows = ""
+                for r in results:
+                    if r["error"]:
+                        result_rows += f'<div class="arow arow-error"><span class="aco">{r["state"]}</span><span class="afile afile-err">{str(r["error"])[:70]}</span><span class="astat astat-err">&#10005;</span></div>'
+                    else:
+                        pdf_tag = ' &nbsp;<span style="color:var(--ok-fg);font-size:10px;">+ PDF</span>' if r["pdf"] else ''
+                        result_rows += f'<div class="arow arow-ok"><span class="aco">{r["state"]}</span><span class="afile afile-assigned">{Path(r["xlsx"]).name}{pdf_tag}</span><span class="astat astat-ok">&#10003;</span></div>'
+                st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>Results</span><span>{n_success}/{len(results)} completed</span></div>{result_rows}</div>', unsafe_allow_html=True)
+                spacer(8)
+                if st.button("Start Over", key="multi_reset_btn", type="secondary"):
+                    st.session_state.multi_step = "idle"; st.session_state.multi_results = []; st.rerun()
 
-        spacer(6)
-        st.markdown('<p class="f-label">&#128202; &nbsp;Schedule Rating Mod</p>', unsafe_allow_html=True)
-        nc, pc = st.columns([3,1])
-        with nc:
-            tm = st.number_input("mod_num", min_value=0, max_value=100,
-                                 value=st.session_state.sched_mod, step=1, label_visibility="collapsed")
-            if tm != st.session_state.sched_mod: st.session_state.sched_mod = int(tm)
-        with pc:
-            st.markdown(f'<div style="display:flex;align-items:center;height:42px;padding-left:4px;">'
-                        f'<span style="font-size:22px;font-weight:700;color:#1A5DAB;line-height:1;">'
-                        f'{st.session_state.sched_mod}'
-                        f'<span style="font-size:13px;font-weight:400;color:#6B7A9E;">%</span>'
-                        f'</span></div>', unsafe_allow_html=True)
-
-        spacer(6)
-        sv = st.slider("mod_slider", 0, 100, value=st.session_state.sched_mod,
-                       step=1, format="%d%%", label_visibility="collapsed")
-        if sv != st.session_state.sched_mod:
-            st.session_state.sched_mod = sv
-            st.rerun()
-        st.markdown('<p class="f-hint">Rule 417 &middot; State Schedule Rating Maximum Modification Threshold</p>', unsafe_allow_html=True)
-
-        spacer(6)
-        st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
-
-        has_files = any_req(); save_ok = bool(st.session_state.save_dir)
-        nr_now = n_req();   sdv = st.session_state.save_dir; mv = st.session_state.sched_mod
-        req_sub  = f"All {len(REQUIRED)} ratebooks uploaded" if all_req() else f"{nr_now} of {len(REQUIRED)} ratebooks uploaded"
-        save_sub = (("…"+sdv[-36:]) if len(sdv)>38 else sdv) if save_ok else "Not yet selected"
-
-        def rdy(ok, title, sub):
-            d = "dot-ok" if ok else "dot-wait"
-            i = "&#10003;" if ok else "&#9675;"
-            return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
-
-        ngic_uploaded = has_ngic()
-        ngic_sub = "Uploaded" if ngic_uploaded else "Required — please upload NGIC"
-
-        st.markdown(
-            '<div class="rdy-card">'
-            + rdy(ngic_uploaded, 'NGIC Ratebook <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', ngic_sub)
-            + rdy(has_files,  f'Other Ratebooks &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{nr_now}/{len(REQUIRED)}</span>', req_sub)
-            + rdy(save_ok, "Save location", save_sub)
-            + rdy(True,    f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{mv}%</span>', "Rule 417 threshold")
-            + '</div>', unsafe_allow_html=True)
-
-        ngic_ok = has_ngic()
-        ready = ngic_ok and save_ok
-
-        # ── Step: idle → show Create button or waiting ────────────────────
-        if st.session_state.confirm_step == "idle":
-            if ready:
-                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                if st.button("&#129413;  Create Rate Pages", key="run_btn", use_container_width=True):
-                    st.session_state.confirm_step = "confirm"
-                    st.session_state.run_status = "idle"
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                missing = []
-                if not ngic_ok:   missing.append("NGIC ratebook")
-                if not save_ok:   missing.append("save location")
-                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-                st.button(f"Waiting \u2014 {', '.join(missing)}", key="run_btn_dis",
-                          use_container_width=True, disabled=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        # ── Step: confirm → inline warning box below button ─────────────
-        elif st.session_state.confirm_step == "confirm":
-            st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-            st.button("&#129413;  Create Rate Pages", key="run_btn_cfm", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            st.markdown("""
-            <div class="warn-box">
-              <div class="wb-head">
-                <span class="wb-icon">⚠️</span>
-                <span class="wb-title">Close &amp; save all open Excel files</span>
-              </div>
-              <p class="wb-body">
-                The builder needs exclusive access to the workbooks.
-                Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.
-              </p>
-            </div>
-            """, unsafe_allow_html=True)
-
-            spacer(8)
-            bc1, bc2 = st.columns(2)
-            with bc1:
-                if st.button("Cancel", key="cancel_btn", use_container_width=True, type="secondary"):
-                    st.session_state.confirm_step = "idle"
-                    st.rerun()
-            with bc2:
-                if st.button("Proceed", key="proceed_btn", use_container_width=True, type="primary"):
-                    st.session_state.confirm_step = "processing"
-                    st.rerun()
-
-        # ── Step: processing → inline spinner below button ─────────────────
-        elif st.session_state.confirm_step == "processing":
-            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-            st.button("Processing Excel...", key="run_btn_proc", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            loader_placeholder = st.empty()
-
-            def update_progress(msg: str):
-                loader_placeholder.markdown(f"""
-                <div class="inline-loader">
-                  <div class="spin-ring"></div>
-                  <div>
-                    <div class="loader-label">Creating Excel rate pages…</div>
-                    <div class="loader-sub">{msg}</div>
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # Initial message
-            update_progress("Please wait while the workbooks are processed.")
-
-            from BARatePages import run as run_rate_pages
-            try:
-                # Set skip_pdf=True as we want to separate PDF generation
-                def _rb(key):
-                    f = st.session_state.get(f"file_{key}")
-                    if f and "error" not in f:
-                        return io.BytesIO(f["bytes"])
-                    return None
-
-                xlsx_out, pdf_out = run_rate_pages(
-                    NGICRatebook=_rb("NGIC"), MMRatebook=_rb("MM"),
-                    NACORatebook=_rb("NACO"), NICOFRatebook=_rb("NICOF"),
-                    NAFFRatebook=_rb("NAFF"), HICNJRatebook=_rb("HICNJ"),
-                    CCMICRatebook=_rb("CCMIC"), NWAGRatebook=_rb("NWAG"),
-                    folder_selected=st.session_state.save_dir,
-                    SchedRatingMod=int(st.session_state.sched_mod) or None,
-                    CWRatebook=_rb("CW"),
-                    progress_callback=update_progress,
-                    skip_pdf=True
-                )
-                st.session_state.xlsx_path = xlsx_out
-                st.session_state.pdf_path = pdf_out
-                st.session_state.run_status = "success"
-                st.session_state.pdf_status = "idle"
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                st.session_state.run_status = "error"
-                st.session_state.run_msg = str(e)
-
-            st.session_state.confirm_step = "idle"
-            st.rerun()
-
-        # ── Step: pdf_processing → inline spinner for PDF ─────────────────
-        elif st.session_state.confirm_step == "pdf_processing":
-            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-            st.button("Generating PDF...", key="pdf_btn_proc", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-            loader_placeholder = st.empty()
-
-            def update_pdf_progress(msg: str):
-                loader_placeholder.markdown(f"""
-                <div class="inline-loader">
-                  <div class="spin-ring"></div>
-                  <div>
-                    <div class="loader-label">Converting to PDF…</div>
-                    <div class="loader-sub">{msg}</div>
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
-
-            from BARatePages import generate_pdf_only
-            try:
-                generate_pdf_only(
-                    st.session_state.xlsx_path,
-                    st.session_state.pdf_path,
-                    progress_callback=update_pdf_progress
-                )
-                st.session_state.pdf_status = "success"
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                st.session_state.pdf_status = "error"
-                st.session_state.run_msg = str(e)
-
-            st.session_state.confirm_step = "idle"
-            st.rerun()
-
-        if st.session_state.run_status == "success":
-            spacer(10)
-            st.success(f"&#10003;  Excel Rate pages created: {Path(st.session_state.xlsx_path).name}")
-            
-            # Show PDF generation button only if PDF hasn't been successfully generated yet
-            if st.session_state.pdf_status != "success":
-                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                if st.button("Generate PDF Document", key="gen_pdf_btn", use_container_width=True):
-                    st.session_state.confirm_step = "pdf_processing"
-                    st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-                if st.session_state.pdf_status == "error":
-                    st.error(f"PDF Error: {st.session_state.run_msg}")
-            else:
-                st.success(f"&#10003;  PDF Document created: {Path(st.session_state.pdf_path).name}")
-
-        elif st.session_state.run_status == "error":
-            spacer(10)
-            st.error(st.session_state.run_msg)
-
-        spacer(24)
-        st.markdown("""<div style="padding-top:14px;border-top:1px solid var(--border);">
-          <p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">
-            Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only
-          </p></div>""", unsafe_allow_html=True)
+            spacer(24)
+            st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
 
 
 # ─── OTHER LOBs ───────────────────────────────────────────────────────────────

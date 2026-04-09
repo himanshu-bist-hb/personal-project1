@@ -27,8 +27,9 @@ st.session_state.setdefault("run_msg",     "")
 st.session_state.setdefault("xlsx_path",   "")
 st.session_state.setdefault("pdf_path",    "")
 st.session_state.setdefault("pdf_status",  "idle")
-st.session_state.setdefault("lob",         "Business Auto")
+st.session_state.setdefault("lob",          "Business Auto")
 st.session_state.setdefault("confirm_step", "idle")
+st.session_state.setdefault("upload_reset", 0)
 
 LOB_NAV = [("Business Auto","🚗"),
     ("General Liability", "⚖️"),
@@ -39,10 +40,14 @@ LOB_NAMES   = [l for l, _ in LOB_NAV]
 LOB_OPTIONS = [f"{ic}  {nm}" for nm, ic in LOB_NAV]
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
-def n_req():   return sum(1 for k in REQUIRED if st.session_state[f"file_{k}"])
-def all_req(): return n_req() == len(REQUIRED)
-def any_req(): return n_req() > 0
-def has_ngic(): return bool(st.session_state["file_NGIC"])
+def _valid(k):
+    v = st.session_state.get(f"file_{k}")
+    return v is not None and "error" not in v
+
+def n_req():    return sum(1 for k in REQUIRED if _valid(k))
+def all_req():  return n_req() == len(REQUIRED)
+def any_req():  return n_req() > 0
+def has_ngic(): return _valid("NGIC")
 
 def chip(f):
     if f:
@@ -282,15 +287,36 @@ header { display:none !important; height:0 !important; min-height:0 !important; 
 .chip-ok   { display:inline-flex; align-items:center; gap:4px; background:var(--ok-bg); border:1px solid #9ECDB0; border-radius:5px; padding:2px 8px; font-size:10px; color:var(--ok-fg); font-weight:600; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .chip-none { display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--border); border-radius:5px; padding:2px 8px; font-size:10px; color:var(--muted); }
 
-/* ── file uploader ── */
-[data-testid="stFileUploader"] { background:var(--surface) !important; border:1.5px dashed var(--border) !important; border-radius:7px !important; }
-[data-testid="stFileUploader"] section { padding:6px 10px !important; min-height:unset !important; }
-[data-testid="stFileUploaderDropzoneInstructions"] { display:none !important; }
-[data-testid="stFileUploaderDropzone"] { padding:4px !important; }
-[data-testid="stFileUploaderDropzone"] > div { flex-direction:row !important; align-items:center !important; gap:8px !important; }
-[data-testid="stFileUploaderDropzone"] button { font-size:10px !important; font-weight:600 !important; padding:4px 10px !important; border-radius:5px !important; white-space:nowrap !important; min-height:unset !important; background:var(--nw-blue) !important; color:#fff !important; border:none !important; }
+/* ── file uploader (multi-file drop zone) ── */
+[data-testid="stFileUploader"] { background:var(--surface) !important; border:2px dashed var(--border) !important; border-radius:10px !important; transition:border-color 0.18s !important; }
+[data-testid="stFileUploader"]:hover { border-color:var(--nw-blue) !important; }
+[data-testid="stFileUploader"] section { padding:20px 16px !important; }
+[data-testid="stFileUploaderDropzoneInstructions"] > div > span { font-size:12px !important; color:var(--muted) !important; }
+[data-testid="stFileUploaderDropzoneInstructions"] > div > small { font-size:10px !important; color:var(--border) !important; }
+[data-testid="stFileUploaderDropzone"] { padding:0 !important; }
+[data-testid="stFileUploaderDropzone"] > div { flex-direction:column !important; align-items:center !important; gap:8px !important; }
+[data-testid="stFileUploaderDropzone"] button { font-size:11px !important; font-weight:600 !important; padding:7px 18px !important; border-radius:6px !important; min-height:unset !important; background:var(--nw-blue) !important; color:#fff !important; border:none !important; }
 [data-testid="stFileUploaderDropzone"] button:hover { background:var(--nw-deep) !important; }
-[data-testid="stFileUploadedFile"] { padding:3px 6px !important; font-size:10px !important; }
+[data-testid="stFileUploadedFile"] { padding:3px 8px !important; font-size:10px !important; }
+
+/* ── assignment table ── */
+.assign-wrap { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); margin-top:14px; overflow:hidden; box-shadow:var(--shadow); }
+.assign-hdr  { display:flex; justify-content:space-between; align-items:center; padding:9px 16px; background:var(--off); border-bottom:1px solid var(--border); font-size:9px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--muted); }
+.arow        { display:grid; grid-template-columns:120px 1fr 28px; align-items:center; padding:8px 16px; border-bottom:1px solid var(--border); gap:12px; }
+.arow:last-child { border-bottom:none; }
+.arow-ok    { background:var(--surface); }
+.arow-empty { background:var(--surface); }
+.arow-error { background:#FFF5F5; }
+.aco        { font-size:11px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.afile      { font-size:11px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.afile-assigned { color:var(--text) !important; }
+.afile-err  { color:#C8102E !important; font-size:10px; }
+.astat      { font-size:12px; font-weight:700; text-align:right; }
+.astat-ok   { color:var(--ok-fg); }
+.astat-empty{ color:var(--border); font-weight:400; }
+.astat-err  { color:#C8102E; }
+.ab-req     { display:inline-block; background:#FEE8E8; color:#C8102E; border:1px solid #F5C0C0; border-radius:3px; font-size:8px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; padding:1px 5px; line-height:1.5; }
+.ab-opt     { display:inline-block; background:var(--nw-lt); color:var(--nw-blue); border:1px solid var(--border); border-radius:3px; font-size:8px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; padding:1px 5px; line-height:1.5; }
 
 /* ── widget labels ── */
 label[data-testid="stWidgetLabel"] p { font-size:10px !important; font-weight:700 !important; letter-spacing:1.5px !important; text-transform:uppercase !important; color:var(--nw-blue) !important; margin-bottom:4px !important; }
@@ -561,35 +587,74 @@ if active_lob == "Business Auto":
     with L:
         st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
 
-        with st.expander(f"RATEBOOKS  \u00b7  {n_req()} of {len(REQUIRED)} uploaded", expanded=True):
-            spacer(6)
-            r1 = st.columns(4); r2 = st.columns(4)
-            for idx, key in enumerate(REQUIRED):
-                row, col = divmod(idx, 4)
-                with [r1, r2][row][col]:
-                    up = st.file_uploader(key, type=["xlsx","xlsm","xls"], key=f"up_{key}", label_visibility="visible")
-                    if up: st.session_state[f"file_{key}"] = {"name": up.name, "bytes": up.read()}
-                    st.markdown(chip(st.session_state[f"file_{key}"]), unsafe_allow_html=True)
-                    spacer(4)
+        # ── Multi-file uploader ─────────────────────────────────────────────
+        uploaded = st.file_uploader(
+            "Select all ratebook files at once — filenames must contain the company code (NGIC, MM, NACO, …)",
+            type=["xlsx", "xlsm", "xls"],
+            accept_multiple_files=True,
+            key=f"multi_up_{st.session_state.upload_reset}",
+        )
 
-        spacer(10)
-        n_cw = bool(st.session_state["file_CW"])
-        _cw_label = "— Loaded \u2713" if n_cw else "— Not loaded"
-        with st.expander(f"OPTIONAL  \u00b7  CW RATEBOOK  {_cw_label}", expanded=True):
-            spacer(6)
-            cw_c, _, _ = st.columns([1,1,1])
-            with cw_c:
-                cw_up = st.file_uploader("CW", type=["xlsx","xlsm","xls"], key="up_CW", label_visibility="visible")
-                if cw_up: st.session_state["file_CW"] = {"name": cw_up.name, "bytes": cw_up.read()}
-                st.markdown(chip(st.session_state["file_CW"]), unsafe_allow_html=True)
-            spacer(6)
+        # ── Auto-detect & assign ────────────────────────────────────────────
+        # Check longer/more-specific codes first to avoid false matches
+        DETECT_ORDER = ["HICNJ", "CCMIC", "NICOF", "NWAG", "NACO", "NAFF", "NGIC", "MM", "CW"]
 
+        if uploaded:
+            grouped = {}
+            for f in uploaded:
+                name_up = f.name.upper()
+                matched = next((k for k in DETECT_ORDER if k in name_up), None)
+                grouped.setdefault(matched or "__unknown__", []).append(f)
+
+            for key in ALL_KEYS:
+                files = grouped.get(key, [])
+                if len(files) == 1:
+                    st.session_state[f"file_{key}"] = {"name": files[0].name, "bytes": files[0].read()}
+                elif len(files) > 1:
+                    st.session_state[f"file_{key}"] = {"error": "multiple", "names": [f.name for f in files]}
+
+        # ── Assignment table ────────────────────────────────────────────────
+        LABELS = {"NGIC": "Required", "CW": "Optional"}
+        rows_html = ""
+        n_ok = n_err = 0
+
+        for key in ALL_KEYS:
+            val = st.session_state.get(f"file_{key}")
+            badge_text = LABELS.get(key)
+            badge_html = ""
+            if badge_text == "Required":
+                badge_html = '<span class="ab-req">Required</span>'
+            elif badge_text == "Optional":
+                badge_html = '<span class="ab-opt">Optional</span>'
+
+            if val is None:
+                rows_html += f'<div class="arow arow-empty"><span class="aco">{key} {badge_html}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
+            elif "error" in val:
+                n_err += 1
+                names_str = ", ".join(val["names"])
+                rows_html += f'<div class="arow arow-error"><span class="aco">{key} {badge_html}</span><span class="afile afile-err">&#9888;&nbsp; Multiple files matched: {names_str}</span><span class="astat astat-err">&#10005;</span></div>'
+            else:
+                n_ok += 1
+                rows_html += f'<div class="arow arow-ok"><span class="aco">{key} {badge_html}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+
+        summary = f'{n_ok} assigned'
+        if n_err:
+            summary += f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err > 1 else ""}</span>'
+
+        st.markdown(
+            f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Clear all ────────────────────────────────────────────────────────
         if any(st.session_state[f"file_{k}"] for k in ALL_KEYS):
-            spacer(6)
-            _, clr = st.columns([5,1])
+            spacer(8)
+            _, clr = st.columns([5, 1])
             with clr:
                 if st.button("Clear all", type="secondary"):
-                    for k in ALL_KEYS: st.session_state[f"file_{k}"] = None
+                    for k in ALL_KEYS:
+                        st.session_state[f"file_{k}"] = None
+                    st.session_state.upload_reset += 1
                     st.session_state.run_status = "idle"
                     st.rerun()
 
@@ -738,7 +803,9 @@ if active_lob == "Business Auto":
                 # Set skip_pdf=True as we want to separate PDF generation
                 def _rb(key):
                     f = st.session_state.get(f"file_{key}")
-                    return io.BytesIO(f["bytes"]) if f else None
+                    if f and "error" not in f:
+                        return io.BytesIO(f["bytes"])
+                    return None
 
                 xlsx_out, pdf_out = run_rate_pages(
                     NGICRatebook=_rb("NGIC"), MMRatebook=_rb("MM"),

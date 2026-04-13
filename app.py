@@ -42,8 +42,8 @@ st.session_state.setdefault("multi_sched_mode",   "upload")  # "upload" | "manua
 st.session_state.setdefault("multi_sched_excel",  {})   # raw parsed excel {state: rating}
 
 LOB_NAV = [("Business Auto","🚗"),
-    ("General Liability", "⚖️"),
     ("Farm Auto",         "🚜"),
+    ("General Liability", "⚖️"),
     ("Property",          "🏠"),
 ]
 LOB_NAMES   = [l for l, _ in LOB_NAV]

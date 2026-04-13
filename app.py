@@ -36,7 +36,10 @@ st.session_state.setdefault("multi_save_dir","")
 st.session_state.setdefault("multi_gen_pdf", False)
 st.session_state.setdefault("multi_step",    "idle")
 st.session_state.setdefault("multi_results", [])
-st.session_state.setdefault("multi_sched",   0)
+st.session_state.setdefault("multi_sched",        0)    # kept for compat
+st.session_state.setdefault("multi_sched_map",    {})   # {state_name: int} per-state mods
+st.session_state.setdefault("multi_sched_mode",   "upload")  # "upload" | "manual"
+st.session_state.setdefault("multi_sched_excel",  {})   # raw parsed excel {state: rating}
 
 LOB_NAV = [("Business Auto","🚗"),
     ("General Liability", "⚖️"),
@@ -395,6 +398,14 @@ div.btn-wait  > div > button { background:var(--border) !important; color:var(--
 .coming-soon .cs-title { font-family:'Libre Baskerville',serif; font-size:22px; font-weight:700; color:var(--nw-deep); margin-bottom:8px; }
 .coming-soon .cs-sub   { font-size:13px; color:var(--muted); max-width:380px; line-height:1.6; }
 .coming-soon .cs-tag   { margin-top:20px; display:inline-block; background:var(--nw-lt); color:var(--nw-blue); border:1px solid var(--border); border-radius:20px; font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; padding:5px 14px; }
+
+/* ── inline radio (sched mode toggle) ── */
+[data-testid="stRadio"][aria-label="sched_mode_pick"] > div,
+div:has(> [data-testid="stRadio"] > div > [data-baseweb="radio"]:first-child) {
+  gap:0 !important;
+}
+/* Per-state schedule rating grid container */
+.sched-state-grid { border:1px solid var(--border); border-top:none; border-radius:0 0 8px 8px; overflow:hidden; }
 
 /* ── multi-state progress card ── */
 .multi-progress-card { display:flex; align-items:center; gap:14px; padding:14px 18px; border:1.5px solid var(--border); border-radius:10px; background:var(--surface); margin-top:10px; }
@@ -843,10 +854,10 @@ if active_lob == "Business Auto":
             spacer(4)
             typed_src = st.text_input("multi_src_path", value=st.session_state.multi_src_dir, placeholder="Paste path or click Browse", label_visibility="collapsed", key="multi_src_input")
             if typed_src != st.session_state.multi_src_dir:
-                st.session_state.multi_src_dir = typed_src; st.session_state.multi_step = "idle"; st.session_state.multi_results = []
+                st.session_state.multi_src_dir = typed_src; st.session_state.multi_step = "idle"; st.session_state.multi_results = []; st.session_state.multi_sched_map = {}
             if st.button("Browse", key="browse_src_btn"):
                 folder = browse_folder()
-                if folder: st.session_state.multi_src_dir = folder; st.session_state.multi_step = "idle"; st.session_state.multi_results = []; st.rerun()
+                if folder: st.session_state.multi_src_dir = folder; st.session_state.multi_step = "idle"; st.session_state.multi_results = []; st.session_state.multi_sched_map = {}; st.rerun()
 
             if st.session_state.multi_src_dir:
                 src_path = Path(st.session_state.multi_src_dir)
@@ -893,17 +904,132 @@ if active_lob == "Business Auto":
                 st.markdown('<p class="f-hint">Choose where all output files will be saved.</p>', unsafe_allow_html=True)
 
             spacer(6)
-            st.markdown('<p class="f-label">&#128202; &nbsp;Schedule Rating Mod</p>', unsafe_allow_html=True)
-            nc2, pc2 = st.columns([3, 1])
-            with nc2:
-                tm2 = st.number_input("multi_mod_num", min_value=0, max_value=100, value=st.session_state.multi_sched, step=1, label_visibility="collapsed")
-                if tm2 != st.session_state.multi_sched: st.session_state.multi_sched = int(tm2)
-            with pc2:
-                st.markdown(f'<div style="display:flex;align-items:center;height:42px;padding-left:4px;"><span style="font-size:22px;font-weight:700;color:#1A5DAB;line-height:1;">{st.session_state.multi_sched}<span style="font-size:13px;font-weight:400;color:#6B7A9E;">%</span></span></div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-label">&#128202; &nbsp;Schedule Rating Mod &mdash; Per State</p>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Rule 417 &middot; Each state can have its own threshold</p>', unsafe_allow_html=True)
             spacer(4)
-            sv2 = st.slider("multi_mod_slider", 0, 100, value=st.session_state.multi_sched, step=1, format="%d%%", label_visibility="collapsed")
-            if sv2 != st.session_state.multi_sched: st.session_state.multi_sched = sv2; st.rerun()
-            st.markdown('<p class="f-hint">Rule 417 &middot; Applied to all states</p>', unsafe_allow_html=True)
+
+            # ── Mode toggle ─────────────────────────────────────────────────
+            _sched_opts = ["Upload Excel", "Enter Manually"]
+            _sched_idx  = 0 if st.session_state.multi_sched_mode == "upload" else 1
+            _sched_pick = st.radio(
+                "sched_mode_pick",
+                options=_sched_opts,
+                index=_sched_idx,
+                horizontal=True,
+                label_visibility="collapsed",
+                key="multi_sched_mode_radio",
+            )
+            _new_mode = "upload" if _sched_pick == "Upload Excel" else "manual"
+            if _new_mode != st.session_state.multi_sched_mode:
+                st.session_state.multi_sched_mode = _new_mode
+                st.rerun()
+
+            # ── Detect states early for this section ────────────────────────
+            _src_ok_sched = bool(st.session_state.multi_src_dir) and Path(st.session_state.multi_src_dir).is_dir()
+            _states_sched = scan_states(st.session_state.multi_src_dir) if _src_ok_sched else []
+
+            # ── Upload Excel branch ─────────────────────────────────────────
+            if st.session_state.multi_sched_mode == "upload":
+                spacer(4)
+                st.markdown(
+                    '<p class="f-hint"><b>Col A</b> = State name &nbsp;&middot;&nbsp; '
+                    '<b>Col B</b> = Schedule Rating % &nbsp;(no header row required).<br>'
+                    'Only rows whose state name matches a detected folder are applied.</p>',
+                    unsafe_allow_html=True,
+                )
+                _sched_file = st.file_uploader(
+                    "Upload schedule rating Excel",
+                    type=["xlsx", "xls"],
+                    key="multi_sched_excel_uploader",
+                    label_visibility="collapsed",
+                )
+                if _sched_file is not None:
+                    import pandas as _pd
+                    try:
+                        _df = _pd.read_excel(io.BytesIO(_sched_file.read()), header=None)
+                        _new_excel = {}
+                        for _, _row in _df.iterrows():
+                            try:
+                                _sn = str(_row.iloc[0]).strip()
+                                _sv = int(float(str(_row.iloc[1]).strip()))
+                                if _sn and _sn.lower() not in ("nan", "none", ""):
+                                    _new_excel[_sn] = max(0, min(100, _sv))
+                            except Exception:
+                                pass
+                        if _new_excel != st.session_state.multi_sched_excel:
+                            st.session_state.multi_sched_excel = _new_excel
+                            # Pre-populate sched_map for matched detected states
+                            for _s in _states_sched:
+                                _nm = _s["name"]
+                                if _nm in _new_excel:
+                                    st.session_state.multi_sched_map[_nm] = _new_excel[_nm]
+                            st.rerun()
+                    except Exception as _exc:
+                        st.markdown(f'<p style="font-size:11px;color:#C8102E;margin:4px 0;">&#9888; Could not parse file: {_exc}</p>', unsafe_allow_html=True)
+
+            # ── Per-state input grid ─────────────────────────────────────────
+            if _states_sched:
+                spacer(6)
+                _n_set = sum(
+                    1 for _s in _states_sched
+                    if st.session_state.multi_sched_map.get(_s["name"], 0) > 0
+                )
+                # Apply any excel defaults not yet in sched_map
+                if st.session_state.multi_sched_excel and st.session_state.multi_sched_mode == "upload":
+                    for _s in _states_sched:
+                        _nm = _s["name"]
+                        if _nm not in st.session_state.multi_sched_map and _nm in st.session_state.multi_sched_excel:
+                            st.session_state.multi_sched_map[_nm] = st.session_state.multi_sched_excel[_nm]
+
+                st.markdown(
+                    f'<div class="assign-hdr" style="border:1px solid var(--border);border-radius:8px 8px 0 0;'
+                    f'padding:9px 14px;margin-bottom:0;">'
+                    f'<span>Per-State Schedule Rating</span>'
+                    f'<span style="color:{"var(--ok-fg)" if _n_set==len(_states_sched) else "var(--muted)"};">'
+                    f'{_n_set}&thinsp;/&thinsp;{len(_states_sched)} configured</span></div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown('<div style="border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;overflow:hidden;">', unsafe_allow_html=True)
+                for _i, _s in enumerate(_states_sched):
+                    _nm  = _s["name"]
+                    _exc = st.session_state.multi_sched_excel.get(_nm)
+                    _cur = int(st.session_state.multi_sched_map.get(_nm, _exc if _exc is not None else 0))
+
+                    _bg   = "#F9FBF9" if _i % 2 == 0 else "#FFFFFF"
+                    _src_badge = ""
+                    if _exc is not None and st.session_state.multi_sched_mode == "upload":
+                        _src_badge = ' &nbsp;<span style="font-size:8px;font-weight:700;color:var(--ok-fg);letter-spacing:0.5px;text-transform:uppercase;">excel</span>'
+
+                    _lc, _ic, _pc = st.columns([5, 3, 1])
+                    with _lc:
+                        st.markdown(
+                            f'<div style="display:flex;align-items:center;height:38px;padding:0 8px;'
+                            f'font-size:12px;font-weight:600;color:var(--text);background:{_bg};">'
+                            f'{_nm}{_src_badge}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    with _ic:
+                        _nv = st.number_input(
+                            f"sr_{_nm}",
+                            min_value=0, max_value=100,
+                            value=_cur,
+                            step=1,
+                            key=f"msm_{_nm}",
+                            label_visibility="collapsed",
+                        )
+                        if int(_nv) != st.session_state.multi_sched_map.get(_nm):
+                            st.session_state.multi_sched_map[_nm] = int(_nv)
+                    with _pc:
+                        st.markdown(
+                            f'<div style="display:flex;align-items:center;height:38px;font-size:12px;'
+                            f'color:var(--muted);">%</div>',
+                            unsafe_allow_html=True,
+                        )
+                st.markdown('</div>', unsafe_allow_html=True)
+            elif not _src_ok_sched:
+                st.markdown('<p class="f-hint">Select a source folder above to configure per-state values.</p>', unsafe_allow_html=True)
+            else:
+                st.markdown('<p class="f-hint">No state folders detected yet.</p>', unsafe_allow_html=True)
 
             spacer(6)
             gen_pdf = st.checkbox("Generate PDF for each state", value=st.session_state.multi_gen_pdf, key="multi_pdf_chk")
@@ -929,7 +1055,7 @@ if active_lob == "Business Auto":
                 + rdy(src_ok and bool(states_list), "Source Folder", src_sub)
                 + rdy(n_ready_m > 0, f'States Ready &nbsp;<span style="font-size:10px;color:#6B7A9E;">{n_ready_m}/{len(states_list)}</span>', f"{n_ready_m} state{'s' if n_ready_m!=1 else ''} with valid NGIC ratebook")
                 + rdy(save_ok_m, "Save Location", save_sub)
-                + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;">{st.session_state.multi_sched}%</span>', "Rule 417 — applied to all states")
+                + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;">Per State</span>', f'{sum(1 for s in states_list if st.session_state.multi_sched_map.get(s["name"],0)>0)} of {len(states_list)} states configured' if states_list else "No states detected")
                 + '</div>', unsafe_allow_html=True)
 
             if st.session_state.multi_step == "idle":
@@ -985,7 +1111,7 @@ if active_lob == "Business Auto":
                             NGICRatebook=_p("NGIC"), MMRatebook=_p("MM"), NACORatebook=_p("NACO"),
                             NAFFRatebook=_p("NAFF"), NICOFRatebook=_p("NICOF"), HICNJRatebook=_p("HICNJ"),
                             CCMICRatebook=_p("CCMIC"), NWAGRatebook=_p("NWAG"), CWRatebook=None,
-                            folder_selected=str(out_dir), SchedRatingMod=int(st.session_state.multi_sched) or None, skip_pdf=True)
+                            folder_selected=str(out_dir), SchedRatingMod=int(st.session_state.multi_sched_map.get(sname, 0)) or None, skip_pdf=True)
                         pdf_out = None
                         if st.session_state.multi_gen_pdf:
                             pdf_file = pdf_dir / (Path(xlsx_out).stem + ".pdf")

@@ -1677,26 +1677,28 @@ def _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only, deleted_only, 
     for name in all_names:
         ws = wb.create_sheet(title=name[:31])
         if name in new_only:
+            # New sheet: proposed (green) on LEFT, blank on RIGHT
             ws.sheet_properties.tabColor = _CMP_TAB_COLOR["new"]
             df = new_sheets.get(name, pd.DataFrame())
             if df.empty: continue
-            nc_old = len(df.columns); sep_col = nc_old+1; new_start = sep_col+1
+            nc_new = len(df.columns); sep_col = nc_new+1; old_start = sep_col+1
             for i, row_vals in enumerate(dataframe_to_rows(df, index=False, header=False), start=1):
-                for j in range(1, nc_old+1): ws.cell(i,j)
-                ws.cell(i, sep_col).fill = _CMP_FILL_SBS_SEP
-                for jj, val in enumerate(row_vals, start=new_start):
+                for jj, val in enumerate(row_vals, start=1):                        # LEFT: green (proposed)
                     c = ws.cell(i,jj, None if val=="" else val); c.fill = _CMP_FILL_SBS_NEW_SHT; c.font = _CMP_FONT_NORM
+                ws.cell(i, sep_col).fill = _CMP_FILL_SBS_SEP
+                for j in range(old_start, old_start+nc_new): ws.cell(i,j)           # RIGHT: blank
             _finalise(ws, sep_col, new_src_wb, name)
         elif name in deleted_only:
+            # Deleted sheet: blank on LEFT, current (red) on RIGHT
             ws.sheet_properties.tabColor = _CMP_TAB_COLOR["deleted"]
             df = old_sheets.get(name, pd.DataFrame())
             if df.empty: continue
-            nc_old = len(df.columns); sep_col = nc_old+1; new_start = sep_col+1
+            nc_old = len(df.columns); sep_col = nc_old+1; old_start = sep_col+1
             for i, row_vals in enumerate(dataframe_to_rows(df, index=False, header=False), start=1):
-                for j, val in enumerate(row_vals, start=1):
-                    c = ws.cell(i,j, None if val=="" else val); c.fill = _CMP_FILL_SBS_DEL_SHT; c.font = _CMP_FONT_NORM
+                for j in range(1, nc_old+1): ws.cell(i,j)                           # LEFT: blank
                 ws.cell(i, sep_col).fill = _CMP_FILL_SBS_SEP
-                for jj in range(new_start, new_start+nc_old): ws.cell(i,jj)
+                for jj, val in enumerate(row_vals, start=old_start):                # RIGHT: red (current)
+                    c = ws.cell(i,jj, None if val=="" else val); c.fill = _CMP_FILL_SBS_DEL_SHT; c.font = _CMP_FONT_NORM
             _finalise(ws, sep_col, old_src_wb, name)
         else:
             old_df = old_sheets.get(name, pd.DataFrame()); new_df = new_sheets.get(name, pd.DataFrame())
@@ -1709,25 +1711,28 @@ def _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only, deleted_only, 
             sv = sheet_stats.get(name, {})
             has_chg = (sv.get("changed_cells",0)+sv.get("added_rows",0)+sv.get("deleted_rows",0)) > 0
             ws.sheet_properties.tabColor = _CMP_TAB_COLOR["modified"] if has_chg else _CMP_TAB_COLOR["unchanged"]
-            sep_col = nc_old+1; new_start = sep_col+1
+            # Proposed (NEW) on LEFT, separator, Current (OLD) on RIGHT
+            sep_col = nc_new+1; old_start = sep_col+1
             for i in range(nr):
                 rs = row_status.get(i,"same")
-                for j in range(nc_old):
-                    val = _cmp_cell_str(old_a.iat[i,j]) if i < len(old_a) else ""
-                    cs = cell_status.get((i,j),"same")
-                    c = ws.cell(i+1, j+1, None if val=="" else val)
-                    if rs=="deleted": c.fill = _CMP_FILL_DELETED; c.font = _CMP_FONT_NORM
-                    elif rs=="added": c.value = None; c.font = _CMP_FONT_NORM
-                    elif cs=="changed": c.font = _CMP_FONT_STRIKE
-                    else: c.font = _CMP_FONT_NORM
-                ws.cell(i+1, sep_col).fill = _CMP_FILL_SBS_SEP
+                # LEFT: NEW (proposed) — yellow fill for changed cells
                 for j in range(nc_new):
                     val = _cmp_cell_str(new_a.iat[i,j]) if i < len(new_a) else ""
                     cs = cell_status.get((i,j),"same")
-                    c = ws.cell(i+1, new_start+j, None if val=="" else val)
-                    if rs=="added": c.fill = _CMP_FILL_ADDED; c.font = _CMP_FONT_NORM
-                    elif rs=="deleted": c.value = None; c.font = _CMP_FONT_NORM
+                    c = ws.cell(i+1, j+1, None if val=="" else val)
+                    if rs=="added":   c.fill = _CMP_FILL_ADDED;      c.font = _CMP_FONT_NORM
+                    elif rs=="deleted": c.value = None;              c.font = _CMP_FONT_NORM
                     elif cs=="changed": c.fill = _CMP_FILL_SBS_CHG_NEW; c.font = _CMP_FONT_NORM
+                    else: c.font = _CMP_FONT_NORM
+                ws.cell(i+1, sep_col).fill = _CMP_FILL_SBS_SEP
+                # RIGHT: OLD (current) — strikethrough red for changed cells
+                for j in range(nc_old):
+                    val = _cmp_cell_str(old_a.iat[i,j]) if i < len(old_a) else ""
+                    cs = cell_status.get((i,j),"same")
+                    c = ws.cell(i+1, old_start+j, None if val=="" else val)
+                    if rs=="deleted": c.fill = _CMP_FILL_DELETED;  c.font = _CMP_FONT_NORM
+                    elif rs=="added": c.value = None;              c.font = _CMP_FONT_NORM
+                    elif cs=="changed": c.font = _CMP_FONT_STRIKE
                     else: c.font = _CMP_FONT_NORM
             _finalise(ws, sep_col, new_src_wb, name)
     buf = io.BytesIO(); wb.save(buf); return buf.getvalue()

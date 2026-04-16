@@ -1,8 +1,22 @@
 # ba_rate_pages_app.py  —  streamlit run app.py
 
+import copy
 import io
-import streamlit as st
+import os
+import re
+import zipfile
+from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
+
+import numpy as np
+import openpyxl
+import pandas as pd
+import streamlit as st
+from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
+from openpyxl.utils.dataframe import dataframe_to_rows
+from openpyxl.worksheet.properties import PageSetupProperties
 
 import subprocess, sys
 
@@ -40,6 +54,19 @@ st.session_state.setdefault("multi_sched",        0)    # kept for compat
 st.session_state.setdefault("multi_sched_map",    {})   # {state_name: int} per-state mods
 st.session_state.setdefault("multi_sched_mode",   "upload")  # "upload" | "manual"
 st.session_state.setdefault("multi_sched_excel",  {})   # raw parsed excel {state: rating}
+
+st.session_state.setdefault("active_tool",             "rate_pages")
+st.session_state.setdefault("cmp_comp_data",           None)
+st.session_state.setdefault("cmp_file_ids",            (None, None))
+st.session_state.setdefault("cmp_tracked_bytes",       None)
+st.session_state.setdefault("cmp_tracked_filename",    None)
+st.session_state.setdefault("cmp_tracked_fmt",         None)
+st.session_state.setdefault("cmp_mass_results",        None)
+st.session_state.setdefault("cmp_mass_zip_bytes",      None)
+st.session_state.setdefault("cmp_mass_file_ids",       (None, None))
+st.session_state.setdefault("cmp_mass_fmt",            None)
+st.session_state.setdefault("cmp_mass_save_dir",       None)
+st.session_state.setdefault("cmp_mass_output_path",    "")
 
 LOB_NAV = [("Business Auto","🚗"),
     ("Farm Auto",         "🚜"),
@@ -412,6 +439,121 @@ div:has(> [data-testid="stRadio"] > div > [data-baseweb="radio"]:first-child) {
 .mp-label { font-size:9px; font-weight:700; letter-spacing:1.8px; text-transform:uppercase; color:var(--muted); flex-shrink:0; }
 .mp-state { font-size:15px; font-weight:700; color:var(--nw-deep); flex:1; }
 .mp-count { font-size:11px; color:var(--muted); flex-shrink:0; }
+
+/* ══════════════════════════════════════════════════════════════════
+   SIDEBAR SERVICES NAV BUTTON  (Tracked Pages)
+══════════════════════════════════════════════════════════════════ */
+[data-testid="stSidebar"] .svc-btn-wrap > div > button {
+  display: flex !important; align-items: center !important; gap: 10px !important;
+  width: 100% !important; padding: 13px 20px !important; border-radius: 0 !important;
+  font-size: 13px !important; font-family: 'Inter', sans-serif !important;
+  font-weight: 500 !important; color: #566278 !important;
+  background: transparent !important; border: none !important;
+  border-left: 3px solid transparent !important; box-shadow: none !important;
+  text-align: left !important; justify-content: flex-start !important;
+  transition: background 0.14s ease, color 0.14s ease !important;
+}
+[data-testid="stSidebar"] .svc-btn-wrap > div > button:hover {
+  background: #EBF2FB !important; color: #0D3F7A !important;
+  border-left: 3px solid #A8C4E8 !important;
+}
+[data-testid="stSidebar"] .svc-active > div > button {
+  background: linear-gradient(90deg,#1A5DAB 0%,#0D3F7A 100%) !important;
+  color: #FFFFFF !important; font-weight: 700 !important;
+  border-left: 3px solid #EDD97A !important;
+}
+[data-testid="stSidebar"] .svc-active > div > button:hover {
+  background: linear-gradient(90deg,#1A5DAB 0%,#0D3F7A 100%) !important;
+  color: #FFFFFF !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TRACKED PAGES COMPARATOR  — styles use app.py design tokens
+══════════════════════════════════════════════════════════════════ */
+
+/* ── Service badge ── */
+.svc-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--nw-lt); color:var(--nw-blue);
+  border:1px solid var(--border); border-radius:20px;
+  font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
+  padding:4px 12px; margin-top:6px;
+}
+
+/* ── Metric cards grid ── */
+.cmp-metric-grid { display:flex; gap:12px; flex-wrap:wrap; margin:14px 0; }
+.cmp-metric-card {
+  flex:1 1 110px; background:var(--surface); border-radius:var(--radius);
+  padding:14px 12px 12px; border:1px solid var(--border);
+  text-align:center; box-shadow:var(--shadow);
+}
+.cmp-metric-val   { font-family:'Libre Baskerville',serif; font-size:1.8rem; font-weight:700; line-height:1.1; }
+.cmp-metric-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:0.8px; margin-top:4px; }
+
+/* ── Sheet pill tags ── */
+.cmp-pills {
+  display:flex; flex-wrap:wrap; gap:8px;
+  padding:12px 14px; background:var(--off);
+  border:1px solid var(--border); border-radius:var(--radius); margin:10px 0 14px;
+}
+.cmp-pill {
+  padding:4px 14px; border-radius:20px; font-size:12px;
+  font-weight:600; border:1.5px solid; cursor:default;
+  display:inline-flex; align-items:center; gap:5px; font-family:'Inter',sans-serif;
+}
+.cmp-pill-unchanged { background:#EBF2FB; color:#0D3F7A; border-color:#A8C4E8; }
+.cmp-pill-new       { background:#D1FAE5; color:#065f46; border-color:#10b981; }
+.cmp-pill-deleted   { background:#fee2e2; color:#991b1b; border-color:#ef4444; }
+.cmp-pill-modified  { background:#FFF8E7; color:#78350f; border-color:var(--gold); }
+
+/* ── Legend ── */
+.cmp-legend { display:flex; flex-wrap:wrap; gap:16px; margin:8px 0 12px; }
+.cmp-legend-item { display:flex; align-items:center; gap:7px; font-size:12px; color:var(--text); }
+.cmp-legend-dot  { width:14px; height:14px; border-radius:4px; flex-shrink:0; }
+
+/* ── Diff table ── */
+.cmp-diff-wrap {
+  overflow-x:auto; border-radius:var(--radius);
+  border:1px solid var(--border); box-shadow:var(--shadow);
+  max-height:500px; overflow-y:auto;
+}
+table.cmp-diff { border-collapse:collapse; width:100%; font-size:12px; white-space:nowrap; font-family:'Inter',sans-serif; }
+table.cmp-diff thead th {
+  background:var(--nw-deep); color:white;
+  padding:8px 12px; font-weight:600; text-align:left;
+  position:sticky; top:0; z-index:2;
+  border-right:1px solid rgba(255,255,255,0.1);
+}
+table.cmp-diff thead th:first-child { width:40px; text-align:center; }
+table.cmp-diff tbody td {
+  padding:6px 12px; border-bottom:1px solid #f0f2f5; border-right:1px solid #f0f2f5;
+  vertical-align:top; max-width:240px; overflow:hidden; text-overflow:ellipsis;
+}
+table.cmp-diff tbody tr:hover td { filter:brightness(0.97); }
+.cmp-r-added   td { background:#ecfdf5 !important; }
+.cmp-r-deleted td { background:#fef2f2 !important; }
+.cmp-c-changed { background:#FFFBEB !important; }
+.cmp-c-added   { background:#ecfdf5 !important; }
+.cmp-c-deleted { background:#fef2f2 !important; }
+.cmp-rn { color:#9ca3af; font-size:10px; text-align:center; user-select:none; }
+.cmp-val-old  { text-decoration:line-through; color:#dc2626; font-size:10px; display:block; line-height:1.3; }
+.cmp-val-new  { color:#16a34a; font-size:11px; display:block; font-weight:600; line-height:1.4; }
+.cmp-val-only { font-size:12px; }
+
+/* ── Info / instruction box  — uses app.py gold accent ── */
+.cmp-info-box {
+  background:var(--nw-lt); border-left:4px solid var(--nw-blue);
+  padding:14px 16px; border-radius:0 var(--radius) var(--radius) 0; margin:8px 0;
+  font-size:13px; line-height:1.7; color:var(--text);
+}
+.cmp-info-box ol, .cmp-info-box ul { margin:6px 0 0; padding-left:20px; }
+.cmp-info-box strong { color:var(--nw-deep); }
+
+/* ── upload label inside comparator ── */
+.cmp-upload-label { font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--nw-blue); margin-bottom:6px; display:block; }
+
+/* ── Truncation note ── */
+.cmp-truncation-note { text-align:center; padding:8px 12px; color:var(--muted); font-style:italic; font-size:12px; background:var(--off); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -436,20 +578,26 @@ with st.sidebar:
     # no JS, no Streamlit internals.  This is the only reliable approach.
     current_idx = LOB_NAMES.index(st.session_state.lob) if st.session_state.lob in LOB_NAMES else 0
 
+    # When in comparator mode, deselect the radio (index=None) so that clicking
+    # the already-active LOB still registers as a new selection and triggers a rerun.
+    _radio_idx = None if st.session_state.active_tool == "comparator" else current_idx
+
     chosen = st.radio(
         "lob_selector",
         options=LOB_OPTIONS,
-        index=current_idx,
+        index=_radio_idx,
         key="lob_radio",
         label_visibility="collapsed",
     )
 
     # Derive the plain LOB name from the chosen option label
-    chosen_lob = LOB_NAMES[LOB_OPTIONS.index(chosen)]
-    if chosen_lob != st.session_state.lob:
-        st.session_state.lob        = chosen_lob
-        st.session_state.run_status = "idle"
-        st.rerun()
+    if chosen is not None:
+        chosen_lob = LOB_NAMES[LOB_OPTIONS.index(chosen)]
+        if chosen_lob != st.session_state.lob or st.session_state.active_tool == "comparator":
+            st.session_state.lob         = chosen_lob
+            st.session_state.run_status  = "idle"
+            st.session_state.active_tool = "rate_pages"
+            st.rerun()
 
     # JS: style active label AND fix all parent wrapper widths/margins
     _active = st.session_state.lob
@@ -552,9 +700,26 @@ with st.sidebar:
     </script>
     """, unsafe_allow_html=True)
 
+    # ── Analytics Services section ────────────────────────────────────────────
+    st.markdown("""
+    <div style="margin:20px 20px 0; border-top:1px solid #DDE5F0; padding-top:12px;">
+      <div style="font-size:8px;font-weight:700;letter-spacing:2.8px;text-transform:uppercase;color:#9BAABF;margin-bottom:4px;">
+        Analytics Services
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    _is_cmp = st.session_state.active_tool == "comparator"
+    st.markdown(f'<div class="svc-btn-wrap {"svc-active" if _is_cmp else "svc-inactive"}">', unsafe_allow_html=True)
+    if st.button("📊  Tracked Pages", key="btn_tracked_pages", use_container_width=True):
+        st.session_state.active_tool = "comparator"
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ─── HEADER ───────────────────────────────────────────────────────────────────
-active_lob = st.session_state.lob
+active_lob  = st.session_state.lob
+active_tool = st.session_state.active_tool
 
 LOB_ICONS = {"Business Auto":"🚗","General Liability":"⚖️","Farm Auto":"🚜","Property":"🏠"}
 LOB_SUBS  = {
@@ -564,47 +729,73 @@ LOB_SUBS  = {
     "Property":          "Property rate page configuration",
 }
 
-st.markdown(f"""
-<div class="nw-header">
-  <div class="nw-header-left">
-    <div class="nw-eagle">📋</div>
-    <div class="nw-brand">Nationwide <span>Insurance</span></div>
-    <div class="nw-sep"></div>
-    <div class="nw-pgname">{LOB_ICONS[active_lob]} &nbsp;{active_lob} &middot; Rate Page Builder</div>
-  </div>
-  <div class="nw-right">BA &nbsp;&middot;&nbsp; Analytics &nbsp;&middot;&nbsp; Internal Tool</div>
-</div>
-<div class="gold-line"></div>
-""", unsafe_allow_html=True)
-
-# Page heading
-h1, h2 = st.columns([3, 1])
-with h1:
-    st.markdown(f"""
-    <p style="font-family:'Libre Baskerville',serif;font-size:25px;font-weight:700;
-              color:#0D3F7A;margin:0 0 5px;">Build {active_lob} Rate Pages</p>
-    <p style="font-size:13px;color:#6B7A9E;margin:0;">{LOB_SUBS[active_lob]}</p>
+if active_tool == "comparator":
+    st.markdown("""
+    <div class="nw-header">
+      <div class="nw-header-left">
+        <div class="nw-eagle">📊</div>
+        <div class="nw-brand">Nationwide <span>Insurance</span></div>
+        <div class="nw-sep"></div>
+        <div class="nw-pgname">📊 &nbsp;Tracked Pages &middot; Rate Change Analysis</div>
+      </div>
+      <div class="nw-right">BA &nbsp;&middot;&nbsp; Analytics &nbsp;&middot;&nbsp; Internal Tool</div>
+    </div>
+    <div class="gold-line"></div>
     """, unsafe_allow_html=True)
-with h2:
-    if active_lob == "Business Auto":
-        nr = n_req(); tot = len(REQUIRED); pct = int(nr/tot*100)
-        fg = "#196B38" if nr == tot else "#1A5DAB"
+    h1, _ = st.columns([3, 1])
+    with h1:
+        st.markdown("""
+        <p style="font-family:'Libre Baskerville',serif;font-size:25px;font-weight:700;
+                  color:#0D3F7A;margin:0 0 5px;">Compare Rate Pages</p>
+        <p style="font-size:13px;color:#6B7A9E;margin:0;">
+          Upload current &amp; proposed rate pages &nbsp;&middot;&nbsp; Detect cell-level changes &nbsp;&middot;&nbsp; Generate tracked Excel reports
+        </p>
+        """, unsafe_allow_html=True)
+else:
+    st.markdown(f"""
+    <div class="nw-header">
+      <div class="nw-header-left">
+        <div class="nw-eagle">📋</div>
+        <div class="nw-brand">Nationwide <span>Insurance</span></div>
+        <div class="nw-sep"></div>
+        <div class="nw-pgname">{LOB_ICONS[active_lob]} &nbsp;{active_lob} &middot; Rate Page Builder</div>
+      </div>
+      <div class="nw-right">BA &nbsp;&middot;&nbsp; Analytics &nbsp;&middot;&nbsp; Internal Tool</div>
+    </div>
+    <div class="gold-line"></div>
+    """, unsafe_allow_html=True)
+
+    # Page heading
+    h1, h2 = st.columns([3, 1])
+    with h1:
         st.markdown(f"""
-        <div style="text-align:right;padding-top:4px;">
-          <div style="font-size:10px;color:#6B7A9E;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;">Uploaded Files</div>
-          <div style="font-size:28px;font-weight:700;color:{fg};line-height:1;font-family:'Libre Baskerville',serif;">
-            {nr}<span style="font-size:13px;font-weight:400;color:#6B7A9E;">/{tot}</span>
-          </div>
-          <div style="background:#D4DFEF;border-radius:3px;height:3px;margin-top:8px;overflow:hidden;">
-            <div style="width:{pct}%;height:100%;background:linear-gradient(90deg,#0D3F7A,#1A5DAB);border-radius:3px;"></div>
-          </div>
-        </div>""", unsafe_allow_html=True)
+        <p style="font-family:'Libre Baskerville',serif;font-size:25px;font-weight:700;
+                  color:#0D3F7A;margin:0 0 5px;">Build {active_lob} Rate Pages</p>
+        <p style="font-size:13px;color:#6B7A9E;margin:0;">{LOB_SUBS[active_lob]}</p>
+        """, unsafe_allow_html=True)
+    with h2:
+        if active_lob == "Business Auto":
+            nr = n_req(); tot = len(REQUIRED); pct = int(nr/tot*100)
+            fg = "#196B38" if nr == tot else "#1A5DAB"
+            st.markdown(f"""
+            <div style="text-align:right;padding-top:4px;">
+              <div style="font-size:10px;color:#6B7A9E;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;">Uploaded Files</div>
+              <div style="font-size:28px;font-weight:700;color:{fg};line-height:1;font-family:'Libre Baskerville',serif;">
+                {nr}<span style="font-size:13px;font-weight:400;color:#6B7A9E;">/{tot}</span>
+              </div>
+              <div style="background:#D4DFEF;border-radius:3px;height:3px;margin-top:8px;overflow:hidden;">
+                <div style="width:{pct}%;height:100%;background:linear-gradient(90deg,#0D3F7A,#1A5DAB);border-radius:3px;"></div>
+              </div>
+            </div>""", unsafe_allow_html=True)
 
 spacer(28)
 
 
 # ─── BUSINESS AUTO ────────────────────────────────────────────────────────────
-if active_lob == "Business Auto":
+if active_tool == "comparator":
+    pass  # handled below after all helper functions are defined
+
+elif active_lob == "Business Auto":
 
     DETECT_ORDER = ["HICNJ", "CCMIC", "NICOF", "NWAG", "NACO", "NAFF", "NGIC", "MM", "CW"]
 
@@ -1153,7 +1344,7 @@ if active_lob == "Business Auto":
 
 
 # ─── OTHER LOBs ───────────────────────────────────────────────────────────────
-else:
+elif active_tool != "comparator":
     CS = {
         "General Liability": ("&#9878;",  "General Liability", 'Wire up your GL backend in the <code>elif active_lob == "General Liability"</code> block.'),
         "Farm Auto":         ("&#128668;", "Farm Auto",         'Wire up your FA backend in the <code>elif active_lob == "Farm Auto"</code> block.'),
@@ -1167,3 +1358,961 @@ else:
       <div class="cs-sub">{de}</div>
       <div class="cs-tag">Coming Soon</div>
     </div>""", unsafe_allow_html=True)
+
+
+# ─── TRACKED PAGES COMPARATOR — helper functions ──────────────────────────────
+
+def _cmp_file_bytes(uploaded_file) -> bytes:
+    if hasattr(uploaded_file, "seek"):
+        uploaded_file.seek(0)
+    return uploaded_file.read()
+
+def _cmp_detect_engine(name: str) -> str:
+    return "xlrd" if name.lower().endswith(".xls") else "openpyxl"
+
+def _cmp_read_excel_sheets(raw: bytes, filename: str) -> Dict[str, pd.DataFrame]:
+    engine = _cmp_detect_engine(filename)
+    try:
+        buf = io.BytesIO(raw)
+        xl  = pd.ExcelFile(buf, engine=engine)
+        result: Dict[str, pd.DataFrame] = {}
+        for sheet in xl.sheet_names:
+            buf.seek(0)
+            df = pd.read_excel(buf, sheet_name=sheet, header=None, dtype=str, engine=engine)
+            result[sheet] = df.fillna("")
+        return result
+    except Exception as exc:
+        st.error(f"Could not read **{filename}**: {exc}")
+        return {}
+
+def _cmp_cell_str(val) -> str:
+    s = str(val).strip() if val is not None else ""
+    if re.fullmatch(r"-?\d+\.0+", s):
+        s = s[: s.index(".")]
+    return s
+
+def _cmp_esc(text: str) -> str:
+    return str(text).replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace('"',"&quot;")
+
+def _cmp_compare_dataframes(old_df: pd.DataFrame, new_df: pd.DataFrame):
+    nr = max(len(old_df), len(new_df))
+    nc = max(
+        len(old_df.columns) if len(old_df) else 0,
+        len(new_df.columns) if len(new_df) else 0,
+    )
+    if nc == 0:
+        empty = pd.DataFrame()
+        return empty, empty, {}, {}, {"total_rows":0,"total_cols":0,"added_rows":0,"deleted_rows":0,"changed_rows":0,"changed_cells":0}
+
+    old_a = old_df.reindex(range(nr)).reindex(columns=range(nc)).fillna("")
+    new_a = new_df.reindex(range(nr)).reindex(columns=range(nc)).fillna("")
+    old_row_range = set(range(len(old_df))); new_row_range = set(range(len(new_df)))
+    cell_status: dict = {}; row_status: dict = {}
+    added_rows = deleted_rows = changed_rows = changed_cells = 0
+    for i in range(nr):
+        in_old = i in old_row_range; in_new = i in new_row_range
+        if in_new and not in_old:
+            row_status[i] = "added"; added_rows += 1
+            for j in range(nc): cell_status[(i,j)] = "added"
+        elif in_old and not in_new:
+            row_status[i] = "deleted"; deleted_rows += 1
+            for j in range(nc): cell_status[(i,j)] = "deleted"
+        else:
+            row_changed = False
+            for j in range(nc):
+                ov = _cmp_cell_str(old_a.iat[i,j]); nv = _cmp_cell_str(new_a.iat[i,j])
+                if ov != nv:
+                    cell_status[(i,j)] = "changed"; row_changed = True; changed_cells += 1
+                else:
+                    cell_status[(i,j)] = "same"
+            if row_changed: row_status[i] = "changed"; changed_rows += 1
+            else: row_status[i] = "same"
+    return old_a, new_a, cell_status, row_status, {
+        "total_rows":nr,"total_cols":nc,"added_rows":added_rows,
+        "deleted_rows":deleted_rows,"changed_rows":changed_rows,"changed_cells":changed_cells,
+    }
+
+_CMP_DATE_RE = re.compile(r"\b\d{2}-\d{2}-\d{4}\b")
+
+def _cmp_base_name(filename: str) -> str:
+    stem    = os.path.splitext(filename)[0]
+    cleaned = _CMP_DATE_RE.sub("", stem)
+    return re.sub(r"[\s_\-]+"," ", cleaned).strip().lower()
+
+def _cmp_match_pairs(current_files, proposed_files):
+    cur_map:  Dict[str, object] = {_cmp_base_name(f.name): f for f in current_files}
+    prop_map: Dict[str, object] = {_cmp_base_name(f.name): f for f in proposed_files}
+    matched            = [(cur_map[k], prop_map[k]) for k in cur_map if k in prop_map]
+    unmatched_current  = [cur_map[k]  for k in cur_map  if k not in prop_map]
+    unmatched_proposed = [prop_map[k] for k in prop_map if k not in cur_map]
+    return matched, unmatched_current, unmatched_proposed
+
+_MAX_DISP = 1000
+
+def _cmp_render_diff_table(old_a, new_a, cell_status, row_status, max_rows=_MAX_DISP) -> str:
+    nr = len(old_a); nc = len(old_a.columns)
+    col_headers = [get_column_letter(j+1) for j in range(nc)]
+    parts = ['<div class="cmp-diff-wrap"><table class="cmp-diff"><thead><tr>']
+    parts.append('<th class="cmp-rn">#</th>')
+    for ch in col_headers: parts.append(f"<th>{ch}</th>")
+    parts.append("</tr></thead><tbody>")
+    show = min(nr, max_rows)
+    for i in range(show):
+        rs = row_status.get(i,"same")
+        row_cls = {"added":"cmp-r-added","deleted":"cmp-r-deleted"}.get(rs,"")
+        parts.append(f'<tr class="{row_cls}">')
+        parts.append(f'<td class="cmp-rn">{i+1}</td>')
+        for j in range(nc):
+            cs = cell_status.get((i,j),"same")
+            ov = _cmp_esc(_cmp_cell_str(old_a.iat[i,j])); nv = _cmp_esc(_cmp_cell_str(new_a.iat[i,j]))
+            if rs == "added":
+                cell_cls = "cmp-c-added"; inner = f'<span class="cmp-val-only">{nv}</span>'
+            elif rs == "deleted":
+                cell_cls = "cmp-c-deleted"; inner = f'<span class="cmp-val-only">{ov}</span>'
+            elif cs == "changed":
+                cell_cls = "cmp-c-changed"
+                if ov and nv: inner = f'<span class="cmp-val-old">{ov}</span><span class="cmp-val-new">{nv}</span>'
+                else: inner = f'<span class="cmp-val-only">{nv or ov}</span>'
+            else:
+                cell_cls = ""; inner = f'<span class="cmp-val-only">{nv}</span>'
+            td_cls = f' class="{cell_cls}"' if cell_cls else ""
+            parts.append(f"<td{td_cls}>{inner}</td>")
+        parts.append("</tr>")
+    if nr > max_rows:
+        parts.append(f'<tr><td colspan="{nc+1}" class="cmp-truncation-note">&#9888; Showing first {max_rows:,} of {nr:,} rows. Download the Excel report to view all rows.</td></tr>')
+    parts.append("</tbody></table></div>")
+    return "".join(parts)
+
+# ── Excel export fills / fonts / borders ──────────────────────────────────────
+_CMP_FILL_CHG     = PatternFill(start_color="FFF3CD", end_color="FFF3CD", fill_type="solid")
+_CMP_FILL_ADDED   = PatternFill(start_color="D1FAE5", end_color="D1FAE5", fill_type="solid")
+_CMP_FILL_DELETED = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+_CMP_FILL_HDR     = PatternFill(start_color="0F2942", end_color="0F2942", fill_type="solid")
+_CMP_FILL_SUM_HDR = PatternFill(start_color="1A4A7A", end_color="1A4A7A", fill_type="solid")
+_CMP_FONT_HDR     = Font(color="FFFFFF", bold=True, name="Segoe UI", size=10)
+_CMP_FONT_NORM    = Font(name="Segoe UI", size=10)
+_CMP_FONT_BOLD    = Font(name="Segoe UI", size=10, bold=True)
+_CMP_THIN_BDR = Border(
+    left=Side(style="thin",color="D1D5DB"), right=Side(style="thin",color="D1D5DB"),
+    top=Side(style="thin",color="D1D5DB"),  bottom=Side(style="thin",color="D1D5DB"),
+)
+_CMP_TAB_COLOR = {"new":"10B981","deleted":"EF4444","modified":"F59E0B","unchanged":"6B7280"}
+_CMP_FILL_SBS_CHG_NEW  = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+_CMP_FILL_SBS_NEW_SHT  = PatternFill(start_color="CCFFCC", end_color="CCFFCC", fill_type="solid")
+_CMP_FILL_SBS_DEL_SHT  = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+_CMP_FILL_SBS_SEP      = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+_CMP_FILL_SBS_HDR_OLD  = PatternFill(start_color="0F2942", end_color="0F2942", fill_type="solid")
+_CMP_FILL_SBS_HDR_NEW  = PatternFill(start_color="1E6091", end_color="1E6091", fill_type="solid")
+_CMP_FILL_SBS_HDR_SEP  = PatternFill(start_color="2D2D2D", end_color="2D2D2D", fill_type="solid")
+_CMP_FONT_STRIKE       = Font(name="Segoe UI", size=10, strike=True, color="C00000")
+_CMP_FONT_SBS_HDR      = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+_CMP_BDR_SEP = Border(
+    left=Side(style="medium",color="595959"), right=Side(style="medium",color="595959"),
+    top=Side(style="thin",color="D0D0D0"),    bottom=Side(style="thin",color="D0D0D0"),
+)
+
+def _cmp_auto_width(ws):
+    for col_cells in ws.columns:
+        max_len = 0; col_letter = get_column_letter(col_cells[0].column)
+        for cell in col_cells:
+            try: max_len = max(max_len, len(str(cell.value)) if cell.value else 0)
+            except: pass
+        ws.column_dimensions[col_letter].width = min(max_len + 4, 60)
+
+def _cmp_apply_border(ws, max_row, max_col):
+    for r in range(1, max_row+1):
+        for c in range(1, max_col+1):
+            ws.cell(r,c).border = _CMP_THIN_BDR
+
+def _cmp_load_src_wb(raw, filename):
+    try:
+        if filename.lower().endswith(".xls"): return None
+        return openpyxl.load_workbook(io.BytesIO(raw))
+    except: return None
+
+def _cmp_copy_print_settings(target_ws, src_wb, sheet_name):
+    if src_wb is None or sheet_name not in src_wb.sheetnames: return
+    try:
+        src_ws = src_wb[sheet_name]
+        src_ps = src_ws.page_setup; tgt_ps = target_ws.page_setup
+        for attr in ('orientation','paperSize','scale','firstPageNumber','pageOrder',
+                     'usePrinterDefaults','blackAndWhite','draft','cellComments',
+                     'useFirstPageNumber','horizontalDpi','verticalDpi','copies','errors'):
+            try:
+                val = getattr(src_ps, attr, None)
+                if val is not None: setattr(tgt_ps, attr, val)
+            except: pass
+        src_pm = src_ws.page_margins; tgt_pm = target_ws.page_margins
+        for attr in ('left','right','top','bottom','header','footer'):
+            try:
+                val = getattr(src_pm, attr, None)
+                if val is not None: setattr(tgt_pm, attr, val)
+            except: pass
+        target_ws.HeaderFooter = copy.deepcopy(src_ws.HeaderFooter)
+    except: pass
+
+def _cmp_copy_cell_style(src_cell, dst_cell):
+    if src_cell is None: return
+    for attr, copy_fn in [
+        ('font', copy.copy), ('alignment', copy.copy),
+        ('border', copy.copy), ('number_format', None),
+    ]:
+        try:
+            val = getattr(src_cell, attr, None)
+            if val is None: continue
+            if attr == 'number_format':
+                if val and val != 'General': dst_cell.number_format = val
+            else:
+                setattr(dst_cell, attr, copy_fn(val))
+        except: pass
+    try:
+        if src_cell.fill is not None and src_cell.fill.fill_type not in (None, "none"):
+            dst_cell.fill = copy.copy(src_cell.fill)
+    except: pass
+
+def _cmp_font_with_strike(src_font):
+    if src_font is None: return _CMP_FONT_STRIKE
+    try:
+        return Font(name=src_font.name, size=src_font.size, bold=src_font.bold,
+                    italic=src_font.italic, underline=src_font.underline, strike=True,
+                    color="C00000", vertAlign=src_font.vertAlign,
+                    charset=src_font.charset, scheme=src_font.scheme)
+    except: return _CMP_FONT_STRIKE
+
+def _cmp_copy_row_col_dims(src_ws, dst_ws):
+    if src_ws is None: return
+    try:
+        for row_idx, rd in src_ws.row_dimensions.items():
+            if rd.height is not None: dst_ws.row_dimensions[row_idx].height = rd.height
+        for col_ltr, cd in src_ws.column_dimensions.items():
+            if cd.width is not None: dst_ws.column_dimensions[col_ltr].width = cd.width
+    except: pass
+
+def _cmp_build_summary_sheet(wb, ordered, new_only, deleted_only, sheet_stats, old_fn, new_fn):
+    ws = wb.create_sheet("📋 Summary", 0)
+    ws.sheet_properties.tabColor = "0F2942"
+    ws.merge_cells("A1:G1")
+    c = ws["A1"]; c.value = "Excel Comparison Report"
+    c.font = Font(name="Segoe UI",size=16,bold=True,color="0F2942")
+    c.alignment = Alignment(horizontal="center",vertical="center"); ws.row_dimensions[1].height = 32
+    for idx,(label,value) in enumerate([("Current Pages",old_fn),("Proposed Pages",new_fn),("Generated",datetime.now().strftime("%Y-%m-%d  %H:%M:%S"))], start=2):
+        ws.cell(idx,1,label).font = _CMP_FONT_BOLD; ws.cell(idx,2,value).font = _CMP_FONT_NORM
+    headers = ["Sheet Name","Status","Changed Cells","Added Rows","Deleted Rows","Changed Rows","Notes"]
+    hr = 6
+    for c_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(hr,c_idx,h); cell.fill = _CMP_FILL_SUM_HDR; cell.font = _CMP_FONT_HDR
+        cell.alignment = Alignment(horizontal="center",vertical="center")
+    ws.row_dimensions[hr].height = 22
+    STATUS_FILL = {
+        "Added":     PatternFill(start_color="D1FAE5",end_color="D1FAE5",fill_type="solid"),
+        "Deleted":   PatternFill(start_color="FEE2E2",end_color="FEE2E2",fill_type="solid"),
+        "Modified":  PatternFill(start_color="FFF3CD",end_color="FFF3CD",fill_type="solid"),
+        "Unchanged": PatternFill(start_color="F3F4F6",end_color="F3F4F6",fill_type="solid"),
+    }
+    for row_off, sname in enumerate(ordered, start=1):
+        r = hr + row_off
+        if sname in new_only:       status, sv, note = "Added", {}, "New sheet in revised file"
+        elif sname in deleted_only: status, sv, note = "Deleted", {}, "Removed from revised file"
+        else:
+            sv = sheet_stats.get(sname, {})
+            has_chg = sv.get("changed_cells",0)+sv.get("added_rows",0)+sv.get("deleted_rows",0) > 0
+            status = "Modified" if has_chg else "Unchanged"; note = ""
+        rf = STATUS_FILL.get(status)
+        data = [sname, status, sv.get("changed_cells","—"), sv.get("added_rows","—"), sv.get("deleted_rows","—"), sv.get("changed_rows","—"), note]
+        for ci, val in enumerate(data, start=1):
+            cell = ws.cell(r,ci,val); cell.font = _CMP_FONT_NORM; cell.alignment = Alignment(vertical="center")
+            if rf: cell.fill = rf
+    _cmp_apply_border(ws, hr + len(ordered), len(headers)); _cmp_auto_width(ws)
+
+def _cmp_build_highlighted_excel(old_sheets, new_sheets, ordered, new_only, deleted_only, sheet_stats, old_fn, new_fn) -> bytes:
+    wb = openpyxl.Workbook(); wb.remove(wb.active)
+    for name in ordered:
+        ws = wb.create_sheet(title=name[:31])
+        if name in new_only:
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["new"]
+            df = new_sheets.get(name, pd.DataFrame())
+            if not df.empty:
+                for i, row in enumerate(dataframe_to_rows(df, index=False, header=False), 1):
+                    for j, val in enumerate(row, 1):
+                        c = ws.cell(i,j, None if val=="" else val); c.fill = _CMP_FILL_ADDED; c.font = _CMP_FONT_NORM
+                _cmp_apply_border(ws,len(df),len(df.columns)); _cmp_auto_width(ws)
+        elif name in deleted_only:
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["deleted"]
+            df = old_sheets.get(name, pd.DataFrame())
+            if not df.empty:
+                for i, row in enumerate(dataframe_to_rows(df, index=False, header=False), 1):
+                    for j, val in enumerate(row, 1):
+                        c = ws.cell(i,j, None if val=="" else val); c.fill = _CMP_FILL_DELETED; c.font = _CMP_FONT_NORM
+                _cmp_apply_border(ws,len(df),len(df.columns)); _cmp_auto_width(ws)
+        else:
+            old_df = old_sheets.get(name, pd.DataFrame()); new_df = new_sheets.get(name, pd.DataFrame())
+            old_a, new_a, cell_status, row_status, stats = _cmp_compare_dataframes(old_df, new_df)
+            has_chg = stats["changed_cells"]+stats["added_rows"]+stats["deleted_rows"] > 0
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["modified"] if has_chg else _CMP_TAB_COLOR["unchanged"]
+            nr, nc = len(new_a), len(new_a.columns)
+            for i in range(nr):
+                rs = row_status.get(i,"same")
+                for j in range(nc):
+                    cs = cell_status.get((i,j),"same")
+                    if rs=="deleted": raw=old_a.iat[i,j]; fill=_CMP_FILL_DELETED
+                    else: raw=new_a.iat[i,j]; fill=(_CMP_FILL_ADDED if rs=="added" else (_CMP_FILL_CHG if cs=="changed" else None))
+                    cell = ws.cell(i+1,j+1, None if raw=="" else raw); cell.font = _CMP_FONT_NORM
+                    if fill: cell.fill = fill
+            if nr and nc: _cmp_apply_border(ws,nr,nc); _cmp_auto_width(ws)
+    _cmp_build_summary_sheet(wb, ordered, new_only, deleted_only, sheet_stats, old_fn, new_fn)
+    buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
+
+def _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only, deleted_only, sheet_stats, sheet_data, old_fn, new_fn, old_raw, new_raw) -> bytes:
+    old_src_wb = _cmp_load_src_wb(old_raw, old_fn); new_src_wb = _cmp_load_src_wb(new_raw, new_fn)
+    wb = openpyxl.Workbook(); wb.remove(wb.active)
+    all_names = sorted(set(list(old_sheets.keys()) + list(new_sheets.keys())))
+
+    def _finalise(ws, sep_col, src_wb, src_name):
+        _cmp_auto_width(ws); ws.column_dimensions[get_column_letter(sep_col)].width = 3
+        ws.sheet_view.showGridLines = False; _cmp_copy_print_settings(ws, src_wb, src_name)
+        ws.page_setup.orientation = 'landscape'
+        ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
+        ws.page_setup.fitToWidth = 1; ws.page_setup.fitToHeight = 0
+
+    for name in all_names:
+        ws = wb.create_sheet(title=name[:31])
+        if name in new_only:
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["new"]
+            df = new_sheets.get(name, pd.DataFrame())
+            if df.empty: continue
+            nc_old = len(df.columns); sep_col = nc_old+1; new_start = sep_col+1
+            for i, row_vals in enumerate(dataframe_to_rows(df, index=False, header=False), start=1):
+                for j in range(1, nc_old+1): ws.cell(i,j)
+                ws.cell(i, sep_col).fill = _CMP_FILL_SBS_SEP
+                for jj, val in enumerate(row_vals, start=new_start):
+                    c = ws.cell(i,jj, None if val=="" else val); c.fill = _CMP_FILL_SBS_NEW_SHT; c.font = _CMP_FONT_NORM
+            _finalise(ws, sep_col, new_src_wb, name)
+        elif name in deleted_only:
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["deleted"]
+            df = old_sheets.get(name, pd.DataFrame())
+            if df.empty: continue
+            nc_old = len(df.columns); sep_col = nc_old+1; new_start = sep_col+1
+            for i, row_vals in enumerate(dataframe_to_rows(df, index=False, header=False), start=1):
+                for j, val in enumerate(row_vals, start=1):
+                    c = ws.cell(i,j, None if val=="" else val); c.fill = _CMP_FILL_SBS_DEL_SHT; c.font = _CMP_FONT_NORM
+                ws.cell(i, sep_col).fill = _CMP_FILL_SBS_SEP
+                for jj in range(new_start, new_start+nc_old): ws.cell(i,jj)
+            _finalise(ws, sep_col, old_src_wb, name)
+        else:
+            old_df = old_sheets.get(name, pd.DataFrame()); new_df = new_sheets.get(name, pd.DataFrame())
+            if name in sheet_data: old_a, new_a, cell_status, row_status = sheet_data[name]
+            else: old_a, new_a, cell_status, row_status, _ = _cmp_compare_dataframes(old_df, new_df)
+            if old_a.empty and new_a.empty: continue
+            nr = max(len(old_a) if not old_a.empty else 0, len(new_a) if not new_a.empty else 0)
+            nc_old = len(old_a.columns) if not old_a.empty else 0
+            nc_new = len(new_a.columns) if not new_a.empty else 0
+            sv = sheet_stats.get(name, {})
+            has_chg = (sv.get("changed_cells",0)+sv.get("added_rows",0)+sv.get("deleted_rows",0)) > 0
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["modified"] if has_chg else _CMP_TAB_COLOR["unchanged"]
+            sep_col = nc_old+1; new_start = sep_col+1
+            for i in range(nr):
+                rs = row_status.get(i,"same")
+                for j in range(nc_old):
+                    val = _cmp_cell_str(old_a.iat[i,j]) if i < len(old_a) else ""
+                    cs = cell_status.get((i,j),"same")
+                    c = ws.cell(i+1, j+1, None if val=="" else val)
+                    if rs=="deleted": c.fill = _CMP_FILL_DELETED; c.font = _CMP_FONT_NORM
+                    elif rs=="added": c.value = None; c.font = _CMP_FONT_NORM
+                    elif cs=="changed": c.font = _CMP_FONT_STRIKE
+                    else: c.font = _CMP_FONT_NORM
+                ws.cell(i+1, sep_col).fill = _CMP_FILL_SBS_SEP
+                for j in range(nc_new):
+                    val = _cmp_cell_str(new_a.iat[i,j]) if i < len(new_a) else ""
+                    cs = cell_status.get((i,j),"same")
+                    c = ws.cell(i+1, new_start+j, None if val=="" else val)
+                    if rs=="added": c.fill = _CMP_FILL_ADDED; c.font = _CMP_FONT_NORM
+                    elif rs=="deleted": c.value = None; c.font = _CMP_FONT_NORM
+                    elif cs=="changed": c.fill = _CMP_FILL_SBS_CHG_NEW; c.font = _CMP_FONT_NORM
+                    else: c.font = _CMP_FONT_NORM
+            _finalise(ws, sep_col, new_src_wb, name)
+    buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
+
+def _cmp_xml_esc(s: str) -> str:
+    return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+
+def _cmp_replace_cell_rich(xml_text, ref, old_val, new_val):
+    if old_val and new_val:
+        is_xml = (f'<r><rPr><strike/><color rgb="FFC00000"/></rPr><t>{_cmp_xml_esc(old_val)}</t></r>'
+                  f'<r><t xml:space="preserve">  {_cmp_xml_esc(new_val)}</t></r>')
+    elif old_val:
+        is_xml = f'<r><rPr><strike/><color rgb="FFC00000"/></rPr><t>{_cmp_xml_esc(old_val)}</t></r>'
+    else:
+        is_xml = f'<t>{_cmp_xml_esc(new_val or "")}</t>'
+    pat = r'(<c r="' + re.escape(ref) + r'")((?:[^>]*))>(.*?)</c>'
+    def _sub(m):
+        attrs = re.sub(r'\s+t="[^"]*"','',m.group(2))
+        return f'{m.group(1)}{attrs} t="inlineStr"><is>{is_xml}</is></c>'
+    return re.sub(pat, _sub, xml_text, flags=re.DOTALL)
+
+def _cmp_patch_inline_rich_cells(wb_bytes, wb_obj, rich_map):
+    sheet_zip_path = {ws.title: f"xl/worksheets/sheet{i}.xml" for i, ws in enumerate(wb_obj.worksheets, 1)}
+    in_buf = io.BytesIO(wb_bytes); out_buf = io.BytesIO()
+    with zipfile.ZipFile(in_buf,"r") as zin:
+        with zipfile.ZipFile(out_buf,"w",compression=zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                data = zin.read(item.filename)
+                for sheet_name, cells in rich_map.items():
+                    if sheet_zip_path.get(sheet_name) == item.filename and cells:
+                        xml_text = data.decode("utf-8")
+                        for ref, (ov, nv) in cells.items():
+                            xml_text = _cmp_replace_cell_rich(xml_text, ref, ov, nv)
+                        data = xml_text.encode("utf-8"); break
+                zout.writestr(item, data)
+    return out_buf.getvalue()
+
+def _cmp_build_inline_excel(old_sheets, new_sheets, new_only, deleted_only, sheet_stats, sheet_data, old_fn, new_fn, old_raw, new_raw) -> bytes:
+    old_src_wb = _cmp_load_src_wb(old_raw, old_fn); new_src_wb = _cmp_load_src_wb(new_raw, new_fn)
+    wb = openpyxl.Workbook(); wb.remove(wb.active)
+    all_names = sorted(set(list(old_sheets.keys()) + list(new_sheets.keys())))
+    rich_cells: Dict[str, Dict[str,tuple]] = {}
+
+    def _get_src_ws(wb_obj, sn):
+        if wb_obj is None: return None
+        try: return wb_obj[sn] if sn in wb_obj.sheetnames else None
+        except: return None
+
+    def _finalise_inline(ws, src_wb, src_name, src_ws=None):
+        if src_ws is not None: _cmp_copy_row_col_dims(src_ws, ws)
+        else: _cmp_auto_width(ws)
+        ws.sheet_view.showGridLines = False; _cmp_copy_print_settings(ws, src_wb, src_name)
+
+    for name in all_names:
+        ws = wb.create_sheet(title=name[:31])
+        if name in new_only:
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["new"]
+            df = new_sheets.get(name, pd.DataFrame())
+            if df.empty: continue
+            src_ws = _get_src_ws(new_src_wb, name)
+            for i in range(len(df)):
+                for j in range(len(df.columns)):
+                    val = _cmp_cell_str(df.iat[i,j]); c = ws.cell(i+1,j+1, None if val=="" else val)
+                    _cmp_copy_cell_style(src_ws.cell(i+1,j+1) if src_ws else None, c); c.fill = _CMP_FILL_ADDED
+            _finalise_inline(ws, new_src_wb, name, src_ws)
+        elif name in deleted_only:
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["deleted"]
+            df = old_sheets.get(name, pd.DataFrame())
+            if df.empty: continue
+            src_ws = _get_src_ws(old_src_wb, name)
+            for i in range(len(df)):
+                for j in range(len(df.columns)):
+                    val = _cmp_cell_str(df.iat[i,j]); c = ws.cell(i+1,j+1, None if val=="" else val)
+                    src_c = src_ws.cell(i+1,j+1) if src_ws else None
+                    _cmp_copy_cell_style(src_c, c); c.font = _cmp_font_with_strike(src_c.font if src_c else None)
+            _finalise_inline(ws, old_src_wb, name, src_ws)
+        else:
+            old_df = old_sheets.get(name, pd.DataFrame()); new_df = new_sheets.get(name, pd.DataFrame())
+            if name in sheet_data: old_a, new_a, cell_status, row_status = sheet_data[name]
+            else: old_a, new_a, cell_status, row_status, _ = _cmp_compare_dataframes(old_df, new_df)
+            if old_a.empty and new_a.empty: continue
+            nr = max(len(old_a) if not old_a.empty else 0, len(new_a) if not new_a.empty else 0)
+            nc = max(len(old_a.columns) if not old_a.empty else 0, len(new_a.columns) if not new_a.empty else 0)
+            sv = sheet_stats.get(name, {})
+            has_chg = (sv.get("changed_cells",0)+sv.get("added_rows",0)+sv.get("deleted_rows",0)) > 0
+            ws.sheet_properties.tabColor = _CMP_TAB_COLOR["modified"] if has_chg else _CMP_TAB_COLOR["unchanged"]
+            new_src_ws = _get_src_ws(new_src_wb, name); old_src_ws = _get_src_ws(old_src_wb, name)
+            for i in range(nr):
+                rs = row_status.get(i,"same")
+                for j in range(nc):
+                    cs = cell_status.get((i,j),"same")
+                    old_val = _cmp_cell_str(old_a.iat[i,j]) if i < len(old_a) else ""
+                    new_val = _cmp_cell_str(new_a.iat[i,j]) if i < len(new_a) else ""
+                    c = ws.cell(i+1, j+1)
+                    if rs=="deleted":
+                        c.value = None if old_val=="" else old_val
+                        src_c = old_src_ws.cell(i+1,j+1) if old_src_ws else None
+                        _cmp_copy_cell_style(src_c, c); c.font = _cmp_font_with_strike(src_c.font if src_c else None)
+                    elif rs=="added":
+                        c.value = None if new_val=="" else new_val
+                        src_c = new_src_ws.cell(i+1,j+1) if new_src_ws else None
+                        _cmp_copy_cell_style(src_c, c); c.fill = _CMP_FILL_ADDED
+                    elif cs=="changed":
+                        src_c = new_src_ws.cell(i+1,j+1) if new_src_ws else None
+                        _cmp_copy_cell_style(src_c, c)
+                        placeholder = new_val if new_val else old_val
+                        c.value = placeholder if placeholder else None
+                        if placeholder:
+                            ref = f"{get_column_letter(j+1)}{i+1}"
+                            rich_cells.setdefault(name, {})[ref] = (old_val, new_val)
+                    else:
+                        c.value = None if new_val=="" else new_val
+                        src_c = new_src_ws.cell(i+1,j+1) if new_src_ws else None
+                        _cmp_copy_cell_style(src_c, c)
+            _finalise_inline(ws, new_src_wb, name, new_src_ws)
+    buf = io.BytesIO(); wb.save(buf); raw_out = buf.getvalue()
+    if any(rich_cells.values()):
+        raw_out = _cmp_patch_inline_rich_cells(raw_out, wb, rich_cells)
+    return raw_out
+
+def _cmp_process_file_pair(old_f, new_f, fmt):
+    try:
+        old_raw = _cmp_file_bytes(old_f); new_raw = _cmp_file_bytes(new_f)
+        old_sheets = _cmp_read_excel_sheets(old_raw, old_f.name)
+        new_sheets = _cmp_read_excel_sheets(new_raw, new_f.name)
+        if not old_sheets or not new_sheets: return None, {"error":"Could not read one or both files"}
+        old_names_s: Set[str] = set(old_sheets); new_names_s: Set[str] = set(new_sheets)
+        new_only_s = new_names_s - old_names_s; deleted_only_s = old_names_s - new_names_s
+        common_s = old_names_s & new_names_s
+        ordered_s = list(old_sheets.keys()) + [s for s in new_sheets.keys() if s not in old_sheets]
+        sheet_stats_s: Dict[str,dict] = {}; sheet_data_s: Dict[str,tuple] = {}
+        for sname in common_s:
+            oa, na, cs, rs, stats = _cmp_compare_dataframes(old_sheets[sname], new_sheets[sname])
+            sheet_stats_s[sname] = stats; sheet_data_s[sname] = (oa, na, cs, rs)
+        if fmt == "Side-by-Side":
+            tracked = _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only_s, deleted_only_s, sheet_stats_s, sheet_data_s, old_f.name, new_f.name, old_raw, new_raw)
+        else:
+            tracked = _cmp_build_inline_excel(old_sheets, new_sheets, new_only_s, deleted_only_s, sheet_stats_s, sheet_data_s, old_f.name, new_f.name, old_raw, new_raw)
+        total_chg = sum(v["changed_cells"]+v["added_rows"]+v["deleted_rows"] for v in sheet_stats_s.values())
+        modified_s = sum(1 for v in sheet_stats_s.values() if v["changed_cells"]+v["added_rows"]+v["deleted_rows"] > 0)
+        return tracked, {
+            "error": None, "current_file": old_f.name, "proposed_file": new_f.name,
+            "total_sheets": len(old_names_s | new_names_s), "new_sheets": len(new_only_s),
+            "deleted_sheets": len(deleted_only_s), "modified_sheets": modified_s,
+            "unchanged_sheets": len(common_s) - modified_s,
+            "changed_cells": sum(v["changed_cells"] for v in sheet_stats_s.values()),
+            "added_rows":    sum(v["added_rows"]    for v in sheet_stats_s.values()),
+            "deleted_rows":  sum(v["deleted_rows"]  for v in sheet_stats_s.values()),
+            "total_changes": total_chg,
+        }
+    except Exception as exc:
+        return None, {"error": str(exc), "current_file": old_f.name, "proposed_file": new_f.name}
+
+
+# ─── TRACKED PAGES COMPARATOR — UI ────────────────────────────────────────────
+if active_tool == "comparator":
+    _tab_ind, _tab_mass = st.tabs(["📄  Individual Pages", "📁  Mass Processing"])
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 1 — INDIVIDUAL PAGES
+    # ══════════════════════════════════════════════════════════════════════════
+    with _tab_ind:
+        spacer(8)
+        st.markdown('<div class="sec-label">&#128196; &nbsp;Upload Rate Page Files</div>', unsafe_allow_html=True)
+        up_c1, up_c2 = st.columns(2, gap="large")
+        with up_c1:
+            st.markdown('<span class="cmp-upload-label">&#128194; Current Pages</span>', unsafe_allow_html=True)
+            old_file = st.file_uploader("old_up", type=["xlsx","xls"], key="cmp_old_file",
+                                        label_visibility="collapsed",
+                                        help="The existing / current version of the rate pages")
+        with up_c2:
+            st.markdown('<span class="cmp-upload-label">&#128194; Proposed Pages</span>', unsafe_allow_html=True)
+            new_file = st.file_uploader("new_up", type=["xlsx","xls"], key="cmp_new_file",
+                                        label_visibility="collapsed",
+                                        help="The proposed / updated version of the rate pages")
+
+        spacer(8)
+        st.markdown('<div class="sec-label">&#9881; &nbsp;Export Format &amp; Generate</div>', unsafe_allow_html=True)
+        fmt_col, btn_col = st.columns([2, 1])
+        with fmt_col:
+            st.markdown('<p class="f-label">&#128202; &nbsp;Tracked Pages Format</p>', unsafe_allow_html=True)
+            st.radio("cmp_export_fmt",
+                     options=["Side-by-Side","Inline Diff"], horizontal=True,
+                     label_visibility="collapsed", key="cmp_ind_fmt",
+                     help="Side-by-Side: OLD on left, NEW on right.\nInline Diff: single table — changed cells show ~~old~~ new.")
+        with btn_col:
+            spacer(20)
+            _ind_gen = st.button("⚙️  Generate Tracked Pages", type="primary",
+                                 use_container_width=True, key="cmp_ind_generate_btn",
+                                 disabled=not (old_file and new_file))
+
+        if not old_file or not new_file:
+            spacer(8)
+            st.markdown("""
+            <div class="cmp-info-box">
+              <strong>How to use — Individual mode</strong>
+              <ol>
+                <li>Upload your <strong>Current Pages</strong> Excel on the left.</li>
+                <li>Upload your <strong>Proposed Pages</strong> Excel on the right.</li>
+                <li>Choose <strong>Side-by-Side</strong> or <strong>Inline Diff</strong> format.</li>
+                <li>Click <strong>⚙️ Generate Tracked Pages</strong>.</li>
+              </ol>
+              <strong>Detected changes:</strong>
+              <ul>
+                <li>🟢 <strong>New sheets</strong> — added in Proposed Pages</li>
+                <li>🔴 <strong>Deleted sheets</strong> — removed from Current Pages</li>
+                <li>🟡 <strong>Changed cells</strong> — old ↦ new value with strikethrough</li>
+                <li>🟢 <strong>Added rows</strong> &nbsp;·&nbsp; 🔴 <strong>Deleted rows</strong></li>
+              </ul>
+            </div>""", unsafe_allow_html=True)
+        else:
+            _old_fid  = f"{old_file.name}:{old_file.size}"
+            _new_fid  = f"{new_file.name}:{new_file.size}"
+            _cur_fids = (_old_fid, _new_fid)
+            if st.session_state.cmp_file_ids != _cur_fids:
+                st.session_state.cmp_comp_data        = None
+                st.session_state.cmp_tracked_bytes    = None
+                st.session_state.cmp_tracked_filename = None
+                st.session_state.cmp_tracked_fmt      = None
+
+            if _ind_gen:
+                _fmt = st.session_state.get("cmp_ind_fmt","Side-by-Side")
+                ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+                with st.spinner("Reading workbooks…"):
+                    old_raw    = _cmp_file_bytes(old_file)
+                    new_raw    = _cmp_file_bytes(new_file)
+                    old_sheets = _cmp_read_excel_sheets(old_raw, old_file.name)
+                    new_sheets = _cmp_read_excel_sheets(new_raw, new_file.name)
+                if old_sheets and new_sheets:
+                    old_names_g: Set[str] = set(old_sheets); new_names_g: Set[str] = set(new_sheets)
+                    new_only_g     = new_names_g - old_names_g
+                    deleted_only_g = old_names_g - new_names_g
+                    common_g       = old_names_g & new_names_g
+                    ordered_g: List[str] = list(old_sheets.keys()) + [s for s in new_sheets.keys() if s not in old_sheets]
+                    with st.spinner("Computing differences…"):
+                        sheet_stats_g: Dict[str,dict] = {}; sheet_data_g: Dict[str,tuple] = {}
+                        for sname in common_g:
+                            oa, na, cs, rs, stats = _cmp_compare_dataframes(old_sheets[sname], new_sheets[sname])
+                            sheet_stats_g[sname] = stats; sheet_data_g[sname] = (oa, na, cs, rs)
+                    if _fmt == "Side-by-Side":
+                        with st.spinner("Generating Tracked Pages (Side-by-Side)…"):
+                            tracked_bytes = _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only_g, deleted_only_g, sheet_stats_g, sheet_data_g, old_file.name, new_file.name, old_raw, new_raw)
+                            tracked_fname = f"tracked_pages_sidebyside_{ts}.xlsx"
+                    else:
+                        with st.spinner("Generating Tracked Pages (Inline Diff)…"):
+                            tracked_bytes = _cmp_build_inline_excel(old_sheets, new_sheets, new_only_g, deleted_only_g, sheet_stats_g, sheet_data_g, old_file.name, new_file.name, old_raw, new_raw)
+                            tracked_fname = f"tracked_pages_inline_{ts}.xlsx"
+                    with st.spinner("Building highlighted summary report…"):
+                        report_bytes = _cmp_build_highlighted_excel(old_sheets, new_sheets, ordered_g, new_only_g, deleted_only_g, sheet_stats_g, old_file.name, new_file.name)
+                        report_fname = f"excel_diff_{ts}.xlsx"
+                    st.session_state.cmp_comp_data = {
+                        "old_sheets":old_sheets,"new_sheets":new_sheets,"ordered":ordered_g,
+                        "new_only":new_only_g,"deleted_only":deleted_only_g,"common":common_g,
+                        "sheet_stats":sheet_stats_g,"sheet_data":sheet_data_g,
+                        "old_name":old_file.name,"new_name":new_file.name,
+                        "report_bytes":report_bytes,"report_fname":report_fname,
+                    }
+                    st.session_state.cmp_tracked_bytes    = tracked_bytes
+                    st.session_state.cmp_tracked_filename = tracked_fname
+                    st.session_state.cmp_tracked_fmt      = _fmt
+                    st.session_state.cmp_file_ids         = _cur_fids
+                else:
+                    st.error("Could not read one or both files. Please check they are valid Excel workbooks.")
+
+            _cd = st.session_state.cmp_comp_data
+            if _cd is None:
+                spacer(8)
+                st.info("Both files are ready. Choose a format and click **⚙️ Generate Tracked Pages** to run the comparison.", icon="ℹ️")
+            else:
+                old_sheets   = _cd["old_sheets"];  new_sheets   = _cd["new_sheets"]
+                ordered      = _cd["ordered"];     new_only     = _cd["new_only"]
+                deleted_only = _cd["deleted_only"]; common       = _cd["common"]
+                sheet_stats  = _cd["sheet_stats"]; sheet_data   = _cd["sheet_data"]
+                old_names    = set(old_sheets);    new_names    = set(new_sheets)
+
+                total_changes  = sum(v["changed_cells"]+v["added_rows"]+v["deleted_rows"] for v in sheet_stats.values())
+                modified_count = sum(1 for v in sheet_stats.values() if v["changed_cells"]+v["added_rows"]+v["deleted_rows"] > 0)
+                total_sheets_seen = len(old_names | new_names)
+
+                spacer(12)
+                st.markdown('<div class="sec-label">&#128200; &nbsp;Comparison Summary</div>', unsafe_allow_html=True)
+                st.markdown(f"""
+                <div class="cmp-metric-grid">
+                  <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:var(--nw-deep)">{total_sheets_seen}</div><div class="cmp-metric-label">Total Sheets</div></div>
+                  <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#10b981">{len(new_only)}</div><div class="cmp-metric-label">Added Sheets</div></div>
+                  <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#ef4444">{len(deleted_only)}</div><div class="cmp-metric-label">Deleted Sheets</div></div>
+                  <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:var(--gold)">{modified_count}</div><div class="cmp-metric-label">Modified Sheets</div></div>
+                  <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:var(--muted)">{len(common) - modified_count}</div><div class="cmp-metric-label">Unchanged Sheets</div></div>
+                  <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#dc2626">{total_changes:,}</div><div class="cmp-metric-label">Total Changes</div></div>
+                </div>""", unsafe_allow_html=True)
+
+                spacer(6)
+                st.markdown('<div class="sec-label">&#128204; &nbsp;Sheet Overview</div>', unsafe_allow_html=True)
+                st.markdown("""<div class="cmp-legend">
+                  <div class="cmp-legend-item"><div class="cmp-legend-dot" style="background:#10b981"></div>New sheet</div>
+                  <div class="cmp-legend-item"><div class="cmp-legend-dot" style="background:#ef4444"></div>Deleted sheet</div>
+                  <div class="cmp-legend-item"><div class="cmp-legend-dot" style="background:#f59e0b"></div>Modified sheet</div>
+                  <div class="cmp-legend-item"><div class="cmp-legend-dot" style="background:#A8C4E8"></div>Unchanged sheet</div>
+                </div>""", unsafe_allow_html=True)
+                pills_html = ['<div class="cmp-pills">']
+                for sname in ordered:
+                    if sname in new_only:       cls, icon = "cmp-pill cmp-pill-new", "＋"
+                    elif sname in deleted_only: cls, icon = "cmp-pill cmp-pill-deleted", "−"
+                    else:
+                        sv = sheet_stats.get(sname, {})
+                        has_chg = sv.get("changed_cells",0)+sv.get("added_rows",0)+sv.get("deleted_rows",0) > 0
+                        cls = "cmp-pill cmp-pill-modified" if has_chg else "cmp-pill cmp-pill-unchanged"
+                        icon = "~" if has_chg else "✓"
+                    pills_html.append(f'<span class="{cls}">{_cmp_esc(f"{icon} {sname}")}</span>')
+                pills_html.append("</div>")
+                st.markdown("".join(pills_html), unsafe_allow_html=True)
+
+                spacer(4)
+                st.markdown('<div class="sec-label">&#128269; &nbsp;Sheet-by-Sheet Analysis</div>', unsafe_allow_html=True)
+                tab_labels: List[str] = []
+                for sname in ordered:
+                    if sname in new_only:       tab_labels.append(f"🟢 {sname}")
+                    elif sname in deleted_only: tab_labels.append(f"🔴 {sname}")
+                    else:
+                        sv = sheet_stats.get(sname, {})
+                        has_chg = sv.get("changed_cells",0)+sv.get("added_rows",0)+sv.get("deleted_rows",0) > 0
+                        tab_labels.append(f"🟡 {sname}" if has_chg else f"⚪ {sname}")
+                sheet_tabs = st.tabs(tab_labels)
+                for sname, stab in zip(ordered, sheet_tabs):
+                    with stab:
+                        if sname in new_only:
+                            st.success(f"**'{sname}'** is a **new sheet** — exists only in Proposed Pages.")
+                            df = new_sheets[sname]; st.caption(f"{len(df):,} rows × {len(df.columns):,} columns")
+                            st.dataframe(df, use_container_width=True, height=360, hide_index=True)
+                        elif sname in deleted_only:
+                            st.error(f"**'{sname}'** was **deleted** — exists only in Current Pages.")
+                            df = old_sheets[sname]; st.caption(f"{len(df):,} rows × {len(df.columns):,} columns")
+                            st.dataframe(df, use_container_width=True, height=360, hide_index=True)
+                        else:
+                            old_a, new_a, cell_status, row_status = sheet_data[sname]
+                            sv = sheet_stats[sname]
+                            has_chg = sv["changed_cells"]+sv["added_rows"]+sv["deleted_rows"] > 0
+                            if not has_chg:
+                                st.info(f"✅ No changes detected in **'{sname}'**.")
+                                st.dataframe(new_sheets[sname], use_container_width=True, height=300, hide_index=True)
+                            else:
+                                m1,m2,m3,m4 = st.columns(4)
+                                m1.metric("Rows compared", f"{sv['total_rows']:,}")
+                                m2.metric("Added rows",    sv["added_rows"],   delta=f"+{sv['added_rows']}"   if sv["added_rows"]   else None)
+                                m3.metric("Deleted rows",  sv["deleted_rows"], delta=f"-{sv['deleted_rows']}" if sv["deleted_rows"] else None, delta_color="inverse")
+                                m4.metric("Changed cells", f"{sv['changed_cells']:,}")
+                                st.markdown("""<div class="cmp-legend" style="margin-top:10px">
+                                  <div class="cmp-legend-item"><div class="cmp-legend-dot" style="background:#FFFBEB;border:1.5px solid #f59e0b"></div>Changed cell</div>
+                                  <div class="cmp-legend-item"><div class="cmp-legend-dot" style="background:#ecfdf5;border:1.5px solid #10b981"></div>Added row</div>
+                                  <div class="cmp-legend-item"><div class="cmp-legend-dot" style="background:#fef2f2;border:1.5px solid #ef4444"></div>Deleted row</div>
+                                </div>""", unsafe_allow_html=True)
+                                st.markdown(_cmp_render_diff_table(old_a, new_a, cell_status, row_status), unsafe_allow_html=True)
+
+                spacer(12)
+                st.markdown('<div class="sec-label">&#128190; &nbsp;Export</div>', unsafe_allow_html=True)
+                exp_c1, exp_c2 = st.columns(2)
+                with exp_c1:
+                    if st.session_state.cmp_tracked_bytes:
+                        _tfmt = st.session_state.cmp_tracked_fmt or "Side-by-Side"
+                        st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                        st.download_button(
+                            label="📋 Download Tracked Pages" + (" — Side-by-Side" if _tfmt=="Side-by-Side" else " — Inline Diff"),
+                            data=st.session_state.cmp_tracked_bytes,
+                            file_name=st.session_state.cmp_tracked_filename,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True, type="primary",
+                        )
+                        st.markdown('</div>', unsafe_allow_html=True)
+                with exp_c2:
+                    st.download_button(
+                        label="📥 Download Highlighted Summary",
+                        data=_cd["report_bytes"], file_name=_cd["report_fname"],
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True,
+                        help="Colour-coded sheet tabs and highlighted cells",
+                    )
+
+        spacer(24)
+        st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # TAB 2 — MASS PROCESSING
+    # ══════════════════════════════════════════════════════════════════════════
+    with _tab_mass:
+        spacer(8)
+        st.markdown('<div class="sec-label">&#128196; &nbsp;Upload Rate Page Files — Batch</div>', unsafe_allow_html=True)
+        mc1, mc2 = st.columns(2, gap="large")
+        with mc1:
+            st.markdown('<span class="cmp-upload-label">&#128194; Current Pages</span>', unsafe_allow_html=True)
+            mass_cur = st.file_uploader("mass_cur", type=["xlsx","xls"], accept_multiple_files=True,
+                                        key="cmp_mass_cur", label_visibility="collapsed",
+                                        help="Select multiple files — hold Ctrl and click, or Ctrl+A to select all")
+            if mass_cur: st.caption(f"✅ {len(mass_cur)} file(s) selected")
+        with mc2:
+            st.markdown('<span class="cmp-upload-label">&#128194; Proposed Pages</span>', unsafe_allow_html=True)
+            mass_prop = st.file_uploader("mass_prop", type=["xlsx","xls"], accept_multiple_files=True,
+                                         key="cmp_mass_prop", label_visibility="collapsed",
+                                         help="Select multiple files — hold Ctrl and click, or Ctrl+A to select all")
+            if mass_prop: st.caption(f"✅ {len(mass_prop)} file(s) selected")
+
+        spacer(8)
+        st.markdown('<div class="sec-label">&#9881; &nbsp;Output &amp; Format</div>', unsafe_allow_html=True)
+        st.markdown('<p class="f-label">&#128193; &nbsp;Output Save Location</p>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint">Files will be saved to a <code>Tracked Pages</code> subfolder here.</p>', unsafe_allow_html=True)
+
+        if "_cmp_mass_path_pending" in st.session_state:
+            st.session_state.cmp_mass_output_path = st.session_state.pop("_cmp_mass_path_pending")
+
+        path_col, browse_col = st.columns([4,1])
+        with path_col:
+            st.text_input("cmp_mass_path_input", label_visibility="collapsed",
+                          placeholder="Paste a folder path or click Browse",
+                          key="cmp_mass_output_path")
+        with browse_col:
+            if st.button("Browse", key="cmp_mass_browse_btn", use_container_width=True):
+                _picked = browse_folder()
+                if _picked:
+                    st.session_state["_cmp_mass_path_pending"] = _picked
+                    st.rerun()
+
+        _raw_mass_path = st.session_state.cmp_mass_output_path.strip().strip('"').strip("'")
+        if _raw_mass_path:
+            _mass_resolved = os.path.join(_raw_mass_path, "Tracked Pages")
+            if os.path.isdir(_raw_mass_path):
+                st.markdown(f'<p class="f-ok">&#10003; &nbsp;Files will be saved to: <code>{_mass_resolved}</code></p>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<p class="f-hint">&#9888; Folder not found — will be created on Generate.</p>', unsafe_allow_html=True)
+        else:
+            _mass_resolved = None
+            st.markdown('<p class="f-hint">No location set — files available as ZIP download only.</p>', unsafe_allow_html=True)
+
+        spacer(4)
+        st.markdown('<p class="f-label">&#128202; &nbsp;Tracked Pages Format</p>', unsafe_allow_html=True)
+        mfmt_col, mbtn_col = st.columns([2,1])
+        with mfmt_col:
+            st.radio("cmp_mass_fmt_sel", options=["Side-by-Side","Inline Diff"], horizontal=True,
+                     label_visibility="collapsed", key="cmp_mass_fmt_radio")
+        with mbtn_col:
+            _mass_gen = st.button("⚙️  Generate All Tracked Pages", type="primary",
+                                  use_container_width=True, key="cmp_mass_generate_btn",
+                                  disabled=not (mass_cur and mass_prop))
+
+        if not mass_cur or not mass_prop:
+            spacer(8)
+            st.markdown("""
+            <div class="cmp-info-box">
+              <strong>How to use — Mass Processing mode</strong>
+              <ol>
+                <li>Click <em>Current Pages</em> and select all current Excel files at once (hold <strong>Ctrl</strong> or <strong>Ctrl+A</strong>).</li>
+                <li>Do the same for <em>Proposed Pages</em>.</li>
+                <li>Files are matched automatically — only the <strong>date portion</strong> (DD-MM-YYYY) may differ in the filename.</li>
+                <li>Set an <strong>Output Save Location</strong> (optional) — files are also available as a ZIP download.</li>
+                <li>Click <strong>⚙️ Generate All Tracked Pages</strong>.</li>
+              </ol>
+              <strong>Output naming:</strong> each file is named after the Proposed Pages file with <em>" - TRACKED PAGES"</em> appended.
+            </div>""", unsafe_allow_html=True)
+        else:
+            _mass_cur_fid  = "|".join(sorted(f"{f.name}:{f.size}" for f in mass_cur))
+            _mass_prop_fid = "|".join(sorted(f"{f.name}:{f.size}" for f in mass_prop))
+            _mass_fids     = (_mass_cur_fid, _mass_prop_fid)
+            if st.session_state.cmp_mass_file_ids != _mass_fids:
+                st.session_state.cmp_mass_results   = None
+                st.session_state.cmp_mass_zip_bytes = None
+                st.session_state.cmp_mass_fmt       = None
+
+            matched_pairs, unmatched_cur, unmatched_prop = _cmp_match_pairs(mass_cur, mass_prop)
+            spacer(8)
+            mc_a, mc_b, mc_c = st.columns(3)
+            mc_a.metric("Matched pairs",        len(matched_pairs))
+            mc_b.metric("Unmatched — Current",  len(unmatched_cur))
+            mc_c.metric("Unmatched — Proposed", len(unmatched_prop))
+
+            if unmatched_cur or unmatched_prop:
+                with st.expander("&#9888;&nbsp; Unmatched files (will be skipped)"):
+                    if unmatched_cur:
+                        st.markdown("**No match in Proposed Pages:**")
+                        for f in unmatched_cur: st.markdown(f"&nbsp;&nbsp;• `{f.name}`")
+                    if unmatched_prop:
+                        st.markdown("**No match in Current Pages:**")
+                        for f in unmatched_prop: st.markdown(f"&nbsp;&nbsp;• `{f.name}`")
+
+            if not matched_pairs:
+                st.warning("No matching file pairs found. Check that filenames match (aside from the date portion).")
+            else:
+                if _mass_gen:
+                    _mfmt = st.session_state.get("cmp_mass_fmt_radio","Side-by-Side")
+                    ts    = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    _disk_dir: Optional[str] = None
+                    if _raw_mass_path:
+                        _disk_dir = os.path.join(_raw_mass_path, "Tracked Pages")
+                        try: os.makedirs(_disk_dir, exist_ok=True)
+                        except Exception as _me: st.error(f"Could not create output folder: {_me}"); _disk_dir = None
+
+                    mass_results_list = []; zip_buf = io.BytesIO(); total_pairs = len(matched_pairs)
+                    with st.status(f"&#9881; Generating {total_pairs} Tracked Page(s)…", expanded=True) as _status:
+                        prog = st.progress(0, text="Initialising…")
+                        with zipfile.ZipFile(zip_buf,"w",compression=zipfile.ZIP_DEFLATED) as zf:
+                            for idx, (cur_f, prop_f) in enumerate(matched_pairs):
+                                st.write(f"**[{idx+1}/{total_pairs}]** Processing `{prop_f.name}`…")
+                                prog.progress(idx/total_pairs, text=f"Processing {idx+1} of {total_pairs}: {prop_f.name}")
+                                tracked_bytes, stats = _cmp_process_file_pair(cur_f, prop_f, _mfmt)
+                                mass_results_list.append(stats)
+                                if tracked_bytes:
+                                    stem = os.path.splitext(prop_f.name)[0]
+                                    out_fname = f"{stem} - TRACKED PAGES.xlsx"
+                                    zf.writestr(out_fname, tracked_bytes)
+                                    if _disk_dir:
+                                        try:
+                                            with open(os.path.join(_disk_dir, out_fname),"wb") as fh:
+                                                fh.write(tracked_bytes)
+                                        except Exception as _we: stats["save_error"] = str(_we)
+                        prog.progress(1.0, text=f"✅ Done — {total_pairs} file(s) processed.")
+                        _status.update(label=f"✅ Complete — {total_pairs} file(s) processed.", state="complete", expanded=False)
+
+                    st.session_state.cmp_mass_results   = mass_results_list
+                    st.session_state.cmp_mass_zip_bytes = zip_buf.getvalue()
+                    st.session_state.cmp_mass_fmt       = _mfmt
+                    st.session_state.cmp_mass_file_ids  = _mass_fids
+                    st.session_state.cmp_mass_save_dir  = _disk_dir
+
+                _mr = st.session_state.cmp_mass_results
+                if _mr is None:
+                    spacer(8)
+                    st.info(f"**{len(matched_pairs)} pair(s)** ready. Choose a format and click **⚙️ Generate All Tracked Pages** to start.", icon="ℹ️")
+                else:
+                    ok_results  = [r for r in _mr if not r.get("error")]
+                    err_results = [r for r in _mr if r.get("error")]
+                    total_files_proc = len(ok_results)
+                    total_chg_across = sum(r["total_changes"]   for r in ok_results)
+                    total_cell_across= sum(r["changed_cells"]   for r in ok_results)
+                    total_add_across = sum(r["added_rows"]      for r in ok_results)
+                    total_del_across = sum(r["deleted_rows"]    for r in ok_results)
+                    files_with_chg   = sum(1 for r in ok_results if r["total_changes"]>0)
+                    files_no_chg     = total_files_proc - files_with_chg
+
+                    spacer(12)
+                    st.markdown('<div class="sec-label">&#128200; &nbsp;Batch Summary</div>', unsafe_allow_html=True)
+                    st.markdown(f"""
+                    <div class="cmp-metric-grid">
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:var(--nw-deep)">{total_files_proc}</div><div class="cmp-metric-label">Files Processed</div></div>
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:var(--gold)">{files_with_chg}</div><div class="cmp-metric-label">Files With Changes</div></div>
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#10b981">{files_no_chg}</div><div class="cmp-metric-label">Files Unchanged</div></div>
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#dc2626">{total_chg_across:,}</div><div class="cmp-metric-label">Total Changes</div></div>
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:var(--nw-blue)">{total_cell_across:,}</div><div class="cmp-metric-label">Changed Cells</div></div>
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#10b981">{total_add_across:,}</div><div class="cmp-metric-label">Added Rows</div></div>
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#ef4444">{total_del_across:,}</div><div class="cmp-metric-label">Deleted Rows</div></div>
+                      <div class="cmp-metric-card"><div class="cmp-metric-val" style="color:#ef4444">{len(err_results)}</div><div class="cmp-metric-label">Errors</div></div>
+                    </div>""", unsafe_allow_html=True)
+
+                    spacer(8)
+                    st.markdown('<div class="sec-label">&#128203; &nbsp;Per-File Results</div>', unsafe_allow_html=True)
+                    tbl_rows = []
+                    for r in _mr:
+                        if r.get("error"):
+                            tbl_rows.append({"Current File":r.get("current_file","—"),"Proposed File":r.get("proposed_file","—"),"Status":f"❌ Error: {r['error']}","Sheets":"—","New":"—","Deleted":"—","Modified":"—","Changed Cells":"—","Added Rows":"—","Deleted Rows":"—"})
+                        else:
+                            status = "✅ No changes" if r["total_changes"]==0 else f"🟡 {r['total_changes']:,} changes"
+                            tbl_rows.append({"Current File":r["current_file"],"Proposed File":r["proposed_file"],"Status":status,"Sheets":r["total_sheets"],"New":r["new_sheets"],"Deleted":r["deleted_sheets"],"Modified":r["modified_sheets"],"Changed Cells":r["changed_cells"],"Added Rows":r["added_rows"],"Deleted Rows":r["deleted_rows"]})
+                    st.dataframe(pd.DataFrame(tbl_rows), use_container_width=True, hide_index=True, height=min(400, 60+38*len(tbl_rows)))
+                    if err_results:
+                        st.error(f"{len(err_results)} file(s) failed — see Status column above.")
+
+                    spacer(8)
+                    st.markdown('<div class="sec-label">&#128190; &nbsp;Output</div>', unsafe_allow_html=True)
+                    _saved_dir = st.session_state.cmp_mass_save_dir
+                    save_errors = [r for r in ok_results if r.get("save_error")]
+                    if _saved_dir:
+                        saved_count = len(ok_results) - len(save_errors)
+                        st.success(f"**{saved_count} file(s) saved** to `{_saved_dir}`", icon="✅")
+                        if save_errors:
+                            with st.expander(f"⚠️ {len(save_errors)} file(s) could not be saved to disk"):
+                                for r in save_errors:
+                                    st.markdown(f"• `{r.get('proposed_file','?')}` — {r['save_error']}")
+                    else:
+                        st.info("No save location was set — files available as ZIP download only.", icon="ℹ️")
+
+                    _mfmt_label = st.session_state.get("cmp_mass_fmt","Side-by-Side")
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    st.download_button(
+                        label=f"📦 Download All Tracked Pages (ZIP) — {_mfmt_label}",
+                        data=st.session_state.cmp_mass_zip_bytes,
+                        file_name=f"tracked_pages_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                        mime="application/zip", use_container_width=True, type="primary",
+                    )
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+        spacer(24)
+        st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)

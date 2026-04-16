@@ -1672,8 +1672,42 @@ def _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only, deleted_only, 
         try: return wb_obj[sn] if sn in wb_obj.sheetnames else None
         except: return None
 
+    def _apply_sbs_dims(ws, new_src_ws, old_src_ws, nc_new, sep_col, nc_old):
+        """Copy row heights and column widths from source workbooks.
+        LEFT columns (1..nc_new)            → from proposed (new_src_ws)
+        RIGHT columns (sep_col+1..+nc_old)  → from current  (old_src_ws), offset-mapped
+        Separator column                    → fixed width 3
+        """
+        old_start = sep_col + 1
+        # Row heights — use proposed as the primary source
+        _row_src = new_src_ws or old_src_ws
+        if _row_src:
+            try:
+                for row_idx, rd in _row_src.row_dimensions.items():
+                    if rd.height is not None:
+                        ws.row_dimensions[row_idx].height = rd.height
+            except Exception: pass
+        # LEFT side column widths from proposed
+        if new_src_ws:
+            try:
+                for col_ltr, cd in new_src_ws.column_dimensions.items():
+                    if cd.width is not None:
+                        ws.column_dimensions[col_ltr].width = cd.width
+            except Exception: pass
+        # RIGHT side column widths from current (source col j → dest col old_start+j-1)
+        if old_src_ws:
+            try:
+                for col_ltr, cd in old_src_ws.column_dimensions.items():
+                    if cd.width is not None:
+                        col_idx = openpyxl.utils.column_index_from_string(col_ltr)
+                        dst_ltr = get_column_letter(old_start + col_idx - 1)
+                        ws.column_dimensions[dst_ltr].width = cd.width
+            except Exception: pass
+        # Separator always narrow
+        ws.column_dimensions[get_column_letter(sep_col)].width = 3
+
     def _finalise(ws, sep_col, src_wb, src_name):
-        _cmp_auto_width(ws); ws.column_dimensions[get_column_letter(sep_col)].width = 3
+        # No auto_width — dimensions are set by _apply_sbs_dims before this call
         ws.sheet_view.showGridLines = False; _cmp_copy_print_settings(ws, src_wb, src_name)
         ws.page_setup.orientation = 'landscape'
         ws.sheet_properties.pageSetUpPr = PageSetupProperties(fitToPage=True)
@@ -1689,12 +1723,13 @@ def _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only, deleted_only, 
             src_ws = _get_src_ws(new_src_wb, name)
             nc_new = len(df.columns); sep_col = nc_new+1; old_start = sep_col+1
             for i, row_vals in enumerate(dataframe_to_rows(df, index=False, header=False), start=1):
-                for jj, val in enumerate(row_vals, start=1):                        # LEFT: proposed formatting + green fill
+                for jj, val in enumerate(row_vals, start=1):
                     c = ws.cell(i, jj, None if val=="" else val)
                     _cmp_copy_cell_style(src_ws.cell(i, jj) if src_ws else None, c)
                     c.fill = _CMP_FILL_SBS_NEW_SHT
                 ws.cell(i, sep_col).fill = _CMP_FILL_SBS_SEP
-                for j in range(old_start, old_start+nc_new): ws.cell(i, j)          # RIGHT: blank
+                for j in range(old_start, old_start+nc_new): ws.cell(i, j)
+            _apply_sbs_dims(ws, src_ws, None, nc_new, sep_col, nc_new)
             _finalise(ws, sep_col, new_src_wb, name)
         elif name in deleted_only:
             # Deleted sheet: blank on LEFT, current (red) on RIGHT
@@ -1704,12 +1739,13 @@ def _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only, deleted_only, 
             src_ws = _get_src_ws(old_src_wb, name)
             nc_old = len(df.columns); sep_col = nc_old+1; old_start = sep_col+1
             for i, row_vals in enumerate(dataframe_to_rows(df, index=False, header=False), start=1):
-                for j in range(1, nc_old+1): ws.cell(i, j)                          # LEFT: blank
+                for j in range(1, nc_old+1): ws.cell(i, j)
                 ws.cell(i, sep_col).fill = _CMP_FILL_SBS_SEP
-                for jj, val in enumerate(row_vals, start=old_start):                # RIGHT: current formatting + red fill
+                for jj, val in enumerate(row_vals, start=old_start):
                     c = ws.cell(i, jj, None if val=="" else val)
                     _cmp_copy_cell_style(src_ws.cell(i, jj - old_start + 1) if src_ws else None, c)
                     c.fill = _CMP_FILL_SBS_DEL_SHT
+            _apply_sbs_dims(ws, None, src_ws, nc_old, sep_col, nc_old)
             _finalise(ws, sep_col, old_src_wb, name)
         else:
             old_df = old_sheets.get(name, pd.DataFrame()); new_df = new_sheets.get(name, pd.DataFrame())
@@ -1724,32 +1760,32 @@ def _cmp_build_sidebyside_excel(old_sheets, new_sheets, new_only, deleted_only, 
             ws.sheet_properties.tabColor = _CMP_TAB_COLOR["modified"] if has_chg else _CMP_TAB_COLOR["unchanged"]
             new_src_ws = _get_src_ws(new_src_wb, name)
             old_src_ws = _get_src_ws(old_src_wb, name)
-            # Proposed (NEW) on LEFT, separator, Current (OLD) on RIGHT
             sep_col = nc_new+1; old_start = sep_col+1
             for i in range(nr):
                 rs = row_status.get(i,"same")
                 excel_row = i + 1
-                # LEFT: NEW (proposed) — copy proposed formatting, then overlay change highlights
+                # LEFT: NEW (proposed) — copy proposed formatting, overlay change highlights
                 for j in range(nc_new):
-                    val = _cmp_cell_str(new_a.iat[i,j]) if i < len(new_a) else ""
-                    cs  = cell_status.get((i,j),"same")
-                    c   = ws.cell(excel_row, j+1, None if val=="" else val)
+                    val  = _cmp_cell_str(new_a.iat[i,j]) if i < len(new_a) else ""
+                    cs   = cell_status.get((i,j),"same")
+                    c    = ws.cell(excel_row, j+1, None if val=="" else val)
                     src_c = new_src_ws.cell(excel_row, j+1) if new_src_ws else None
                     _cmp_copy_cell_style(src_c, c)
                     if rs=="added":     c.fill = _CMP_FILL_ADDED
-                    elif rs=="deleted": c.value = None          # row only in OLD — blank on NEW side
+                    elif rs=="deleted": c.value = None
                     elif cs=="changed": c.fill = _CMP_FILL_SBS_CHG_NEW
                 ws.cell(excel_row, sep_col).fill = _CMP_FILL_SBS_SEP
-                # RIGHT: OLD (current) — copy current formatting, then overlay change highlights
+                # RIGHT: OLD (current) — copy current formatting, overlay change highlights
                 for j in range(nc_old):
-                    val = _cmp_cell_str(old_a.iat[i,j]) if i < len(old_a) else ""
-                    cs  = cell_status.get((i,j),"same")
-                    c   = ws.cell(excel_row, old_start+j, None if val=="" else val)
+                    val  = _cmp_cell_str(old_a.iat[i,j]) if i < len(old_a) else ""
+                    cs   = cell_status.get((i,j),"same")
+                    c    = ws.cell(excel_row, old_start+j, None if val=="" else val)
                     src_c = old_src_ws.cell(excel_row, j+1) if old_src_ws else None
                     _cmp_copy_cell_style(src_c, c)
                     if rs=="deleted":   c.fill = _CMP_FILL_DELETED
-                    elif rs=="added":   c.value = None          # row only in NEW — blank on OLD side
+                    elif rs=="added":   c.value = None
                     elif cs=="changed": c.font = _cmp_font_with_strike(src_c.font if src_c else None)
+            _apply_sbs_dims(ws, new_src_ws, old_src_ws, nc_new, sep_col, nc_old)
             _finalise(ws, sep_col, new_src_wb, name)
     buf = io.BytesIO(); wb.save(buf); return buf.getvalue()
 

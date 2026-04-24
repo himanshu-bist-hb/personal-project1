@@ -209,15 +209,32 @@ def _handle_rule_255(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$H${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
-    # Break after the first row of the Comprehensive deductible table so that
-    # the 255.D. heading + table header + first data row (100/500) all stay on
-    # page 1, and the remaining deductible rows start fresh on page 2.
-    # The "Comprehensive" column header appears in column A at the df[1] header row.
+
     col_a = ws_com.Range(f"A1:A{max_row}").Value
+
+    # --- diagnostic: print rows 30-50 so we can see the actual layout ---
+    print(f"[Rule 255] sheet={ws_com.Name!r}  max_row={max_row}")
+    for _r in range(30, min(51, max_row + 1)):
+        _raw = col_a[_r - 1]
+        _val = _raw[0] if isinstance(_raw, (tuple, list)) else _raw
+        print(f"  row {_r:3d}: {_val!r}")
+
+    # Scan col A for the "Comprehensive" deductible-table header written by
+    # buildGarageKeepers2.  Break after the first data row so that:
+    #   page 1 → rates table + notes + 255.D heading + header + 100/500 row
+    #   page 2 → remaining deductible rows + 255.E.2 section
+    found_at = None
     for row_num in range(1, max_row + 1):
-        if col_a[row_num - 1][0] == "Comprehensive":
-            ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 2))  # after first data row
+        raw = col_a[row_num - 1]
+        val = raw[0] if isinstance(raw, (tuple, list)) else raw
+        if val == "Comprehensive":
+            found_at = row_num
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 2))
+            print(f"[Rule 255] 'Comprehensive' found at row {row_num} → break before row {row_num + 2}")
             break
+
+    if found_at is None:
+        print("[Rule 255] WARNING: 'Comprehensive' not found in col A — no break added")
 
 
 def _handle_rule_275(ws_com, xl_app, dest_filename):

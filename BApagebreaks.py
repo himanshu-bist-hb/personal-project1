@@ -20,7 +20,8 @@ WHAT CHANGED vs previous version
     one function + one line in SHEET_RULES.
 
 4.  IDENTICAL OUTPUT — every page_setup, row break, print_area, and
-    page_margins value is the same; only the implementation mechanism changed.
+    page_margins value is the same as the original openpyxl version;
+    only the implementation mechanism changed.
 
 HOW TO ADD A NEW RULE
 ──────────────────────
@@ -48,7 +49,7 @@ COM API TRANSLATION REFERENCE
   ws.page_margins.top = 1.00          ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
   ws.print_options.horizontalCentered  ws_com.PageSetup.CenterHorizontally
   ws.print_options.verticalCentered    ws_com.PageSetup.CenterVertically
-  sheet.row_breaks.append(Break(N))    ws_com.HPageBreaks.Add(ws_com.Rows(N + 1))
+  Break(N)  [break after row N]        ws_com.HPageBreaks.Add(ws_com.Rows(N + 1))
   Break(row - 1)  [break before row]  ws_com.HPageBreaks.Add(ws_com.Rows(row))
   workbook[title]["A10"].value         ws_com.Range("A10").Value
   ws.max_row                           ws_com.UsedRange.Rows.Count
@@ -76,7 +77,7 @@ _XL_LANDSCAPE = 2   # xlLandscape
 
 
 # ===========================================================================
-#  SMART PAGE-BREAK HELPERS
+#  PAGE BREAK HELPER
 # ===========================================================================
 
 def _clear_page_breaks(ws_com):
@@ -86,131 +87,11 @@ def _clear_page_breaks(ws_com):
         ws_com.HPageBreaks(1).Delete()
 
 
-def _page_height_after_block(block_h, page_h):
-    """Return how much of the last page is occupied after placing a block."""
-    rem = block_h % page_h
-    return rem if rem > 0 else (page_h if block_h >= page_h else block_h)
-
-
-def _smart_page_breaks(ws_com, xl_app, sheet_name=""):
-    """
-    Insert horizontal page breaks that keep each logical table block on one
-    page wherever possible.
-
-    For most sheets, blocks are delimited by blank rows in column A.
-    Rule R1 is a special case: its sections start at rows whose column-A
-    value has an "R1" prefix (no blank separators exist between sections).
-
-    Algorithm — greedy page packing:
-      1.  Identify raw block-start rows using the appropriate detection method.
-      2.  Merge "tiny" lead blocks (≤ SUBTITLE_ROWS rows) with the next block
-          so subtitle rows are never stranded alone at the bottom of a page.
-          generateWorksheetTablesX writes:  subtitle → blank → headers → data
-          Blank-row detection fires twice per sub-table (at the subtitle row
-          and again at the headers row after the within-table blank), creating
-          a 2-row "subtitle+blank" stub that must travel with its data block.
-      3.  Measure each merged group's total height in points.
-      4.  If the next group fits in the remaining page space, keep it there;
-          otherwise insert a break before it and open a new page.
-      A group larger than one full page is placed as-is — Excel will break
-      it internally rather than us splitting it artificially.
-    """
-    # Only skip when Excel's own fit-to-N-tall scaling is active AND zoom is
-    # disabled.  When Zoom=False;FitToPagesWide=1 is set without explicitly
-    # setting FitToPagesTall=False, Excel silently defaults FitToPagesTall=1
-    # even though the intent was "fit width only".  We guard against that by
-    # requiring BOTH conditions before bailing out.
-    try:
-        zoom_off = not ws_com.PageSetup.Zoom   # True when Zoom is disabled (fit-to-pages mode)
-        ftt = int(ws_com.PageSetup.FitToPagesTall)
-        if zoom_off and ftt >= 1:
-            return
-    except (TypeError, ValueError, Exception):
-        pass
-
-    max_row = ws_com.UsedRange.Rows.Count
-    if max_row < 2:
-        return
-
-    # Available vertical space per page (points)
-    is_landscape = (ws_com.PageSetup.Orientation == _XL_LANDSCAPE)
-    paper_h_pts  = xl_app.InchesToPoints(8.5 if is_landscape else 11.0)
-    avail_pts    = (paper_h_pts
-                   - ws_com.PageSetup.TopMargin
-                   - ws_com.PageSetup.BottomMargin)
-
-    # Row heights (one COM call per row)
-    row_h = [ws_com.Rows(r).RowHeight for r in range(1, max_row + 1)]
-
-    # Column A values for boundary detection
-    col_a = ws_com.Range(f"A1:A{max_row}").Value  # tuple of (value,) tuples
-
-    # ── Step 1: raw block-start rows ──────────────────────────────────────────
-    if sheet_name.startswith("Rule R1"):
-        # R1 has no blank-row separators; each row whose A value starts with
-        # "R1" is treated as the opening of a new section.
-        block_starts = [1]
-        for r in range(2, max_row + 1):
-            v = col_a[r - 1][0]
-            if v is not None and str(v).startswith("R1"):
-                block_starts.append(r)
-        block_starts.append(max_row + 1)  # sentinel
-
-        # R1 blocks carry no subtitle stub; use them as groups directly
-        groups = [
-            (block_starts[i], block_starts[i + 1] - 1)
-            for i in range(len(block_starts) - 1)
-        ]
-    else:
-        # Generic: a block starts at row 1 and at every non-blank row that
-        # immediately follows a blank row.
-        def blank(r):
-            v = col_a[r - 1][0]
-            return v is None or str(v).strip() == ""
-
-        block_starts = [1]
-        for r in range(2, max_row + 1):
-            if blank(r - 1) and not blank(r):
-                block_starts.append(r)
-        block_starts.append(max_row + 1)  # sentinel
-
-        # ── Step 2: merge subtitle lead-blocks with the next block ────────────
-        # Any raw block whose row span is ≤ SUBTITLE_ROWS is a subtitle stub
-        # (subtitle + within-table blank, possibly plus the sheet title row).
-        # Merge it forward so the subtitle and its data are one unit for packing.
-        SUBTITLE_ROWS = 3
-        groups = []
-        i = 0
-        while i < len(block_starts) - 1:
-            g_start   = block_starts[i]
-            g_end_idx = i + 1   # exclusive index into block_starts (points past group end)
-            # Extend while the accumulated lead is still a stub
-            while (g_end_idx < len(block_starts) - 1 and
-                   block_starts[g_end_idx] - g_start <= SUBTITLE_ROWS):
-                g_end_idx += 1
-            g_end = block_starts[g_end_idx] - 1
-            groups.append((g_start, g_end))
-            i = g_end_idx
-
-    # ── Step 3: greedy page fill ──────────────────────────────────────────────
-    page_used = 0.0
-    for (g_start, g_end) in groups:
-        g_h = sum(row_h[r - 1] for r in range(g_start, g_end + 1))
-
-        if page_used == 0.0:
-            # First group on this page — always accept (even if it overflows)
-            page_used = _page_height_after_block(g_h, avail_pts)
-        elif page_used + g_h > avail_pts:
-            # Group doesn't fit → start a new page before it
-            ws_com.HPageBreaks.Add(ws_com.Rows(g_start))
-            page_used = _page_height_after_block(g_h, avail_pts)
-        else:
-            page_used += g_h
-
-
 # ===========================================================================
 #  RULE HANDLER FUNCTIONS
-#  Each handles one sheet-name prefix.
+#  Each handler clears existing breaks then applies its own.
+#  _clear_page_breaks is called once in the main loop BEFORE the handler runs,
+#  so handlers can call HPageBreaks.Add directly without duplicates.
 #
 #  Signature: (ws_com, xl_app, dest_filename) → None
 #    ws_com        — COM Worksheet object
@@ -223,8 +104,13 @@ def _handle_index(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$J${max_row}"
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
-    ws_com.PageSetup.FitToPagesTall = False   # False = automatic height (unlimited pages)
+    ws_com.PageSetup.FitToPagesTall = False   # fit width only — unlimited pages tall
 
+
+def _handle_rule_222b(ws_com, xl_app, dest_filename):
+    # Breaks after rows 25 and 49
+    for row_num in [25, 49]:
+        ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 1))
 
 
 def _handle_rule_222ttt(ws_com, xl_app, dest_filename):
@@ -249,6 +135,9 @@ def _handle_rule_225zone(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$M${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
+    # Break after every 51 data rows, starting after row 51
+    for row_num in range(52, max_row, 51):
+        ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 1))
 
 
 def _handle_rule_225c3(ws_com, xl_app, dest_filename):
@@ -294,6 +183,8 @@ def _handle_rule_255(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$H${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
+    # Break after row 37
+    ws_com.HPageBreaks.Add(ws_com.Rows(38))
 
 
 def _handle_rule_275(ws_com, xl_app, dest_filename):
@@ -311,22 +202,58 @@ def _handle_rule_283(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$P${max_row}"
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
-    ws_com.PageSetup.FitToPagesTall = False  # explicit: fit width only, not height
+
+    target_values = {
+        "283.B Limited Specified Causes of Loss",
+        "283.B Comprehensive",
+        "283.B Blanket Collision",
+    }
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    for row_num in range(1, max_row + 1):
+        cell_value = str(col_a[row_num - 1][0])
+        if cell_value in target_values and row_num > 3:
+            # Break before this row (same as openpyxl Break(row - 1))
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
 
 
 def _handle_rule_289(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$H${max_row}"
+    # Break after row 37
+    ws_com.HPageBreaks.Add(ws_com.Rows(38))
 
 
 def _handle_rule_297(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$P${max_row}"
 
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    occurrence_count = 0
+    for row_num in range(1, max_row + 1):
+        cell_value = str(col_a[row_num - 1][0])
+        if cell_value.startswith("Single") or cell_value.startswith("Uninsured"):
+            occurrence_count += 1
+        # Break before every 3rd occurrence (same as openpyxl Break(row - 1))
+        if (occurrence_count % 3 == 0) and (occurrence_count != 0):
+            occurrence_count += 1   # prevent re-triggering on the same row
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+
 
 def _handle_rule_298(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$K${max_row}"
+
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    occurrence_count = 0
+    for row_num in range(1, max_row + 1):
+        cell_value = str(col_a[row_num - 1][0])
+        if cell_value.startswith("298"):
+            occurrence_count += 1
+        if occurrence_count == 4:
+            occurrence_count += 1   # prevent re-triggering
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+        if occurrence_count == 8:
+            break
 
 
 def _handle_rule_301ab(ws_com, xl_app, dest_filename):
@@ -343,13 +270,15 @@ def _handle_rule_301ab(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
-    ws_com.PageSetup.FitToPagesTall = False  # explicit: fit width only, not height
     if ws_com.Name.startswith("Rule 301.B"):
         ws_com.PageSetup.PrintArea = f"$A$1:$T${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
     ws_com.PageSetup.Orientation = _XL_LANDSCAPE
     ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
+    # Break every 45 rows (same as openpyxl Break(row) starting at row 46)
+    for row_num in range(46, max_row, 45):
+        ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 1))
 
 
 def _handle_rule_301cd(ws_com, xl_app, dest_filename):
@@ -372,7 +301,6 @@ def _handle_rule_301cd(ws_com, xl_app, dest_filename):
 def _handle_rule_306(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
-    ws_com.PageSetup.FitToPagesTall = False  # explicit: fit width only, not height
     ws_com.PageSetup.PrintTitleRows = "$1:$4"
 
 
@@ -380,11 +308,24 @@ def _handle_rule_315(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
+    # Break after row 23
+    ws_com.HPageBreaks.Add(ws_com.Rows(24))
 
 
 def _handle_rule_r1(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$M${max_row}"
+
+    # Break before the 3rd and 6th rows whose column-A value starts with "R1"
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    occurrence_count = 0
+    for row_num in range(1, max_row + 1):
+        cell_value = str(col_a[row_num - 1][0])
+        if cell_value.startswith("R1"):
+            occurrence_count += 1
+        if occurrence_count in (3, 6):
+            occurrence_count += 1   # prevent re-triggering
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
 
 
 # ===========================================================================
@@ -401,8 +342,9 @@ SHEET_RULES = [
     # Index sheet — special print area
     ("Index",           _handle_index),
 
-    # Rule 222
+    # Rule 222 — TTT before B so "Rule 222 T" matches TTT, not B
     ("Rule 222 TTT",    _handle_rule_222ttt),
+    ("Rule 222 B",      _handle_rule_222b),
 
     # Rule 223
     ("Rule 223 B.5",    _handle_rule_223b5),
@@ -476,7 +418,6 @@ def _apply_sheet_rules(sheet_name: str, ws_com, xl_app, dest_filename: str) -> N
 def _kill_excel_instances() -> None:
     """Force-kill any running Excel processes so COM dispatch can proceed."""
     import subprocess
-    # /t 2>NUL suppresses the "process not found" error message
     subprocess.call("taskkill /f /im excel.exe 2>NUL", shell=True)
 
 
@@ -494,17 +435,15 @@ def process_pagebreaks(dest_filename1: str, dest_filename2: str) -> None:
 
     Args:
         dest_filename1: Path to the .xlsx file produced by buildBAPages.
-        dest_filename2: Intended PDF output path (currently not written;
-                        the export block is commented out).
+        dest_filename2: Intended PDF output path.
 
     Pipeline:
         1.  Kill running Excel instances.
         2.  Open file directly via COM (no CorruptLoad — file is already clean).
         3.  Truncate any sheet names exceeding Excel's 31-char limit.
-        4.  Set default PrintTitleRows = "$1:$1" for every sheet.
-        5.  Apply rule-specific settings via SHEET_RULES registry.
-        6.  Hide the Index sheet.
-        7.  Save, make Excel visible, leave it open for the user.
+        4.  For every sheet: set default PrintTitleRows, clear existing breaks,
+            then apply rule-specific settings and breaks via SHEET_RULES.
+        5.  Save, export PDF, close.
     """
     dest_filename1 = os.path.normpath(os.path.abspath(dest_filename1))
     dest_filename2 = os.path.normpath(os.path.abspath(dest_filename2))
@@ -528,19 +467,16 @@ def process_pagebreaks(dest_filename1: str, dest_filename2: str) -> None:
             if len(ws_com.Name) > 31:
                 ws_com.Name = ws_com.Name[:31]
 
-        # Apply default + rule-specific print settings to every sheet,
-        # then replace any hard-coded or openpyxl-set page breaks with
-        # content-aware breaks that keep table blocks intact.
+        # Apply print settings and page breaks to every sheet.
+        # Breaks are cleared first so handlers start with a clean slate.
         for ws_com in xl_book.Sheets:
             ws_com.PageSetup.PrintTitleRows = "$1:$1"   # universal default
-            _apply_sheet_rules(ws_com.Name, ws_com, xl_app, dest_filename1)
             _clear_page_breaks(ws_com)
-            _smart_page_breaks(ws_com, xl_app, ws_com.Name)
+            _apply_sheet_rules(ws_com.Name, ws_com, xl_app, dest_filename1)
 
-        # Save without hiding the index
+        # Save, export PDF, close
         xl_book.Save()
 
-        # Export all visible sheets as PDF (Index is now visible)
         xl_book.ExportAsFixedFormat(0, dest_filename2, Quality=0)
         print(f"PDF saved: {dest_filename2}")
 

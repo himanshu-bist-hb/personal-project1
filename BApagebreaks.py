@@ -87,6 +87,27 @@ def _clear_page_breaks(ws_com):
         ws_com.HPageBreaks(1).Delete()
 
 
+def _break_before_subtitles(ws_com, max_row, col_a):
+    """Insert a page break before every sub-table subtitle row except the first.
+
+    Targets generateWorksheetTablesX layout where each df is preceded by a
+    subtitle row whose neighbours are both blank:
+        row N-1 = blank, row N = subtitle text, row N+1 = blank
+
+    The first subtitle at row 2 is naturally skipped because row 1 (the sheet
+    title) is non-blank, so it never satisfies the 'prev blank' condition.
+    """
+    for row_num in range(2, max_row):
+        prev_val = col_a[row_num - 2][0]
+        curr_val = col_a[row_num - 1][0]
+        next_val = col_a[row_num][0]
+        prev_blank = prev_val is None or str(prev_val).strip() == ""
+        curr_has_val = curr_val is not None and str(curr_val).strip() != ""
+        next_blank = next_val is None or str(next_val).strip() == ""
+        if curr_has_val and prev_blank and next_blank:
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+
+
 # ===========================================================================
 #  RULE HANDLER FUNCTIONS
 #  Each handler clears existing breaks then applies its own.
@@ -108,9 +129,15 @@ def _handle_index(ws_com, xl_app, dest_filename):
 
 
 def _handle_rule_222b(ws_com, xl_app, dest_filename):
-    # Breaks after rows 25 and 49
-    for row_num in [25, 49]:
-        ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 1))
+    max_row = ws_com.UsedRange.Rows.Count
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    for row_num in range(1, max_row + 1):
+        cell_value = col_a[row_num - 1][0]
+        if cell_value is not None and (
+            str(cell_value).startswith("222.B.1.b") or
+            str(cell_value).startswith("222.B.1.c")
+        ):
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
 
 
 def _handle_rule_222ttt(ws_com, xl_app, dest_filename):
@@ -135,9 +162,8 @@ def _handle_rule_225zone(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$M${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
-    # Break after every 51 data rows, starting after row 51
-    for row_num in range(52, max_row, 51):
-        ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 1))
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    _break_before_subtitles(ws_com, max_row, col_a)
 
 
 def _handle_rule_225c3(ws_com, xl_app, dest_filename):
@@ -183,8 +209,15 @@ def _handle_rule_255(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$H${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
-    # Break after row 37
-    ws_com.HPageBreaks.Add(ws_com.Rows(38))
+    # Break after the first row of the Comprehensive deductible table so that
+    # the 255.D. heading + table header + first data row (100/500) all stay on
+    # page 1, and the remaining deductible rows start fresh on page 2.
+    # The "Comprehensive" column header appears in column A at the df[1] header row.
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    for row_num in range(1, max_row + 1):
+        if col_a[row_num - 1][0] == "Comprehensive":
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 2))  # after first data row
+            break
 
 
 def _handle_rule_275(ws_com, xl_app, dest_filename):
@@ -219,8 +252,8 @@ def _handle_rule_283(ws_com, xl_app, dest_filename):
 def _handle_rule_289(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$H${max_row}"
-    # Break after row 37
-    ws_com.HPageBreaks.Add(ws_com.Rows(38))
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    _break_before_subtitles(ws_com, max_row, col_a)
 
 
 def _handle_rule_297(ws_com, xl_app, dest_filename):
@@ -276,9 +309,8 @@ def _handle_rule_301ab(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.CenterVertically = False
     ws_com.PageSetup.Orientation = _XL_LANDSCAPE
     ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
-    # Break every 45 rows (same as openpyxl Break(row) starting at row 46)
-    for row_num in range(46, max_row, 45):
-        ws_com.HPageBreaks.Add(ws_com.Rows(row_num + 1))
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    _break_before_subtitles(ws_com, max_row, col_a)
 
 
 def _handle_rule_301cd(ws_com, xl_app, dest_filename):
@@ -308,8 +340,14 @@ def _handle_rule_315(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
-    # Break after row 23
-    ws_com.HPageBreaks.Add(ws_com.Rows(24))
+    max_row = ws_com.UsedRange.Rows.Count
+    col_a = ws_com.Range(f"A1:A{max_row}").Value
+    # Break before each subsequent dataframe's first column header
+    section_headers = {"Number of Days", "Duration for Waiting Period", "Percentage"}
+    for row_num in range(1, max_row + 1):
+        cell_value = col_a[row_num - 1][0]
+        if cell_value in section_headers:
+            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
 
 
 def _handle_rule_r1(ws_com, xl_app, dest_filename):

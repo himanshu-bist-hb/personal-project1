@@ -76,6 +76,105 @@ _XL_LANDSCAPE = 2   # xlLandscape
 
 
 # ===========================================================================
+#  SMART PAGE-BREAK HELPERS
+# ===========================================================================
+
+def _clear_page_breaks(ws_com):
+    """Remove all existing horizontal page breaks (e.g. written by openpyxl)."""
+    count = ws_com.HPageBreaks.Count
+    for _ in range(count, 0, -1):
+        ws_com.HPageBreaks(1).Delete()
+
+
+def _page_height_after_block(block_h, page_h):
+    """Return how much of the last page is occupied after placing a block."""
+    rem = block_h % page_h
+    return rem if rem > 0 else (page_h if block_h >= page_h else block_h)
+
+
+def _smart_page_breaks(ws_com, xl_app, sheet_name=""):
+    """
+    Insert horizontal page breaks that keep each logical table block on one
+    page wherever possible.
+
+    For most sheets, blocks are delimited by blank rows in column A.
+    Rule R1 is a special case: its sections start at rows whose column-A
+    value has an "R1" prefix (no blank separators exist between sections).
+
+    Algorithm — greedy page packing:
+      1.  Identify block-start rows using the appropriate detection method.
+      2.  Measure each block's total height in points.
+      3.  If the next block fits in the remaining page space, keep it there;
+          otherwise insert a break before it and open a new page.
+      A block larger than one full page is placed as-is — Excel will break
+      it internally rather than us splitting it artificially.
+    """
+    # Fit-to-N-pages-tall mode: explicit breaks are not needed
+    try:
+        if int(ws_com.PageSetup.FitToPagesTall) >= 1:
+            return
+    except (TypeError, ValueError):
+        pass
+
+    max_row = ws_com.UsedRange.Rows.Count
+    if max_row < 2:
+        return
+
+    # Available vertical space per page (points)
+    is_landscape = (ws_com.PageSetup.Orientation == _XL_LANDSCAPE)
+    paper_h_pts  = xl_app.InchesToPoints(8.5 if is_landscape else 11.0)
+    avail_pts    = (paper_h_pts
+                   - ws_com.PageSetup.TopMargin
+                   - ws_com.PageSetup.BottomMargin)
+
+    # Row heights (one COM call per row; fine for ≤200-row sheets)
+    row_h = [ws_com.Rows(r).RowHeight for r in range(1, max_row + 1)]
+
+    # Column A values for boundary detection
+    col_a = ws_com.Range(f"A1:A{max_row}").Value  # tuple of (value,) tuples
+
+    # Determine block-start rows
+    if sheet_name.startswith("Rule R1"):
+        # R1 has no blank-row separators; each row whose A value starts with
+        # "R1" is treated as the opening of a new section.
+        block_starts = [1]
+        for r in range(2, max_row + 1):
+            v = col_a[r - 1][0]
+            if v is not None and str(v).startswith("R1"):
+                block_starts.append(r)
+    else:
+        # Generic: a block starts at row 1 and at every non-blank row that
+        # immediately follows a blank row.
+        def blank(r):
+            v = col_a[r - 1][0]
+            return v is None or str(v).strip() == ""
+
+        block_starts = [1]
+        for r in range(2, max_row + 1):
+            if blank(r - 1) and not blank(r):
+                block_starts.append(r)
+
+    block_starts.append(max_row + 1)  # sentinel
+
+    # Greedy page fill
+    page_used = 0.0
+    for i in range(len(block_starts) - 1):
+        b_start = block_starts[i]
+        b_end   = block_starts[i + 1] - 1
+        b_h     = sum(row_h[r - 1] for r in range(b_start, b_end + 1))
+
+        if page_used == 0.0:
+            # First block on this page — always accept (even if it overflows)
+            page_used = _page_height_after_block(b_h, avail_pts)
+        elif page_used + b_h > avail_pts:
+            # Block doesn't fit → start a new page before it
+            ws_com.HPageBreaks.Add(ws_com.Rows(b_start))
+            page_used = _page_height_after_block(b_h, avail_pts)
+        else:
+            page_used += b_h
+
+
+# ===========================================================================
 #  RULE HANDLER FUNCTIONS
 #  Each handles one sheet-name prefix.
 #
@@ -92,11 +191,6 @@ def _handle_index(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = False   # False = automatic height (unlimited pages)
 
-
-def _handle_rule_222b(ws_com, xl_app, dest_filename):
-    # Break(25) → after row 25; Break(49) → after row 49
-    ws_com.HPageBreaks.Add(ws_com.Rows(26))
-    ws_com.HPageBreaks.Add(ws_com.Rows(50))
 
 
 def _handle_rule_222ttt(ws_com, xl_app, dest_filename):
@@ -121,9 +215,6 @@ def _handle_rule_225zone(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$M${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
-    # Break(row) = after row → HPageBreaks.Add(Rows(row + 1))
-    for row in range(52, max_row, 51):
-        ws_com.HPageBreaks.Add(ws_com.Rows(row + 1))
 
 
 def _handle_rule_225c3(ws_com, xl_app, dest_filename):
@@ -169,7 +260,6 @@ def _handle_rule_255(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$H${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
-    ws_com.HPageBreaks.Add(ws_com.Rows(38))   # Break(37) → Rows(38)
 
 
 def _handle_rule_275(ws_com, xl_app, dest_filename):
@@ -185,18 +275,6 @@ def _handle_rule_275(ws_com, xl_app, dest_filename):
 def _handle_rule_283(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$P${max_row}"
-    target_values = {
-        "283.B Limited Specified Causes of Loss",
-        "283.B Comprehensive",
-        "283.B Blanket Collision",
-    }
-    # Bulk-read column A once (faster than one COM call per row)
-    col_a = ws_com.Range(f"A1:A{max_row}").Value  # tuple of (value,) tuples
-    for row in range(1, max_row + 1):
-        cell_value = str(col_a[row - 1][0])
-        if cell_value in target_values and row > 3:
-            # Break(row-1) = break before current row → HPageBreaks.Add(Rows(row))
-            ws_com.HPageBreaks.Add(ws_com.Rows(row))
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
 
@@ -204,38 +282,16 @@ def _handle_rule_283(ws_com, xl_app, dest_filename):
 def _handle_rule_289(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$H${max_row}"
-    ws_com.HPageBreaks.Add(ws_com.Rows(38))   # Break(37) → Rows(38)
 
 
 def _handle_rule_297(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$P${max_row}"
-    col_a = ws_com.Range(f"A1:A{max_row}").Value
-    occurrence_count = 0
-    for row in range(1, max_row + 1):
-        cell_value = str(col_a[row - 1][0])
-        if cell_value.startswith("Single") or cell_value.startswith("Uninsured"):
-            occurrence_count += 1
-        if occurrence_count % 3 == 0 and occurrence_count != 0:
-            occurrence_count += 1
-            # Break(row-1) = break before current row → HPageBreaks.Add(Rows(row))
-            ws_com.HPageBreaks.Add(ws_com.Rows(row))
 
 
 def _handle_rule_298(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$K${max_row}"
-    col_a = ws_com.Range(f"A1:A{max_row}").Value
-    occurrence_count = 0
-    for row in range(1, max_row + 1):
-        cell_value = str(col_a[row - 1][0])
-        if cell_value.startswith("298"):
-            occurrence_count += 1
-        if occurrence_count == 4:
-            occurrence_count += 1
-            ws_com.HPageBreaks.Add(ws_com.Rows(row))   # Break(row-1) → Rows(row)
-        if occurrence_count == 8:
-            break
 
 
 def _handle_rule_301ab(ws_com, xl_app, dest_filename):
@@ -254,9 +310,6 @@ def _handle_rule_301ab(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.FitToPagesWide = 1
     if ws_com.Name.startswith("Rule 301.B"):
         ws_com.PageSetup.PrintArea = f"$A$1:$T${max_row}"
-    # Break(row) = after row → HPageBreaks.Add(Rows(row + 1))
-    for row in range(46, max_row, 45):
-        ws_com.HPageBreaks.Add(ws_com.Rows(row + 1))
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
     ws_com.PageSetup.Orientation = _XL_LANDSCAPE
@@ -290,21 +343,11 @@ def _handle_rule_315(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
-    ws_com.HPageBreaks.Add(ws_com.Rows(24))   # Break(23) → Rows(24)
 
 
 def _handle_rule_r1(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f"$A$1:$M${max_row}"
-    col_a = ws_com.Range(f"A1:A{max_row}").Value
-    occurrence_count = 0
-    for row in range(1, max_row + 1):
-        cell_value = str(col_a[row - 1][0])
-        if cell_value.startswith("R1"):
-            occurrence_count += 1
-        if occurrence_count in (3, 6):
-            occurrence_count += 1
-            ws_com.HPageBreaks.Add(ws_com.Rows(row))   # Break(row-1) → Rows(row)
 
 
 # ===========================================================================
@@ -322,7 +365,6 @@ SHEET_RULES = [
     ("Index",           _handle_index),
 
     # Rule 222
-    ("Rule 222 B",      _handle_rule_222b),
     ("Rule 222 TTT",    _handle_rule_222ttt),
 
     # Rule 223
@@ -449,10 +491,14 @@ def process_pagebreaks(dest_filename1: str, dest_filename2: str) -> None:
             if len(ws_com.Name) > 31:
                 ws_com.Name = ws_com.Name[:31]
 
-        # Apply default + rule-specific print settings to every sheet
+        # Apply default + rule-specific print settings to every sheet,
+        # then replace any hard-coded or openpyxl-set page breaks with
+        # content-aware breaks that keep table blocks intact.
         for ws_com in xl_book.Sheets:
             ws_com.PageSetup.PrintTitleRows = "$1:$1"   # universal default
             _apply_sheet_rules(ws_com.Name, ws_com, xl_app, dest_filename1)
+            _clear_page_breaks(ws_com)
+            _smart_page_breaks(ws_com, xl_app, ws_com.Name)
 
         # Save without hiding the index
         xl_book.Save()

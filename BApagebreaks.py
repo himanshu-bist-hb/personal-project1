@@ -102,18 +102,30 @@ def _smart_page_breaks(ws_com, xl_app, sheet_name=""):
     value has an "R1" prefix (no blank separators exist between sections).
 
     Algorithm — greedy page packing:
-      1.  Identify block-start rows using the appropriate detection method.
-      2.  Measure each block's total height in points.
-      3.  If the next block fits in the remaining page space, keep it there;
+      1.  Identify raw block-start rows using the appropriate detection method.
+      2.  Merge "tiny" lead blocks (≤ SUBTITLE_ROWS rows) with the next block
+          so subtitle rows are never stranded alone at the bottom of a page.
+          generateWorksheetTablesX writes:  subtitle → blank → headers → data
+          Blank-row detection fires twice per sub-table (at the subtitle row
+          and again at the headers row after the within-table blank), creating
+          a 2-row "subtitle+blank" stub that must travel with its data block.
+      3.  Measure each merged group's total height in points.
+      4.  If the next group fits in the remaining page space, keep it there;
           otherwise insert a break before it and open a new page.
-      A block larger than one full page is placed as-is — Excel will break
+      A group larger than one full page is placed as-is — Excel will break
       it internally rather than us splitting it artificially.
     """
-    # Fit-to-N-pages-tall mode: explicit breaks are not needed
+    # Only skip when Excel's own fit-to-N-tall scaling is active AND zoom is
+    # disabled.  When Zoom=False;FitToPagesWide=1 is set without explicitly
+    # setting FitToPagesTall=False, Excel silently defaults FitToPagesTall=1
+    # even though the intent was "fit width only".  We guard against that by
+    # requiring BOTH conditions before bailing out.
     try:
-        if int(ws_com.PageSetup.FitToPagesTall) >= 1:
+        zoom_off = not ws_com.PageSetup.Zoom   # True when Zoom is disabled (fit-to-pages mode)
+        ftt = int(ws_com.PageSetup.FitToPagesTall)
+        if zoom_off and ftt >= 1:
             return
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, Exception):
         pass
 
     max_row = ws_com.UsedRange.Rows.Count
@@ -127,13 +139,13 @@ def _smart_page_breaks(ws_com, xl_app, sheet_name=""):
                    - ws_com.PageSetup.TopMargin
                    - ws_com.PageSetup.BottomMargin)
 
-    # Row heights (one COM call per row; fine for ≤200-row sheets)
+    # Row heights (one COM call per row)
     row_h = [ws_com.Rows(r).RowHeight for r in range(1, max_row + 1)]
 
     # Column A values for boundary detection
     col_a = ws_com.Range(f"A1:A{max_row}").Value  # tuple of (value,) tuples
 
-    # Determine block-start rows
+    # ── Step 1: raw block-start rows ──────────────────────────────────────────
     if sheet_name.startswith("Rule R1"):
         # R1 has no blank-row separators; each row whose A value starts with
         # "R1" is treated as the opening of a new section.
@@ -142,6 +154,13 @@ def _smart_page_breaks(ws_com, xl_app, sheet_name=""):
             v = col_a[r - 1][0]
             if v is not None and str(v).startswith("R1"):
                 block_starts.append(r)
+        block_starts.append(max_row + 1)  # sentinel
+
+        # R1 blocks carry no subtitle stub; use them as groups directly
+        groups = [
+            (block_starts[i], block_starts[i + 1] - 1)
+            for i in range(len(block_starts) - 1)
+        ]
     else:
         # Generic: a block starts at row 1 and at every non-blank row that
         # immediately follows a blank row.
@@ -153,25 +172,40 @@ def _smart_page_breaks(ws_com, xl_app, sheet_name=""):
         for r in range(2, max_row + 1):
             if blank(r - 1) and not blank(r):
                 block_starts.append(r)
+        block_starts.append(max_row + 1)  # sentinel
 
-    block_starts.append(max_row + 1)  # sentinel
+        # ── Step 2: merge subtitle lead-blocks with the next block ────────────
+        # Any raw block whose row span is ≤ SUBTITLE_ROWS is a subtitle stub
+        # (subtitle + within-table blank, possibly plus the sheet title row).
+        # Merge it forward so the subtitle and its data are one unit for packing.
+        SUBTITLE_ROWS = 3
+        groups = []
+        i = 0
+        while i < len(block_starts) - 1:
+            g_start   = block_starts[i]
+            g_end_idx = i + 1   # exclusive index into block_starts (points past group end)
+            # Extend while the accumulated lead is still a stub
+            while (g_end_idx < len(block_starts) - 1 and
+                   block_starts[g_end_idx] - g_start <= SUBTITLE_ROWS):
+                g_end_idx += 1
+            g_end = block_starts[g_end_idx] - 1
+            groups.append((g_start, g_end))
+            i = g_end_idx
 
-    # Greedy page fill
+    # ── Step 3: greedy page fill ──────────────────────────────────────────────
     page_used = 0.0
-    for i in range(len(block_starts) - 1):
-        b_start = block_starts[i]
-        b_end   = block_starts[i + 1] - 1
-        b_h     = sum(row_h[r - 1] for r in range(b_start, b_end + 1))
+    for (g_start, g_end) in groups:
+        g_h = sum(row_h[r - 1] for r in range(g_start, g_end + 1))
 
         if page_used == 0.0:
-            # First block on this page — always accept (even if it overflows)
-            page_used = _page_height_after_block(b_h, avail_pts)
-        elif page_used + b_h > avail_pts:
-            # Block doesn't fit → start a new page before it
-            ws_com.HPageBreaks.Add(ws_com.Rows(b_start))
-            page_used = _page_height_after_block(b_h, avail_pts)
+            # First group on this page — always accept (even if it overflows)
+            page_used = _page_height_after_block(g_h, avail_pts)
+        elif page_used + g_h > avail_pts:
+            # Group doesn't fit → start a new page before it
+            ws_com.HPageBreaks.Add(ws_com.Rows(g_start))
+            page_used = _page_height_after_block(g_h, avail_pts)
         else:
-            page_used += b_h
+            page_used += g_h
 
 
 # ===========================================================================
@@ -277,6 +311,7 @@ def _handle_rule_283(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.PrintArea = f"$A$1:$P${max_row}"
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
+    ws_com.PageSetup.FitToPagesTall = False  # explicit: fit width only, not height
 
 
 def _handle_rule_289(ws_com, xl_app, dest_filename):
@@ -308,6 +343,7 @@ def _handle_rule_301ab(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
+    ws_com.PageSetup.FitToPagesTall = False  # explicit: fit width only, not height
     if ws_com.Name.startswith("Rule 301.B"):
         ws_com.PageSetup.PrintArea = f"$A$1:$T${max_row}"
     ws_com.PageSetup.CenterHorizontally = False
@@ -336,6 +372,7 @@ def _handle_rule_301cd(ws_com, xl_app, dest_filename):
 def _handle_rule_306(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.Zoom = False
     ws_com.PageSetup.FitToPagesWide = 1
+    ws_com.PageSetup.FitToPagesTall = False  # explicit: fit width only, not height
     ws_com.PageSetup.PrintTitleRows = "$1:$4"
 
 

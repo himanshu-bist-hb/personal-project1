@@ -454,10 +454,13 @@ def run(
     ba_workbook.save(filename=xlsx_out)
     print("Stage 2: Excel file saved.")
 
-    # ── 8. Generate PDF (Optional) ────────────────────────────────────────────
-    if not skip_pdf:
-        if progress_callback: progress_callback("Generating PDF document...")
-        process_pagebreaks(xlsx_out, pdf_out)
+    # ── 8. Apply page breaks / print settings ─────────────────────────────────
+    # Always run, regardless of skip_pdf. This step writes the per-rule manual
+    # page breaks (Rule 255 after row 37, etc.) and forces fit-to-page on all
+    # other sheets. Skipping it would leave the xlsx with default Excel
+    # pagination (every sheet broken at row 42 / column H), which is wrong.
+    if progress_callback: progress_callback("Applying page breaks...")
+    process_pagebreaks(xlsx_out, pdf_out)
 
     elapsed = time.perf_counter() - t_start
     if progress_callback: progress_callback(f"Successfully completed in {elapsed:0.1f} seconds! 🎉")

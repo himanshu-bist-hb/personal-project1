@@ -3,6 +3,7 @@ import os
 
 
 def process_pagebreaks(dest_filename1, dest_filename2):
+    print(f"[BApagebreaks] Applying page breaks to: {dest_filename1}")
     # Load the workbook
     workbook = openpyxl.load_workbook(dest_filename1)
 
@@ -17,11 +18,14 @@ def process_pagebreaks(dest_filename1, dest_filename2):
         sheet = workbook[sheet_name]
         sheet.print_title_rows = '1:1'
 
-        # Default page setup: fit width to 1 page, unlimited height.
-        # Manual-break rules below override this to disable fit-to-page entirely.
+        # Default page setup: fit ENTIRE content to ONE page (1 wide, 1 tall).
+        # Sheets without a custom rule below will print on a single page no
+        # matter how big the table is.
+        # Manual-break rules below override this to disable fit-to-page so
+        # those breaks are honored instead.
         sheet.sheet_properties.pageSetUpPr.fitToPage = True
         sheet.page_setup.fitToWidth = 1
-        sheet.page_setup.fitToHeight = False
+        sheet.page_setup.fitToHeight = 1
 
         if sheet_name.startswith("Index"):
             sheet.print_title_rows = '0:0'

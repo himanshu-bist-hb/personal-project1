@@ -1,240 +1,429 @@
-import openpyxl
-import os
+"""
+BApagebreaks.py
+================
+Post-processing for the BA Rate Pages workbook:
 
+  1. Apply per-rule page breaks and print settings (defined in SHEET_RULES).
+  2. Sheets without a custom rule fit on ONE printed page (regardless of size).
+  3. Move Index to the front and make it the active sheet.
+  4. Re-save through Excel COM so the file opens without the "corrupted" prompt.
+
+----------------------------------------------------------------------------
+HOW TO ADD A PAGE-BREAK RULE FOR A NEW SHEET / RULE
+----------------------------------------------------------------------------
+
+Step 1 - Write a handler function:
+
+    def _handle_rule_999(ws, dest_filename):
+        ws.print_area = f"A1:H{ws.max_row}"
+        disable_fit_to_page(ws)
+        add_break_after(ws, 37)        # break after row 37
+        # ws.page_setup.orientation = "landscape"   # if needed
+        # ws.print_title_rows = "1:3"               # if needed
+
+Step 2 - Register it in SHEET_RULES below (one line):
+
+    ("Rule 999", _handle_rule_999),
+
+That is all. Order matters: list a more-specific prefix BEFORE a less-specific
+one (e.g., "Rule 239 C" must come before "Rule 239 ").
+
+----------------------------------------------------------------------------
+HELPERS YOU CAN USE INSIDE A HANDLER
+----------------------------------------------------------------------------
+
+  fit_single_page(ws)         entire sheet onto one printed page
+  fit_width_only(ws)          fit width to 1 page; height grows with content
+  disable_fit_to_page(ws)     turn off fit-to-page; manual breaks rule
+  add_break_after(ws, row)    add a horizontal page break AFTER the given row
+"""
+
+import gc
+import os
+import time
+
+import openpyxl
+from openpyxl.worksheet.pagebreak import Break
+
+try:
+    import pythoncom
+    import win32com.client
+except ImportError:
+    pythoncom = None
+    win32com = None
+
+
+# ============================================================================
+#  HELPERS  -  use these inside rule handlers
+# ============================================================================
+
+def fit_single_page(ws):
+    """Fit the entire content of ws onto a single printed page."""
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+
+
+def fit_width_only(ws):
+    """Fit width to 1 page; height grows as needed (manual breaks honored)."""
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+
+
+def disable_fit_to_page(ws):
+    """Turn off fit-to-page entirely; rely on manual page breaks."""
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    ws.page_setup.fitToWidth = 0
+    ws.page_setup.fitToHeight = 0
+
+
+def add_break_after(ws, row):
+    """Add a horizontal page break AFTER the given row (1-indexed)."""
+    ws.row_breaks.append(Break(id=row))
+
+
+# ============================================================================
+#  RULE HANDLERS
+#  Signature: (ws, dest_filename) -> None
+# ============================================================================
+
+def _handle_index(ws, dest_filename):
+    ws.print_title_rows = "0:0"
+    ws.print_area = f"A1:J{ws.max_row}"
+    fit_width_only(ws)
+
+
+def _handle_rule_222b(ws, dest_filename):
+    disable_fit_to_page(ws)
+    add_break_after(ws, 25)
+    add_break_after(ws, 49)
+
+
+def _handle_rule_222ttt(ws, dest_filename):
+    fit_single_page(ws)
+    ws.print_title_rows = "1:3"
+
+
+def _handle_rule_223b5(ws, dest_filename):
+    ws.page_setup.orientation = "landscape"
+
+
+def _handle_rule_223c(ws, dest_filename):
+    fit_single_page(ws)
+
+
+def _handle_rule_225_zone(ws, dest_filename):
+    ws.print_area = f"A1:M{ws.max_row}"
+    ws.print_options.horizontalCentered = False
+    ws.print_options.verticalCentered = False
+    disable_fit_to_page(ws)
+    for row in range(52, ws.max_row, 51):
+        add_break_after(ws, row)
+
+
+def _handle_rule_225c3(ws, dest_filename):
+    fit_single_page(ws)
+
+
+def _handle_rule_232ppt(ws, dest_filename):
+    fit_single_page(ws)
+    ws.print_title_rows = "1:3"
+
+
+def _handle_rule_239_general(ws, dest_filename):
+    fit_single_page(ws)
+    ws.print_title_rows = "1:3"
+
+
+def _handle_rule_239c(ws, dest_filename):
+    fit_single_page(ws)
+    ws.page_margins.top = 1.00
+
+
+def _handle_rule_240(ws, dest_filename):
+    fit_single_page(ws)
+    ws.print_options.verticalCentered = True
+    ws.print_title_rows = "1:3"
+    ws.print_area = f"A1:M{ws.max_row}"
+    ws.page_margins.top = 1.00
+
+
+def _handle_rule_255(ws, dest_filename):
+    ws.print_area = f"A1:H{ws.max_row}"
+    ws.print_options.horizontalCentered = False
+    ws.print_options.verticalCentered = False
+    disable_fit_to_page(ws)
+    add_break_after(ws, 37)
+
+
+def _handle_rule_275(ws, dest_filename):
+    if ws["A10"].value == "275.B.1.(b). Short Term - Autos Leased by the Hour, Day, or Week":
+        ws.print_title_rows = "1:1"
+        fit_single_page(ws)
+
+
+def _handle_rule_283(ws, dest_filename):
+    ws.print_area = f"A1:P{ws.max_row}"
+    targets = {
+        "283.B Limited Specified Causes of Loss",
+        "283.B Comprehensive",
+        "283.B Blanket Collision",
+    }
+    for row in range(1, ws.max_row + 1):
+        cell_value = str(ws.cell(row=row, column=1).value)
+        if cell_value in targets and row > 3:
+            ws.row_breaks.append(Break(id=row - 1))   # break BEFORE this row
+    fit_width_only(ws)
+
+
+def _handle_rule_289(ws, dest_filename):
+    ws.print_area = f"A1:H{ws.max_row}"
+    disable_fit_to_page(ws)
+    add_break_after(ws, 37)
+
+
+def _handle_rule_297(ws, dest_filename):
+    ws.print_area = f"A1:P{ws.max_row}"
+    disable_fit_to_page(ws)
+    occurrence_count = 0
+    for row in range(1, ws.max_row + 1):
+        cell_value = str(ws.cell(row=row, column=1).value)
+        if cell_value.startswith("Single") or cell_value.startswith("Uninsured"):
+            occurrence_count += 1
+        if (occurrence_count % 3 == 0) and (occurrence_count != 0):
+            occurrence_count += 1
+            ws.row_breaks.append(Break(id=row - 1))
+
+
+def _handle_rule_298(ws, dest_filename):
+    ws.print_area = f"A1:K{ws.max_row}"
+    disable_fit_to_page(ws)
+    occurrence_count = 0
+    for row in range(1, ws.max_row + 1):
+        cell_value = str(ws.cell(row=row, column=1).value)
+        if cell_value.startswith("298"):
+            occurrence_count += 1
+        if occurrence_count == 4:
+            occurrence_count += 1
+            ws.row_breaks.append(Break(id=row - 1))
+        if occurrence_count == 8:
+            break
+
+
+_VA_VEHICLE_TYPES = {
+    "Extra Heavy Truck-Tractor", "Extra-Heavy Truck", "Heavy Truck",
+    "Heavy Truck-Tractor", "Light Truck", "Medium Truck",
+    "Private Passenger Types", "Semitrailer",
+    "Service or Utility Trailer", "Trailer",
+}
+
+
+def _handle_rule_301ab(ws, dest_filename):
+    if ws["B4"].value in _VA_VEHICLE_TYPES:
+        return
+    fit_width_only(ws)
+    if ws.title.startswith("Rule 301.B"):
+        ws.print_area = f"A1:T{ws.max_row}"
+    for row in range(46, ws.max_row, 45):
+        add_break_after(ws, row)
+    ws.print_options.horizontalCentered = False
+    ws.print_options.verticalCentered = False
+    ws.page_setup.orientation = "landscape"
+    ws.page_margins.top = 1.00
+
+
+def _handle_rule_301cd(ws, dest_filename):
+    if ws["B4"].value not in _VA_VEHICLE_TYPES:
+        return
+    if "FL" not in dest_filename:
+        ws.page_margins.top = 1.00
+    fit_single_page(ws)
+
+
+def _handle_rule_306(ws, dest_filename):
+    fit_width_only(ws)
+    ws.print_title_rows = "1:4"
+
+
+def _handle_rule_315(ws, dest_filename):
+    fit_width_only(ws)
+    add_break_after(ws, 23)
+
+
+def _handle_rule_r1(ws, dest_filename):
+    ws.print_area = f"A1:M{ws.max_row}"
+    disable_fit_to_page(ws)
+    occurrence_count = 0
+    for row in range(1, ws.max_row + 1):
+        cell_value = str(ws.cell(row=row, column=1).value)
+        if cell_value.startswith("R1"):
+            occurrence_count += 1
+        if occurrence_count in (3, 6):
+            occurrence_count += 1
+            ws.row_breaks.append(Break(id=row - 1))
+
+
+# ============================================================================
+#  RULE REGISTRY
+#  Order matters: more-specific prefixes BEFORE less-specific ones.
+#  To add a new rule: write the handler above, then add one line here.
+# ============================================================================
+
+SHEET_RULES = [
+    ("Index",        _handle_index),
+
+    ("Rule 222 B",   _handle_rule_222b),
+    ("Rule 222 TTT", _handle_rule_222ttt),
+
+    ("Rule 223 B.5", _handle_rule_223b5),
+    ("Rule 223 C",   _handle_rule_223c),
+
+    ("Rule 225 Zone", _handle_rule_225_zone),
+    ("Rule 225.C.3", _handle_rule_225c3),
+
+    ("Rule 232 PPT", _handle_rule_232ppt),
+
+    ("Rule 239 C",   _handle_rule_239c),       # specific BEFORE generic
+    ("Rule 239 ",    _handle_rule_239_general),
+
+    ("Rule 240 ",    _handle_rule_240),
+
+    ("Rule 255",     _handle_rule_255),
+
+    ("Rule 275",     _handle_rule_275),
+
+    ("Rule 283",     _handle_rule_283),
+    ("Rule 289",     _handle_rule_289),
+    ("Rule 297",     _handle_rule_297),
+    ("Rule 298",     _handle_rule_298),
+
+    ("Rule 301.C",   _handle_rule_301cd),
+    ("Rule 301.D",   _handle_rule_301cd),
+    ("Rule 301.A",   _handle_rule_301ab),
+    ("Rule 301.B",   _handle_rule_301ab),
+
+    ("Rule 306",     _handle_rule_306),
+    ("Rule 315",     _handle_rule_315),
+
+    ("Rule R1",      _handle_rule_r1),
+]
+
+
+def _apply_matching_rule(sheet_name, ws, dest_filename):
+    """Walk SHEET_RULES and run the first handler whose prefix matches."""
+    for prefix, handler in SHEET_RULES:
+        if sheet_name.startswith(prefix):
+            handler(ws, dest_filename)
+            return True
+    return False
+
+
+# ============================================================================
+#  PUBLIC ENTRY POINT
+# ============================================================================
 
 def process_pagebreaks(dest_filename1, dest_filename2):
+    """
+    Apply page breaks / print settings to the workbook at dest_filename1.
+
+    dest_filename2 is accepted for backward compatibility (was the PDF path).
+    PDF export is no longer performed here; that's a separate concern.
+    """
     print(f"[BApagebreaks] Applying page breaks to: {dest_filename1}")
-    # Load the workbook
+    dest_filename1 = os.path.normpath(os.path.abspath(dest_filename1))
+
     workbook = openpyxl.load_workbook(dest_filename1)
 
-    # Shorten sheet names if they are too long
-    for sheet in workbook.sheetnames:
-        if len(sheet) > 31:  # Excel sheet name limit is 31 characters
-            new_name = sheet[:31]
-            workbook[sheet].title = new_name
+    # Truncate sheet names exceeding Excel's 31-character limit
+    for original_name in list(workbook.sheetnames):
+        if len(original_name) > 31:
+            workbook[original_name].title = original_name[:31]
 
-    # Iterate through all sheets in the workbook
     for sheet_name in workbook.sheetnames:
-        sheet = workbook[sheet_name]
-        sheet.print_title_rows = '1:1'
+        ws = workbook[sheet_name]
+        # Default settings applied to every sheet first;
+        # rule handler (if any) overrides as needed.
+        ws.print_title_rows = "1:1"
+        fit_single_page(ws)
+        _apply_matching_rule(sheet_name, ws, dest_filename1)
 
-        # Default page setup: fit ENTIRE content to ONE page (1 wide, 1 tall).
-        # Sheets without a custom rule below will print on a single page no
-        # matter how big the table is.
-        # Manual-break rules below override this to disable fit-to-page so
-        # those breaks are honored instead.
-        sheet.sheet_properties.pageSetUpPr.fitToPage = True
-        sheet.page_setup.fitToWidth = 1
-        sheet.page_setup.fitToHeight = 1
-
-        if sheet_name.startswith("Index"):
-            sheet.print_title_rows = '0:0'
-            sheet.print_area = 'A1:J{}'.format(sheet.max_row)
-            sheet.page_setup.fitToWidth = 1
-            sheet.page_setup.fitToHeight = False
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-
-        elif sheet_name.startswith("Rule 222 B"):
-            # Manual page breaks: turn fit-to-page OFF so they're honored.
-            sheet.sheet_properties.pageSetUpPr.fitToPage = False
-            sheet.page_setup.fitToWidth = False
-            sheet.page_setup.fitToHeight = False
-            for row in [25, 49]:
-                sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
-
-        elif sheet_name.startswith("Rule 222 TTT"):
-            sheet.page_setup.fitToHeight = 1
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            sheet.print_title_rows = '1:3'
-
-        elif sheet_name.startswith("Rule 223 B.5"):
-            sheet.page_setup.orientation = "landscape"
-
-        elif sheet_name.startswith("Rule 223 C"):
-            sheet.page_setup.fitToHeight = 1
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-
-        elif sheet_name.startswith("Rule 225 Zone"):
-            sheet.print_area = 'A1:M{}'.format(sheet.max_row)
-            sheet.print_options.horizontalCentered = False
-            sheet.print_options.verticalCentered = False
-            sheet.sheet_properties.pageSetUpPr.fitToPage = False
-            sheet.page_setup.fitToWidth = False
-            sheet.page_setup.fitToHeight = False
-            for row in range(52, sheet.max_row, 51):
-                sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
-
-        elif sheet_name.startswith("Rule 225.C.3"):
-            sheet.page_setup.fitToHeight = 1
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-
-        elif sheet_name.startswith("Rule 232 PPT"):
-            sheet.page_setup.fitToHeight = 1
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            sheet.print_title_rows = '1:3'
-
-        elif sheet_name.startswith("Rule 239 ") and not sheet_name.startswith("Rule 239 C"):
-            sheet.page_setup.fitToHeight = 1
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            sheet.print_title_rows = '1:3'
-
-        elif sheet_name.startswith("Rule 239 C"):
-            sheet.page_setup.fitToHeight = 1
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            sheet.page_margins.top = 1.00
-
-        elif sheet_name.startswith("Rule 240 "):
-            sheet.page_setup.fitToHeight = 1
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            sheet.print_options.verticalCentered = True
-            sheet.print_title_rows = '1:3'
-            sheet.print_area = 'A1:M{}'.format(sheet.max_row)
-            sheet.page_margins.top = 1.00
-
-        elif sheet_name.startswith("Rule 255"):
-            sheet.print_area = 'A1:H{}'.format(sheet.max_row)
-            sheet.print_options.horizontalCentered = False
-            sheet.print_options.verticalCentered = False
-            sheet.sheet_properties.pageSetUpPr.fitToPage = False
-            sheet.page_setup.fitToWidth = False
-            sheet.page_setup.fitToHeight = False
-            for row in [37]:
-                sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
-
-        elif sheet_name.startswith("Rule 275"):
-            if workbook[sheet_name]["A10"].value == "275.B.1.(b). Short Term - Autos Leased by the Hour, Day, or Week":
-                sheet.print_title_rows = '1:1'
-                sheet.page_setup.fitToHeight = 1
-                sheet.page_setup.fitToWidth = 1
-                sheet.sheet_properties.pageSetUpPr.fitToPage = True
-
-        elif sheet_name.startswith("Rule 283"):
-            sheet.print_area = 'A1:P{}'.format(sheet.max_row)
-            target_values = ["283.B Limited Specified Causes of Loss",
-                             "283.B Comprehensive",
-                             "283.B Blanket Collision"]
-            for row in range(1, sheet.max_row + 1):
-                cell_value = str(sheet.cell(row=row, column=1).value)
-                if cell_value in target_values and row > 3:
-                    sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(id=row - 1))
-            sheet.page_setup.fitToWidth = 1
-            sheet.page_setup.fitToHeight = False
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-
-        elif sheet_name.startswith("Rule 289"):
-            sheet.print_area = 'A1:H{}'.format(sheet.max_row)
-            sheet.sheet_properties.pageSetUpPr.fitToPage = False
-            sheet.page_setup.fitToWidth = False
-            sheet.page_setup.fitToHeight = False
-            for row in [37]:
-                sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
-
-        elif sheet_name.startswith("Rule 297"):
-            sheet.print_area = 'A1:P{}'.format(sheet.max_row)
-            sheet.sheet_properties.pageSetUpPr.fitToPage = False
-            sheet.page_setup.fitToWidth = False
-            sheet.page_setup.fitToHeight = False
-            occurrence_count = 0
-            for row in range(1, sheet.max_row + 1):
-                cell_value = str(sheet.cell(row=row, column=1).value)
-                if str(cell_value).startswith('Single') or str(cell_value).startswith('Uninsured'):
-                    occurrence_count += 1
-                if (occurrence_count % 3 == 0) and (occurrence_count != 0):
-                    occurrence_count += 1
-                    sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row-1))
-
-        elif sheet_name.startswith("Rule 298"):
-            sheet.print_area = 'A1:K{}'.format(sheet.max_row)
-            sheet.sheet_properties.pageSetUpPr.fitToPage = False
-            sheet.page_setup.fitToWidth = False
-            sheet.page_setup.fitToHeight = False
-            occurrence_count = 0
-            for row in range(1, sheet.max_row + 1):
-                cell_value = str(sheet.cell(row=row, column=1).value)
-                if str(cell_value).startswith('298'):
-                    occurrence_count += 1
-                if occurrence_count == 4:
-                    occurrence_count += 1
-                    sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row-1))
-                if occurrence_count == 8:
-                    break
-
-        elif sheet_name.startswith(("Rule 301.A", "Rule 301.B", "Rule 301.C")):
-            if workbook[sheet_name]["B4"].value in ["Extra Heavy Truck-Tractor", "Extra-Heavy Truck", "Heavy Truck",
-                                                    "Heavy Truck-Tractor", "Light Truck", "Medium Truck", "Private Passenger Types",
-                                                    "Semitrailer", "Service or Utility Trailer", "Trailer"]:
-                pass
-            else:
-                sheet.page_setup.fitToWidth = 1
-                sheet.page_setup.fitToHeight = False
-                sheet.sheet_properties.pageSetUpPr.fitToPage = True
-                if sheet_name.startswith("Rule 301.B"):
-                    sheet.print_area = 'A1:T{}'.format(sheet.max_row)
-                for row in range(46, sheet.max_row, 45):
-                    sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
-                sheet.print_options.horizontalCentered = False
-                sheet.print_options.verticalCentered = False
-                sheet.page_setup.orientation = "landscape"
-                sheet.page_margins.top = 1.00
-
-        elif sheet_name.startswith(("Rule 301.C", "Rule 301.D)")):
-            if workbook[sheet_name]["B4"].value in ["Extra Heavy Truck-Tractor", "Extra-Heavy Truck", "Heavy Truck",
-                                                    "Heavy Truck-Tractor", "Light Truck", "Medium Truck", "Private Passenger Types",
-                                                    "Semitrailer", "Service or Utility Trailer", "Trailer"]:
-                if not "FL" in dest_filename1:
-                    sheet.page_margins.top = 1.00
-                sheet.page_setup.fitToWidth = 1
-                sheet.page_setup.fitToHeight = 1
-                sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            else:
-                pass
-
-        elif sheet_name.startswith("Rule 306"):
-            sheet.page_setup.fitToWidth = 1
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            sheet.print_title_rows = '1:4'
-
-        elif sheet_name.startswith("Rule 315"):
-            sheet.page_setup.fitToWidth = 1
-            sheet.page_setup.fitToHeight = False
-            sheet.sheet_properties.pageSetUpPr.fitToPage = True
-            for row in [23]:
-                sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
-
-        elif sheet_name.startswith("Rule R1"):
-            sheet.print_area = 'A1:M{}'.format(sheet.max_row)
-            sheet.sheet_properties.pageSetUpPr.fitToPage = False
-            sheet.page_setup.fitToWidth = False
-            sheet.page_setup.fitToHeight = False
-            occurrence_count = 0
-            for row in range(1, sheet.max_row + 1):
-                cell_value = str(sheet.cell(row=row, column=1).value)
-                if str(cell_value).startswith('R1'):
-                    occurrence_count += 1
-                if occurrence_count == 3 or occurrence_count == 6:
-                    occurrence_count += 1
-                    sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row-1))
-
-    # Hide the Index sheet (the old code did this via COM after the repair step;
-    # openpyxl can do it directly, no COM needed).
+    # Index goes to position 0 and is the active sheet on open
     if "Index" in workbook.sheetnames:
-        workbook["Index"].sheet_state = "hidden"
+        ws_index = workbook["Index"]
+        ws_index.sheet_state = "visible"
+        if workbook.sheetnames.index("Index") != 0:
+            workbook._sheets.remove(ws_index)
+            workbook._sheets.insert(0, ws_index)
+        workbook.active = 0
 
-    # Save the modified workbook in place. No COM, no CorruptLoad, no SaveAs cycle.
-    # Excel's repair process was re-adding fitToPage=True and dropping the manual
-    # breaks during SaveAs, which is why the previous setup wasn't producing the
-    # dashed page-break line.
     workbook.save(dest_filename1)
     workbook.close()
-    print("Stage 3: Page Breaks saved.")
+    print("[BApagebreaks] openpyxl save complete; running Excel COM resave to clean XML...")
+
+    _resave_through_excel(dest_filename1)
+    print("[BApagebreaks] Done.")
 
 
-# Example usage
-# process_pagebreaks(r'C:\Users\bernb17\Nationwide\Desktop\CL-State-Pages-Dump\ME - ISO Curr', 'ME 03-01-25 BA Small Market Rate Pages.xlsx', 'output.pdf')
+# ============================================================================
+#  EXCEL COM RESAVE  -  fixes the "corrupt file" warning on open
+# ============================================================================
+#
+#  WHY this is needed: openpyxl writes valid OOXML, but Excel sometimes flags
+#  the resulting file because of minor canonicalization differences (attribute
+#  ordering, defaults, etc.). Letting Excel itself open the file and save it
+#  rewrites the XML in Excel's preferred form. We do NOT use CorruptLoad here:
+#  CorruptLoad's repair process strips manual page breaks. A normal Open + Save
+#  preserves them.
+# ============================================================================
+
+def _resave_through_excel(filename):
+    if win32com is None:
+        print("[BApagebreaks] win32com not available; skipping COM resave.")
+        return
+
+    if pythoncom:
+        pythoncom.CoInitialize()
+
+    xl_app = None
+    xl_book = None
+    try:
+        xl_app = win32com.client.DispatchEx("Excel.Application")
+        xl_app.Visible = False
+        xl_app.DisplayAlerts = False
+        xl_app.AskToUpdateLinks = False
+
+        xl_book = xl_app.Workbooks.Open(filename, UpdateLinks=0)
+
+        # Make Index the visible/active sheet on open
+        try:
+            xl_book.Sheets("Index").Activate()
+        except Exception:
+            pass
+
+        xl_book.Save()
+        xl_book.Close(False)
+        xl_book = None
+    except Exception as exc:
+        print(f"[BApagebreaks] COM resave failed: {exc}")
+    finally:
+        if xl_book is not None:
+            try:
+                xl_book.Close(False)
+            except Exception:
+                pass
+        if xl_app is not None:
+            try:
+                xl_app.Quit()
+            except Exception:
+                pass
+        gc.collect()
+        if pythoncom:
+            pythoncom.CoUninitialize()
+        # Brief pause so Excel's process fully releases the file before any
+        # caller (e.g. PDF export) tries to open it.
+        time.sleep(1)
+
+
+# Example usage:
+# process_pagebreaks(r"C:\path\to\workbook.xlsx", "ignored.pdf")

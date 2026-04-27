@@ -19,6 +19,12 @@ def process_pagebreaks(dest_filename1, dest_filename2):
     for sheet_name in workbook.sheetnames:
         sheet = workbook[sheet_name]
         sheet.print_title_rows = '1:1'
+        # Re-assert page setup defaults: ExcelSettingsBA already wrote these,
+        # but openpyxl can mangle pageSetUpPr/fitToPage on load+save. Resetting
+        # them here guarantees they survive into the saved file.
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.page_setup.fitToWidth = 1
+        sheet.page_setup.fitToHeight = False
 
         if sheet_name.startswith("Index"):
             sheet.print_title_rows = '0:0'  # No title rows
@@ -27,6 +33,9 @@ def process_pagebreaks(dest_filename1, dest_filename2):
             sheet.page_setup.fitToHeight = False  # Disable fit to height
 
         elif sheet_name.startswith("Rule 222 B"):
+            sheet.sheet_properties.pageSetUpPr.fitToPage = False
+            sheet.page_setup.fitToWidth = False
+            sheet.page_setup.fitToHeight = False
             for row in [25, 49]:
                 sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
 
@@ -46,6 +55,9 @@ def process_pagebreaks(dest_filename1, dest_filename2):
             sheet.print_area = 'A1:M{}'.format(sheet.max_row)
             sheet.print_options.horizontalCentered = False
             sheet.print_options.verticalCentered = False
+            sheet.sheet_properties.pageSetUpPr.fitToPage = False
+            sheet.page_setup.fitToWidth = False
+            sheet.page_setup.fitToHeight = False
             for row in range(52, sheet.max_row, 51):
                 sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
 
@@ -83,6 +95,9 @@ def process_pagebreaks(dest_filename1, dest_filename2):
             sheet.print_area = 'A1:H{}'.format(sheet.max_row)
             sheet.print_options.horizontalCentered = False
             sheet.print_options.verticalCentered = False
+            sheet.sheet_properties.pageSetUpPr.fitToPage = False
+            sheet.page_setup.fitToWidth = False
+            sheet.page_setup.fitToHeight = False
             for row in [37]:
                 sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
 
@@ -105,14 +120,22 @@ def process_pagebreaks(dest_filename1, dest_filename2):
                 if cell_value in target_values and row > 3:
                     sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(id=row - 1))  # Insert page break above
             sheet.page_setup.fitToWidth = 1
+            sheet.page_setup.fitToHeight = False
+            sheet.sheet_properties.pageSetUpPr.fitToPage = True
 
         elif sheet_name.startswith("Rule 289"):
             sheet.print_area = 'A1:H{}'.format(sheet.max_row)
+            sheet.sheet_properties.pageSetUpPr.fitToPage = False
+            sheet.page_setup.fitToWidth = False
+            sheet.page_setup.fitToHeight = False
             for row in [37]:
                 sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
 
         elif sheet_name.startswith("Rule 297"):
             sheet.print_area = 'A1:P{}'.format(sheet.max_row)
+            sheet.sheet_properties.pageSetUpPr.fitToPage = False
+            sheet.page_setup.fitToWidth = False
+            sheet.page_setup.fitToHeight = False
 
             occurrence_count = 0
             for row in range(1, sheet.max_row + 1):
@@ -128,6 +151,9 @@ def process_pagebreaks(dest_filename1, dest_filename2):
         # Pretty sloppy but it works.
         elif sheet_name.startswith("Rule 298"):
             sheet.print_area = 'A1:K{}'.format(sheet.max_row)
+            sheet.sheet_properties.pageSetUpPr.fitToPage = False
+            sheet.page_setup.fitToWidth = False
+            sheet.page_setup.fitToHeight = False
 
             occurrence_count = 0
             for row in range(1, sheet.max_row + 1):
@@ -149,6 +175,8 @@ def process_pagebreaks(dest_filename1, dest_filename2):
                 pass
             else:
                 sheet.page_setup.fitToWidth = 1
+                sheet.page_setup.fitToHeight = False
+                sheet.sheet_properties.pageSetUpPr.fitToPage = True
                 if sheet_name.startswith("Rule 301.B"): # sloppy solution to bypass automatic page breaks. Column T is minimum width to solve this way
                     sheet.print_area = 'A1:T{}'.format(sheet.max_row)
                 for row in range(46, sheet.max_row, 45):
@@ -176,14 +204,18 @@ def process_pagebreaks(dest_filename1, dest_filename2):
             sheet.print_title_rows = '1:4'
 
         elif sheet_name.startswith("Rule 315"):
-            sheet.page_setup.fitToHeight = 1
             sheet.page_setup.fitToWidth = 1
+            sheet.page_setup.fitToHeight = False
+            sheet.sheet_properties.pageSetUpPr.fitToPage = True
             for row in [23]:
                 sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row))
 
         # Pretty sloppy but it works.
         elif sheet_name.startswith("Rule R1"):
             sheet.print_area = 'A1:M{}'.format(sheet.max_row)
+            sheet.sheet_properties.pageSetUpPr.fitToPage = False
+            sheet.page_setup.fitToWidth = False
+            sheet.page_setup.fitToHeight = False
 
             occurrence_count = 0
             for row in range(1, sheet.max_row + 1):

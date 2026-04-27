@@ -4,7 +4,8 @@
       "Bash(sed:*)",
       "Bash(python3:*)",
       "Bash(python:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(C:/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe *)"
     ]
   }
 }

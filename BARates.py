@@ -9,7 +9,6 @@ import openpyxl
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
 from openpyxl.styles.borders import Border, Side
-from openpyxl.worksheet.pagebreak import Break
 import logging
 import re
 import time
@@ -6941,8 +6940,6 @@ class Auto:
                     cell = ws[char + str(row)]
                     cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
                     cell.number_format = '#0'
-        # Insert a horizontal page break at row 25
-        ws.row_breaks.append(Break(id=25))
         ws['A26'].alignment = Alignment(wrap_text=False)
 
         # Format PPP Classifications - Farm

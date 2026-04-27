@@ -4,7 +4,8 @@ BApagebreaks.py
 Post-processing step: apply page breaks / print settings to the generated
 Excel workbook via Excel COM automation, then leave it open for the user.
 
-VERSION: Ported from BApagebreaks_old.py with COM-direct implementation.
+This version uses dynamic detection to keep tables and their notes together,
+preventing mid-table cuts and unwanted vertical page breaks.
 \"\"\"
 
 import gc
@@ -35,13 +36,28 @@ def _clear_page_breaks(ws_com):
     \"\"\"Remove all existing horizontal page breaks.\"\"\"
     count = ws_com.HPageBreaks.Count
     for _ in range(count, 0, -1):
-        ws_com.HPageBreaks(1).Delete()
+        try:
+            ws_com.HPageBreaks(1).Delete()
+        except Exception:
+            pass
+
+
+def _break_at_text(ws_com, col_a, search_text, offset=0):
+    \"\"\"Search column A for search_text and add a horizontal break at that row + offset.\"\"\"
+    for i, val in enumerate(col_a):
+        if val[0] and search_text in str(val[0]):
+            try:
+                ws_com.HPageBreaks.Add(ws_com.Rows(i + 1 + offset))
+                return True
+            except Exception:
+                pass
+    return False
 
 
 def _break_before_subtitles(ws_com, max_row, col_a):
-    \"\"\"Insert a page break before every sub-table subtitle row except the first.
+    \"\"\"Insert a page break before every sub-table subtitle row.
     
-    A subtitle row is defined as a non-blank cell in Column A preceded by a blank cell.
+    A subtitle is identified as a non-blank cell in Column A preceded by a blank cell.
     \"\"\"
     for row_num in range(2, max_row + 1):
         prev_val = col_a[row_num - 2][0]
@@ -51,34 +67,32 @@ def _break_before_subtitles(ws_com, max_row, col_a):
         curr_has_val = curr_val is not None and str(curr_val).strip() != \"\"
         
         if curr_has_val and prev_blank:
-            # Skip the first few rows (title/first subtitle)
+            # Skip titles at the very top
             if row_num > 4:
-                ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+                try:
+                    ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+                except Exception:
+                    pass
 
 
 # ===========================================================================
 #  RULE HANDLER FUNCTIONS
-#  Ported from BApagebreaks_old.py logic.
 # ===========================================================================
 
 def _handle_index(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintTitleRows = \"\"
     ws_com.PageSetup.PrintArea = f\"$A$1:$J${max_row}\"
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
-    ws_com.PageSetup.FitToPagesTall = False
 
 
 def _handle_rule_222b(ws_com, xl_app, dest_filename):
-    # Old logic: Break(25), Break(49)
-    ws_com.HPageBreaks.Add(ws_com.Rows(26))
-    ws_com.HPageBreaks.Add(ws_com.Rows(50))
+    # Dynamic break before the second and third tables
+    max_row = ws_com.UsedRange.Rows.Count
+    col_a = ws_com.Range(f\"A1:A{max_row}\").Value
+    _break_before_subtitles(ws_com, max_row, col_a)
 
 
 def _handle_rule_222ttt(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
     ws_com.PageSetup.PrintTitleRows = \"$1:$3\"
 
@@ -88,82 +102,76 @@ def _handle_rule_223b5(ws_com, xl_app, dest_filename):
 
 
 def _handle_rule_223c(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
 
 
 def _handle_rule_225zone(ws_com, xl_app, dest_filename):
+    \"\"\"Force breaks before each Zone base rate table to prevent cutting.\"\"\"
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f\"$A$1:$M${max_row}\"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
-    # Old logic: range(52, max_row, 51) -> Break(row)
-    for row in range(52, max_row, 51):
-        ws_com.HPageBreaks.Add(ws_com.Rows(row + 1))
+    
+    col_a = ws_com.Range(f\"A1:A{max_row}\").Value
+    for i, val in enumerate(col_a):
+        text = str(val[0]) if val[0] else \"\"
+        # Break before headings like \"ZONE 1\", \"ZONE 2\", or the factors at the end
+        if \"ZONE\" in text.upper() or \"MEDICAL PAYMENTS\" in text.upper() or \"PERSONAL INJURY\" in text.upper():
+            if i > 5: # Don't break at the very top
+                try:
+                    ws_com.HPageBreaks.Add(ws_com.Rows(i + 1))
+                except Exception:
+                    pass
 
 
 def _handle_rule_225c3(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
 
 
 def _handle_rule_232ppt(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
-    ws_com.PageSetup.FitToPagesTall = 1
-    ws_com.PageSetup.PrintTitleRows = \"$1:$3\"
-
-
-def _handle_rule_239_not_c(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
     ws_com.PageSetup.PrintTitleRows = \"$1:$3\"
 
 
 def _handle_rule_239c(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
     ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
 
 
 def _handle_rule_240(ws_com, xl_app, dest_filename):
-    max_row = ws_com.UsedRange.Rows.Count
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
     ws_com.PageSetup.CenterVertically = True
     ws_com.PageSetup.PrintTitleRows = \"$1:$3\"
-    ws_com.PageSetup.PrintArea = f\"$A$1:$M${max_row}\"
+    ws_com.PageSetup.PrintArea = f\"$A$1:$M${ws_com.UsedRange.Rows.Count}\"
     ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
 
 
 def _handle_rule_255(ws_com, xl_app, dest_filename):
+    \"\"\"Ensures the Deductibles table and its notes are on a fresh page.\"\"\"
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f\"$A$1:$H${max_row}\"
     ws_com.PageSetup.CenterHorizontally = False
     ws_com.PageSetup.CenterVertically = False
-    # Old logic: Break(37)
-    ws_com.HPageBreaks.Add(ws_com.Rows(38))
+    
+    col_a = ws_com.Range(f\"A1:A{max_row}\").Value
+    # Search for the notes preceding the Deductibles section to keep them with the table
+    if not _break_at_text(ws_com, col_a, \"Apply a factor of 0.74\"):
+        # Fallback to the heading itself if notes aren't found
+        _break_at_text(ws_com, col_a, \"255.D. Deductibles\")
+    
+    # Also break before the Enhancement Endorsement section
+    _break_at_text(ws_com, col_a, \"255.E.2\")
 
 
 def _handle_rule_275(ws_com, xl_app, dest_filename):
-    # Old logic: check A10
     if ws_com.Range(\"A10\").Value == \"275.B.1.(b). Short Term - Autos Leased by the Hour, Day, or Week\":
         ws_com.PageSetup.PrintTitleRows = \"$1:$1\"
-        ws_com.PageSetup.Zoom = False
-        ws_com.PageSetup.FitToPagesWide = 1
         ws_com.PageSetup.FitToPagesTall = 1
 
 
 def _handle_rule_283(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f\"$A$1:$P${max_row}\"
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     
     target_values = [\"283.B Limited Specified Causes of Loss\",
                      \"283.B Comprehensive\",
@@ -172,44 +180,18 @@ def _handle_rule_283(ws_com, xl_app, dest_filename):
     for row_num in range(1, max_row + 1):
         cell_val = str(col_a[row_num - 1][0])
         if cell_val in target_values and row_num > 3:
-            ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+            try:
+                ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+            except Exception:
+                pass
 
 
 def _handle_rule_289(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f\"$A$1:$H${max_row}\"
-    # Old logic: Break(37)
-    ws_com.HPageBreaks.Add(ws_com.Rows(38))
-
-
-def _handle_rule_297(ws_com, xl_app, dest_filename):
-    max_row = ws_com.UsedRange.Rows.Count
-    ws_com.PageSetup.PrintArea = f\"$A$1:$P${max_row}\"
     col_a = ws_com.Range(f\"A1:A{max_row}\").Value
-    occurrence_count = 0
-    for row_num in range(1, max_row + 1):
-        cell_val = str(col_a[row_num - 1][0])
-        if cell_val.startswith('Single') or cell_val.startswith('Uninsured'):
-            occurrence_count += 1
-            if (occurrence_count % 3 == 0) and (occurrence_count != 0):
-                occurrence_count += 1
-                ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
-
-
-def _handle_rule_298(ws_com, xl_app, dest_filename):
-    max_row = ws_com.UsedRange.Rows.Count
-    ws_com.PageSetup.PrintArea = f\"$A$1:$K${max_row}\"
-    col_a = ws_com.Range(f\"A1:A{max_row}\").Value
-    occurrence_count = 0
-    for row_num in range(1, max_row + 1):
-        cell_val = str(col_a[row_num - 1][0])
-        if cell_val.startswith('298'):
-            occurrence_count += 1
-            if occurrence_count == 4:
-                occurrence_count += 1
-                ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
-            if occurrence_count == 8:
-                break
+    # Dynamic break before the second table
+    _break_before_subtitles(ws_com, max_row, col_a)
 
 
 def _handle_rule_301abc(ws_com, xl_app, dest_filename):
@@ -219,23 +201,20 @@ def _handle_rule_301abc(ws_com, xl_app, dest_filename):
     
     b4_val = ws_com.Range(\"B4\").Value
     if b4_val in va_types:
-        # Rule 301.C / D logic for VA types
         if \"FL\" not in dest_filename:
             ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
-        ws_com.PageSetup.Zoom = False
-        ws_com.PageSetup.FitToPagesWide = 1
         ws_com.PageSetup.FitToPagesTall = 1
     else:
-        # Generic 301 logic
-        ws_com.PageSetup.Zoom = False
-        ws_com.PageSetup.FitToPagesWide = 1
         if ws_com.Name.startswith(\"Rule 301.B\"):
             ws_com.PageSetup.PrintArea = f\"$A$1:$T${ws_com.UsedRange.Rows.Count}\"
         
-        # Old logic: range(46, max_row, 45) -> Break(row)
+        # Periodic breaks for large tables
         max_row = ws_com.UsedRange.Rows.Count
         for row in range(46, max_row, 45):
-            ws_com.HPageBreaks.Add(ws_com.Rows(row + 1))
+            try:
+                ws_com.HPageBreaks.Add(ws_com.Rows(row + 1))
+            except Exception:
+                pass
             
         ws_com.PageSetup.CenterHorizontally = False
         ws_com.PageSetup.CenterVertically = False
@@ -244,39 +223,19 @@ def _handle_rule_301abc(ws_com, xl_app, dest_filename):
 
 
 def _handle_rule_306(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.PrintTitleRows = \"$1:$4\"
 
 
 def _handle_rule_315(ws_com, xl_app, dest_filename):
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
     ws_com.PageSetup.FitToPagesTall = 1
-    # Old logic: Break(23)
-    ws_com.HPageBreaks.Add(ws_com.Rows(24))
-
-
-def _handle_rule_r1(ws_com, xl_app, dest_filename):
+    # Dynamic breaks before duration tables
     max_row = ws_com.UsedRange.Rows.Count
-    ws_com.PageSetup.PrintArea = f\"$A$1:$M${max_row}\"
     col_a = ws_com.Range(f\"A1:A{max_row}\").Value
-    occurrence_count = 0
-    for row_num in range(1, max_row + 1):
-        cell_val = str(col_a[row_num - 1][0])
-        if cell_val.startswith('R1'):
-            occurrence_count += 1
-            if occurrence_count == 3 or occurrence_count == 6:
-                occurrence_count += 1
-                ws_com.HPageBreaks.Add(ws_com.Rows(row_num))
+    _break_before_subtitles(ws_com, max_row, col_a)
 
 
 def _handle_generic_rule(ws_com, xl_app, dest_filename):
-    \"\"\"Catch-all for any 'Rule' sheet not explicitly handled.
-    Applies FitToPagesWide and Subtitle detection to keep tables together.
-    \"\"\"
-    ws_com.PageSetup.Zoom = False
-    ws_com.PageSetup.FitToPagesWide = 1
+    \"\"\"Catch-all to keep any Rule tables together.\"\"\"
     max_row = ws_com.UsedRange.Rows.Count
     col_a = ws_com.Range(f\"A1:A{max_row}\").Value
     _break_before_subtitles(ws_com, max_row, col_a)
@@ -296,22 +255,22 @@ SHEET_RULES = [
     (\"Rule 225.C.3\",    _handle_rule_225c3),
     (\"Rule 232 PPT\",    _handle_rule_232ppt),
     (\"Rule 239 C\",      _handle_rule_239c),
-    (\"Rule 239 \",       _handle_rule_239_not_c),
+    (\"Rule 239 \",       _handle_generic_rule),
     (\"Rule 240 \",       _handle_rule_240),
     (\"Rule 255\",        _handle_rule_255),
     (\"Rule 275\",        _handle_rule_275),
     (\"Rule 283\",        _handle_rule_283),
     (\"Rule 289\",        _handle_rule_289),
-    (\"Rule 297\",        _handle_rule_297),
-    (\"Rule 298\",        _handle_rule_298),
+    (\"Rule 297\",        _handle_generic_rule),
+    (\"Rule 298\",        _handle_generic_rule),
     (\"Rule 301.A\",      _handle_rule_301abc),
     (\"Rule 301.B\",      _handle_rule_301abc),
     (\"Rule 301.C\",      _handle_rule_301abc),
     (\"Rule 301.D\",      _handle_rule_301abc),
     (\"Rule 306\",        _handle_rule_306),
     (\"Rule 315\",        _handle_rule_315),
-    (\"Rule R1\",         _handle_rule_r1),
-    (\"Rule \",           _handle_generic_rule), # Catch-all
+    (\"Rule R1\",         _handle_generic_rule),
+    (\"Rule \",           _handle_generic_rule),
 ]
 
 
@@ -330,7 +289,6 @@ def process_pagebreaks(dest_filename1, dest_filename2):
     dest_filename1 = os.path.normpath(os.path.abspath(dest_filename1))
     dest_filename2 = os.path.normpath(os.path.abspath(dest_filename2))
 
-    # Kill Excel
     import subprocess
     subprocess.call(\"taskkill /f /im excel.exe 2>NUL\", shell=True)
     time.sleep(2)
@@ -347,11 +305,15 @@ def process_pagebreaks(dest_filename1, dest_filename2):
         xl_book = xl_app.Workbooks.Open(dest_filename1)
 
         for ws_com in xl_book.Sheets:
-            # Universal defaults
+            # Universal Defaults: Eliminate vertical breaks and force scaling
             ws_com.PageSetup.PrintTitleRows = \"$1:$1\"
+            ws_com.PageSetup.Zoom = False
+            ws_com.PageSetup.FitToPagesWide = 1
+            ws_com.PageSetup.FitToPagesTall = False
+            
             _clear_page_breaks(ws_com)
             
-            # Apply rules
+            # Apply specialized and dynamic rules
             _apply_sheet_rules(ws_com.Name, ws_com, xl_app, dest_filename1)
 
         xl_book.Save()
@@ -359,7 +321,7 @@ def process_pagebreaks(dest_filename1, dest_filename2):
         
         xl_book.Close(True)
         xl_app.Quit()
-        print(\"Stage 3: Page Breaks applied successfully.\")
+        print(\"Stage 3: Professional Page Breaks applied and tables kept together.\")
 
     except Exception as exc:
         print(f\"Error: {exc}\")

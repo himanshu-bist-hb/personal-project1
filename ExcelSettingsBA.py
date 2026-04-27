@@ -147,7 +147,10 @@ class Excel:
         ws.page_setup.blackAndWhite        = False
         ws.page_setup.firstPageNumber      = 1
         ws.page_setup.useFirstPageNumber   = True
-        ws.sheet_properties.pageSetUpPr.fitToPage = True
+        # NOTE: Do NOT set pageSetUpPr.fitToPage = True here. BApagebreaks.py
+        # decides per-sheet whether fit-to-page should be on. Forcing it True
+        # globally makes Excel ignore manual page breaks (Rule 255, 222 B,
+        # 225 Zone, 289, 297, 298, R1) and shrink-to-fit instead.
         ws.page_setup.fitToHeight          = False
         ws.sheet_view.showGridLines        = False
         ws.print_title_rows                = PRINT_TITLE_ROWS

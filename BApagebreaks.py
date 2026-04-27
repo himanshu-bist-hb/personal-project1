@@ -1,4 +1,5 @@
 import openpyxl
+import win32com.client
 import os
 import time
 import gc
@@ -194,14 +195,75 @@ def process_pagebreaks(dest_filename1, dest_filename2):
                     occurrence_count += 1
                     sheet.row_breaks.append(openpyxl.worksheet.pagebreak.Break(row-1))
 
-    # Hide the Index sheet (the old version did this via COM after the repair step)
-    if "Index" in workbook.sheetnames:
-        workbook["Index"].sheet_state = "hidden"
-
-    # Save the modified workbook
+    # Save the modified workbook with a new name
+    # modified_filename = dest_filename1.replace('.xlsx', '_modified.xlsx')
     workbook.save(dest_filename1)
-    workbook.close()
+    workbook.close() # Close the workbook at the end
     print("Stage 3: Page Breaks saved.")
+
+    time.sleep(2)
+
+    # Normalize paths
+    dest_filename1 = os.path.normpath(os.path.abspath(dest_filename1))
+    dest_filename2 = os.path.normpath(os.path.abspath(dest_filename2))
+    repaired_filename = dest_filename1.replace(".xlsx", "_repaired.xlsx")
+
+    # Ensure Excel is not running
+    def kill_excel_instances():
+        import subprocess
+        subprocess.call("taskkill /f /im excel.exe", shell=True)
+
+    kill_excel_instances()
+    time.sleep(2)
+
+    xlApp = win32com.client.DispatchEx('Excel.Application')
+    xlApp.Visible = False
+
+    try:
+        # Step 1: Open with CorruptLoad to repair
+        xlBook = xlApp.Workbooks.Open(dest_filename1, CorruptLoad=1)
+        xlBook.SaveAs(repaired_filename)
+        xlBook.Close(False)
+        print("File repaired and saved.")
+    except Exception as e:
+        print(f"Error during repair: {e}")
+        xlApp.Quit()
+        return
+
+    # Step 2: Reopen the repaired file normally
+    try:
+        xlBook = xlApp.Workbooks.Open(repaired_filename, ReadOnly=True)
+        xlApp.Visible = True
+
+        index_sheet = xlBook.Sheets("Index")
+        index_sheet.Visible = False
+
+        # time.sleep(3)
+        # xlBook.ExportAsFixedFormat(0, dest_filename2, Quality=0)
+        # print("PDF export complete.")
+    except Exception as e:
+        print(f"Error exporting to PDF: {e}")
+    finally:
+        xlBook.Close(False)
+        xlApp.Quit()
+
+        # Clean up COM objects
+        del xlBook
+        del xlApp
+        gc.collect()
+
+        # if os.path.exists(dest_filename2):
+        #     print(f"PDF file created successfully: {dest_filename2}")
+        # else:
+        #     print("PDF creation failed.")
+
+        os.remove(dest_filename1)
+        print("Corrupted File deleted successfully.")
+
+        os.rename(repaired_filename, dest_filename1)
+
+        print("Waiting 10 seconds for items to flush to disk.")
+        time.sleep(10)
 
 
 # Example usage

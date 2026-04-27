@@ -55,6 +55,8 @@ OPENPYXL API CHEATSHEET
 import os
 import re
 import shutil
+import subprocess
+import time
 import zipfile
 from io import BytesIO
 
@@ -444,5 +446,101 @@ def _sanitize_xlsx(filename):
     os.replace(tmp, filename)
 
 
+# ============================================================================
+#  PDF EXPORT  -  drives Excel via COM to preserve every print setting
+#  (page breaks, fit-to-page, print areas, orientation, margins, headers).
+# ============================================================================
+
+_XL_TYPE_PDF        = 0   # xlTypePDF
+_XL_QUALITY_STD     = 0   # xlQualityStandard
+
+
+def _kill_excel_instances():
+    """Best-effort: terminate any orphan EXCEL.EXE so COM gets a clean slate."""
+    try:
+        subprocess.run(
+            ["taskkill", "/f", "/im", "excel.exe"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+    except Exception:
+        pass
+
+
+def export_to_pdf(xlsx_path, pdf_path):
+    """
+    Convert an .xlsx file to PDF using Excel via COM.
+
+    All sheets except 'Index' are included. The xlsx is opened read-only
+    and never modified. Raises RuntimeError if the PDF is not produced.
+    """
+    import win32com.client
+    import pythoncom
+
+    xlsx_path = os.path.normpath(os.path.abspath(xlsx_path))
+    pdf_path  = os.path.normpath(os.path.abspath(pdf_path))
+
+    if not os.path.exists(xlsx_path):
+        raise FileNotFoundError(f"Excel file not found: {xlsx_path}")
+
+    os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+    if os.path.exists(pdf_path):
+        try: os.remove(pdf_path)
+        except PermissionError:
+            raise RuntimeError(f"PDF is open in another program: {pdf_path}")
+
+    _kill_excel_instances()
+    pythoncom.CoInitialize()
+    excel = None
+    workbook = None
+    try:
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        excel.ScreenUpdating = False
+
+        workbook = excel.Workbooks.Open(xlsx_path, ReadOnly=True, UpdateLinks=0)
+
+        # Hide Index from the PDF without touching the source file.
+        for sheet in workbook.Sheets:
+            if sheet.Name == "Index":
+                sheet.Visible = 0  # xlSheetHidden
+            else:
+                # Make sure the first non-Index sheet is active so Excel
+                # picks a sensible page-1.
+                try: sheet.Activate()
+                except Exception: pass
+                break
+
+        workbook.ExportAsFixedFormat(
+            Type=_XL_TYPE_PDF,
+            Filename=pdf_path,
+            Quality=_XL_QUALITY_STD,
+            IncludeDocProperties=False,
+            IgnorePrintAreas=False,
+            OpenAfterPublish=False,
+        )
+    finally:
+        try:
+            if workbook is not None:
+                workbook.Close(SaveChanges=False)
+        except Exception:
+            pass
+        try:
+            if excel is not None:
+                excel.Quit()
+        except Exception:
+            pass
+        del workbook, excel
+        pythoncom.CoUninitialize()
+
+    # Verify
+    for _ in range(10):
+        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+            return pdf_path
+        time.sleep(0.2)
+    raise RuntimeError(f"PDF was not created: {pdf_path}")
+
+
 # Example usage:
 # process_pagebreaks(r"C:\path\to\workbook.xlsx", "ignored.pdf")
+# export_to_pdf(r"C:\path\to\workbook.xlsx", r"C:\path\to\workbook.pdf")

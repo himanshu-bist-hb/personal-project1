@@ -5,7 +5,9 @@
       "Bash(python3:*)",
       "Bash(python:*)",
       "Read(//tmp/**)",
-      "Bash(C:/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe *)"
+      "Bash(C:/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe *)",
+      "Bash(C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\\\\venv\\\\Scripts\\\\python.exe *)",
+      "Bash(\"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\\\\venv\\\\Scripts\\\\python.exe\" -m pip install pywin32)"
     ]
   }
 }

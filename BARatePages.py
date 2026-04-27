@@ -43,7 +43,7 @@ from openpyxl.worksheet.cell_range import CellRange
 from openpyxl.worksheet.pagebreak import Break
 
 import BARates as BA
-from BApagebreaks import process_pagebreaks
+from BApagebreaks import process_pagebreaks, export_to_pdf
 
 
 # ==============================================================================
@@ -469,8 +469,23 @@ def run(
     return xlsx_out, pdf_out
 
 
-def generate_pdf_only(xlsx_path: str, pdf_path: str, progress_callback: Optional[Callable[[str], None]] = None) -> None:
-    """Helper to run only the PDF conversion on an existing .xlsx file."""
-    if progress_callback: progress_callback("Generating PDF from Excel...")
-    process_pagebreaks(xlsx_path, pdf_path)
-    if progress_callback: progress_callback("PDF generation complete! 🎉")
+def generate_pdf_only(xlsx_path: str, pdf_path: str, progress_callback: Optional[Callable[[str], None]] = None) -> str:
+    """
+    Convert an existing rate-pages .xlsx into a PDF using Excel's own print
+    engine, so every page-break / fit-to-page / print-area setting already
+    written to the workbook is honored.
+
+    Returns the absolute path to the generated PDF and raises if the file
+    is not produced.
+    """
+    import os, time
+    if progress_callback: progress_callback("Launching Excel...")
+    t0 = time.perf_counter()
+    out = export_to_pdf(xlsx_path, pdf_path)
+    if not (os.path.exists(out) and os.path.getsize(out) > 0):
+        raise RuntimeError(f"PDF was not created at {out}")
+    elapsed = time.perf_counter() - t0
+    if progress_callback:
+        progress_callback(f"PDF created in {elapsed:0.1f}s — {os.path.basename(out)} 🎉")
+    print(f"[BARatePages] PDF generated: {out}")
+    return out

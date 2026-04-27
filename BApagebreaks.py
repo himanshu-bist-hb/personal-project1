@@ -39,12 +39,9 @@ def _break_before_subtitles(ws_com, max_row, col_a, cooldown=8):
     \"\"\"
     Intelligently adds page breaks before new sections.
     A section is identified as a non-blank cell preceded by a blank cell.
-    
-    Args:
-        cooldown: Minimum rows between breaks (prevents splitting notes from tables).
     \"\"\"
     last_break_row = 0
-    for i in range(4, max_row): # Start from row 5
+    for i in range(4, max_row):
         row_num = i + 1
         prev_val = col_a[i - 1][0]
         curr_val = col_a[i][0]
@@ -53,7 +50,6 @@ def _break_before_subtitles(ws_com, max_row, col_a, cooldown=8):
         is_curr_data  = curr_val is not None and str(curr_val).strip() != \"\"
         
         if is_curr_data and is_prev_blank:
-            # Only break if we haven't broken recently (keeps notes + table together)
             if (row_num - last_break_row) > cooldown:
                 try:
                     ws_com.HPageBreaks.Add(Before=ws_com.Rows(row_num))
@@ -82,31 +78,65 @@ def _handle_rule_222ttt(ws_com, xl_app, dest_filename):
 def _handle_rule_223b5(ws_com, xl_app, dest_filename):
     ws_com.PageSetup.Orientation = _XL_LANDSCAPE
 
+def _handle_rule_223c(ws_com, xl_app, dest_filename):
+    ws_com.PageSetup.FitToPagesTall = 1
+
 def _handle_rule_225zone(ws_com, xl_app, dest_filename):
-    \"\"\"Force breaks before each Zone base rate table to prevent cutting.\"\"\"
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f\"$A$1:$M${max_row}\"
     ws_com.PageSetup.CenterHorizontally = False
-    
     col_a = ws_com.Range(f\"A1:A{max_row}\").Value
     for i, val in enumerate(col_a):
         text = str(val[0]).upper() if val[0] else \"\"
-        # Break before headings like \"ZONE 1\", \"ZONE 2\", etc.
         if i > 5 and any(marker in text for marker in [\"ZONE\", \"MEDICAL PAYMENTS\", \"PERSONAL INJURY\"]):
             try:
                 ws_com.HPageBreaks.Add(Before=ws_com.Rows(i + 1))
             except Exception:
                 pass
 
+def _handle_rule_225c3(ws_com, xl_app, dest_filename):
+    ws_com.PageSetup.FitToPagesTall = 1
+
+def _handle_rule_232ppt(ws_com, xl_app, dest_filename):
+    ws_com.PageSetup.FitToPagesTall = 1
+    ws_com.PageSetup.PrintTitleRows = \"$1:$3\"
+
+def _handle_rule_239c(ws_com, xl_app, dest_filename):
+    ws_com.PageSetup.FitToPagesTall = 1
+    ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
+
+def _handle_rule_240(ws_com, xl_app, dest_filename):
+    ws_com.PageSetup.FitToPagesTall = 1
+    ws_com.PageSetup.CenterVertically = True
+    ws_com.PageSetup.PrintTitleRows = \"$1:$3\"
+    ws_com.PageSetup.PrintArea = f\"$A$1:$M${ws_com.UsedRange.Rows.Count}\"
+    ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
+
 def _handle_rule_255(ws_com, xl_app, dest_filename):
-    \"\"\"Ensures the Deductibles table and its notes are on a fresh page.\"\"\"
     max_row = ws_com.UsedRange.Rows.Count
     ws_com.PageSetup.PrintArea = f\"$A$1:$H${max_row}\"
     ws_com.PageSetup.CenterHorizontally = False
-    
     col_a = ws_com.Range(f\"A1:A{max_row}\").Value
-    # Use subtitle logic with a high cooldown to keep notes + table + enhancement together
-    _break_before_subtitles(ws_com, max_row, col_a, cooldown=15)
+    
+    # Force break before the notes for 255.D
+    for i, val in enumerate(col_a):
+        text = str(val[0]) if val[0] else \"\"
+        if \"Apply a factor of 0.74\" in text or \"255.D. Deductibles\" in text:
+            if i > 10:
+                try:
+                    ws_com.HPageBreaks.Add(Before=ws_com.Rows(i + 1))
+                    break # Only one major break needed for 255.D
+                except Exception:
+                    pass
+    
+    # Enhancement Endorsement break
+    for i, val in enumerate(col_a):
+        text = str(val[0]) if val[0] else \"\"
+        if \"255.E.2\" in text:
+            try:
+                ws_com.HPageBreaks.Add(Before=ws_com.Rows(i + 1))
+            except Exception:
+                pass
 
 def _handle_rule_283(ws_com, xl_app, dest_filename):
     max_row = ws_com.UsedRange.Rows.Count
@@ -127,20 +157,16 @@ def _handle_rule_301abc(ws_com, xl_app, dest_filename):
         max_row = ws_com.UsedRange.Rows.Count
         if ws_com.Name.startswith(\"Rule 301.B\"):
             ws_com.PageSetup.PrintArea = f\"$A$1:$T${max_row}\"
-        
-        # Periodic breaks for extremely long tables
         for row in range(46, max_row, 45):
             try:
                 ws_com.HPageBreaks.Add(Before=ws_com.Rows(row + 1))
             except Exception:
                 pass
-            
         ws_com.PageSetup.CenterHorizontally = False
         ws_com.PageSetup.Orientation = _XL_LANDSCAPE
         ws_com.PageSetup.TopMargin = xl_app.InchesToPoints(1.00)
 
 def _handle_generic_rule(ws_com, xl_app, dest_filename):
-    \"\"\"Catch-all to keep any Rule tables together.\"\"\"
     max_row = ws_com.UsedRange.Rows.Count
     col_a = ws_com.Range(f\"A1:A{max_row}\").Value
     _break_before_subtitles(ws_com, max_row, col_a, cooldown=8)
@@ -205,13 +231,11 @@ def process_pagebreaks(dest_filename1, dest_filename2):
         xl_book = xl_app.Workbooks.Open(dest_filename1)
 
         for ws_com in xl_book.Sheets:
-            # Universal Defaults
             ws_com.PageSetup.Zoom = False
             ws_com.PageSetup.FitToPagesWide = 1
             ws_com.PageSetup.FitToPagesTall = False
             ws_com.PageSetup.PrintTitleRows = \"$1:$1\"
             
-            # Clean and Apply
             _clear_page_breaks(ws_com)
             _apply_sheet_rules(ws_com.Name, ws_com, xl_app, dest_filename1)
 

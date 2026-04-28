@@ -4,7 +4,7 @@ import warnings
 from functools import reduce
 import pandas as pd
 import numpy as np
-from . import ExcelSettingsBA
+from . import ExcelSettingsFA
 import openpyxl
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils import get_column_letter
@@ -15,7 +15,7 @@ import re
 import time
 import copy
 
-from config.constants import BA_INPUT_FILE
+from config.constants import FA_INPUT_FILE
 
 # Define custom warning classes. Makes custom warnings when key functions fail more user friendly.
 # Search up the warning names to see use cases if interested.
@@ -108,8 +108,8 @@ class Auto:
             "195 to 289",
             "290 or greater"
         ]
-        self.no_med_states = pd.read_excel(BA_INPUT_FILE, sheet_name="No MedPay")
-        self.pip_states = pd.read_excel(BA_INPUT_FILE, sheet_name="PIP States")
+        self.no_med_states = pd.read_excel(FA_INPUT_FILE, sheet_name="No MedPay")
+        self.pip_states = pd.read_excel(FA_INPUT_FILE, sheet_name="PIP States")
         self.createMM()
 
     def createMM(self):
@@ -184,8 +184,8 @@ class Auto:
                 LEVEL1[sheet] = copy.deepcopy(LEVEL3[sheet])
 
         # Begginning of the LCM protocol. Basically goes through each sheet in the LCM list and applies the LCM/Company dev if applicable.
-        LCM_sheet_mapping = pd.read_excel(BA_INPUT_FILE, sheet_name="LCM-Comp Dev Mapping")
-        LCM_map = pd.read_excel(BA_INPUT_FILE, sheet_name="LCM-Map")
+        LCM_sheet_mapping = pd.read_excel(FA_INPUT_FILE, sheet_name="LCM-Comp Dev Mapping")
+        LCM_map = pd.read_excel(FA_INPUT_FILE, sheet_name="LCM-Map")
 
         liab_LCM = pd.DataFrame(self.rateTables[name]["LCMLiability_Ext"][1:], index=None,
                                 columns=self.rateTables[name]["LCMLiability_Ext"][0]).iloc[0, 2]
@@ -488,7 +488,7 @@ class Auto:
         coverages = ["csl", "med", "pip", "ppi","coll", "otc"]
 
         sheet_name = type_sheet[rate_type]
-        state_mapper = pd.read_excel(BA_INPUT_FILE, sheet_name=sheet_name)
+        state_mapper = pd.read_excel(FA_INPUT_FILE, sheet_name=sheet_name)
 
         mappers = {}
         for coverage in coverages:
@@ -1260,7 +1260,7 @@ class Auto:
         coverages = ["csl", "coll", "otc"]
 
         sheet_name = "225 Zone Rated"
-        state_mapper = pd.read_excel(BA_INPUT_FILE, sheet_name=sheet_name)
+        state_mapper = pd.read_excel(FA_INPUT_FILE, sheet_name=sheet_name)
 
         mappers = {}
         for coverage in coverages:
@@ -1850,7 +1850,7 @@ class Auto:
         Rule68Table2 = Rule68Table2.astype(object)
         Rule68Table2.iloc[:, 1:] = Rule68Table2.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
 
-        no_med = pd.read_excel(BA_INPUT_FILE, sheet_name="No MedPay")
+        no_med = pd.read_excel(FA_INPUT_FILE, sheet_name="No MedPay")
 
         if self.StateAbb not in self.pip_states.values:
             Rule68Table2 = Rule68Table2[Rule68Table2["Coverage"] != "PIP"]
@@ -1898,7 +1898,7 @@ class Auto:
     def buildRule79table2(self, company):
         Rule79Table2 = pd.DataFrame(self.rateTables[company]['GarageDealersOtherThanCollisionRate'][1:], index=None, columns=self.rateTables[company]['GarageDealersOtherThanCollisionRate'][0])\
 
-        helper_map = pd.read_excel(BA_INPUT_FILE, sheet_name="283 Helper Map")
+        helper_map = pd.read_excel(FA_INPUT_FILE, sheet_name="283 Helper Map")
         # Create a dictionary for mapping Input values to Output values
         mapping_dict = dict(zip(helper_map["Input"], helper_map["Output"]))
         Rule79Table2.replace(mapping_dict, inplace=True)
@@ -2026,7 +2026,7 @@ class Auto:
     def buildRule83table1(self, company):
         Rule83Table1a = pd.DataFrame(self.rateTables[company]['GarageDealersOtherThanCollisionRate'][1:], index=None, columns=self.rateTables[company]['GarageDealersOtherThanCollisionRate'][0])
 
-        helper_map = pd.read_excel(BA_INPUT_FILE, sheet_name="283 Helper Map")
+        helper_map = pd.read_excel(FA_INPUT_FILE, sheet_name="283 Helper Map")
 
         # Create a dictionary for mapping Input values to Output values
         mapping_dict = dict(zip(helper_map["Input"], helper_map["Output"]))
@@ -2046,7 +2046,7 @@ class Auto:
     def buildRule83table2(self, company):
         Rule83Table2a = pd.DataFrame(self.rateTables[company]['GarageDealersOtherThanCollisionRate'][1:], index=None, columns=self.rateTables[company]['GarageDealersOtherThanCollisionRate'][0])
         #Rule83Table2a = self.buildDataFrame("GarageDealersOtherThanCollisionRate").rename(columns={'SpecialTypesOtherThanCollisionCoverageType' : 'CoverageType', 'SpecialTypesSupplementaryType' : 'SuppType'}).query(f'CoverageType == "Stated Amount - Limited Specified Causes of Loss"')
-        helper_map = pd.read_excel(BA_INPUT_FILE, sheet_name="283 Helper Map")
+        helper_map = pd.read_excel(FA_INPUT_FILE, sheet_name="283 Helper Map")
 
         # Create a dictionary for mapping Input values to Output values
         mapping_dict = dict(zip(helper_map["Input"], helper_map["Output"]))
@@ -2067,7 +2067,7 @@ class Auto:
     def buildRule83table3(self, company):
         Rule83Table3a = pd.DataFrame(self.rateTables[company]['GarageDealersOtherThanCollisionRate'][1:], index=None, columns=self.rateTables[company]['GarageDealersOtherThanCollisionRate'][0])
 
-        helper_map = pd.read_excel(BA_INPUT_FILE, sheet_name="283 Helper Map")
+        helper_map = pd.read_excel(FA_INPUT_FILE, sheet_name="283 Helper Map")
 
         # Create a dictionary for mapping Input values to Output values
         mapping_dict = dict(zip(helper_map["Input"], helper_map["Output"]))
@@ -2467,9 +2467,9 @@ class Auto:
             # Apply the cleaning function to the Factor column
         factor_table['Factor'] = factor_table['Factor'].apply(clean_factor)
 
-        coll_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 Coll Map").fillna("Y")
-        otc_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 OTC Map").fillna("Y")
-        otc_fg_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name="298 OTC FG Map").fillna("Y") # Full glass
+        coll_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 Coll Map").fillna("Y")
+        otc_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 OTC Map").fillna("Y")
+        otc_fg_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name="298 OTC FG Map").fillna("Y") # Full glass
 
         factor_table = factor_table
         deductible_amount = factor_table[factor_table["VehicleAndCoverageType"] == "Private Passenger Types Collision"]["Deductible"]
@@ -2534,7 +2534,7 @@ class Auto:
         output_table.replace({"nan" : "NA"}, inplace=True)
 
         # Removing comprehensive all perils in a mandatory FG state:
-        fg_state_list = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 FG States")
+        fg_state_list = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 FG States")
 
         if self.StateAbb in fg_state_list.values:
             output_table = output_table.drop(columns = ["Comprehensive All Perils Deductible"])
@@ -2564,9 +2564,9 @@ class Auto:
             # Apply the cleaning function to the Factor column
         factor_table['Factor'] = factor_table['Factor'].apply(clean_factor)
 
-        coll_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 Coll Map").fillna("Y")
-        otc_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 OTC Map").fillna("Y")
-        otc_fg_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name="298 OTC FG Map").fillna("Y") # Full glass
+        coll_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 Coll Map").fillna("Y")
+        otc_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 OTC Map").fillna("Y")
+        otc_fg_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name="298 OTC FG Map").fillna("Y") # Full glass
 
         factor_table = factor_table
         deductible_amount = factor_table[factor_table["VehicleAndCoverageType"] == "Private Passenger Types Collision"]["Deductible"]
@@ -2642,7 +2642,7 @@ class Auto:
         output_table.replace({"nan" : "NA"}, inplace=True)
 
         # Removing comprehensive all perils in a mandatory FG state:
-        fg_state_list = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 FG States")
+        fg_state_list = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 FG States")
 
         if self.StateAbb in fg_state_list.values:
             output_table = output_table.drop(columns = ["Comprehensive All Perils Deductible"])
@@ -2671,9 +2671,9 @@ class Auto:
             # Apply the cleaning function to the Factor column
         factor_table['Factor'] = factor_table['Factor'].apply(clean_factor)
 
-        coll_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 Coll Map").fillna("Y")
-        otc_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 OTC Map").fillna("Y")
-        otc_fg_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name="298 OTC FG Map").fillna("Y") # Full glass
+        coll_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 Coll Map").fillna("Y")
+        otc_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 OTC Map").fillna("Y")
+        otc_fg_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name="298 OTC FG Map").fillna("Y") # Full glass
 
         factor_table = factor_table
         deductible_amount = factor_table[factor_table["Vehicle And Coverage Type"] == "Trucks And Truck-tractors Collision"]["Deductible Amount"]
@@ -2751,7 +2751,7 @@ class Auto:
         output_table.replace({"nan" : "NA"}, inplace=True)
 
         # Removing comprehensive all perils in a mandatory FG state:
-        fg_state_list = pd.read_excel(BA_INPUT_FILE, sheet_name = "298 FG States")
+        fg_state_list = pd.read_excel(FA_INPUT_FILE, sheet_name = "298 FG States")
 
         if self.StateAbb in fg_state_list.values:
             output_table = output_table.drop(columns = ["Comprehensive All Perils Deductible"])
@@ -3018,12 +3018,12 @@ class Auto:
                 return df
 
         # Load sheet name mappings
-        School_239 = pd.read_excel(BA_INPUT_FILE, sheet_name="239 School Buses")
-        Other_239 = pd.read_excel(BA_INPUT_FILE, sheet_name="239 Other Buses")
-        Van_239 = pd.read_excel(BA_INPUT_FILE, sheet_name="239 Van Pools")
-        Taxi_239 = pd.read_excel(BA_INPUT_FILE, sheet_name="239 Taxis")
-        TTT_222 = pd.read_excel(BA_INPUT_FILE, sheet_name="222 TTT")
-        PPT_232 = pd.read_excel(BA_INPUT_FILE, sheet_name="232 PPT")
+        School_239 = pd.read_excel(FA_INPUT_FILE, sheet_name="239 School Buses")
+        Other_239 = pd.read_excel(FA_INPUT_FILE, sheet_name="239 Other Buses")
+        Van_239 = pd.read_excel(FA_INPUT_FILE, sheet_name="239 Van Pools")
+        Taxi_239 = pd.read_excel(FA_INPUT_FILE, sheet_name="239 Taxis")
+        TTT_222 = pd.read_excel(FA_INPUT_FILE, sheet_name="222 TTT")
+        PPT_232 = pd.read_excel(FA_INPUT_FILE, sheet_name="232 PPT")
 
         # Function to fetch sheet name from Input File
         def get_sheetname(df, state, coverage):
@@ -3668,8 +3668,8 @@ class Auto:
             # Apply the cleaning function to the Factor column
         factor_table['BasePremium'] = factor_table['BasePremium'].apply(clean_factor)
 
-        coll_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "266 Coll Map").fillna("Y")
-        otc_deductible_map = pd.read_excel(BA_INPUT_FILE, sheet_name = "266 OTC Map").fillna("Y")
+        coll_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "266 Coll Map").fillna("Y")
+        otc_deductible_map = pd.read_excel(FA_INPUT_FILE, sheet_name = "266 OTC Map").fillna("Y")
         factor_table = factor_table
         deductible_amount = factor_table[factor_table["typeCoverage"] == "PhysDamCollSA"]["Deductible"]
         collision_factors = factor_table[factor_table["typeCoverage"] == "PhysDamCollSA"].drop(columns = "typeCoverage")
@@ -4522,7 +4522,7 @@ class Auto:
     def buildILF(self, company):
         ILF = pd.DataFrame(self.rateTables[company]['IncreasedLimitFactorText'][1:], index=None, columns=self.rateTables[company]['IncreasedLimitFactorText'][0]).rename(columns={'LiabilityLimitText': 'Combined Single Limit of Liability'})
 
-        limits_list = pd.read_excel(BA_INPUT_FILE, sheet_name="CSL Limits")
+        limits_list = pd.read_excel(FA_INPUT_FILE, sheet_name="CSL Limits")
 
         limits_list = limits_list[self.StateAbb].dropna().astype(float).apply(lambda x: f"{x:,.0f}").values
 
@@ -4561,7 +4561,7 @@ class Auto:
         DriveOtherFactors = DriveOtherFactors.rename(columns={'Constant':'Coverage','Factor':'Per Named'})
 
         # Filtering state specific coverages
-        um_info = pd.read_excel(BA_INPUT_FILE, sheet_name = "297 Map")
+        um_info = pd.read_excel(FA_INPUT_FILE, sheet_name = "297 Map")
         um_info = um_info[um_info["State"] == self.StateAbb]
         combined_text = um_info.apply(lambda x: ' '.join(str(v) for v in x), axis=1).str.cat(sep=' ').lower()
 
@@ -4631,11 +4631,11 @@ class Auto:
         PollutionFactors = PollutionFactors.sort_values(by=['Factor'])
         return PollutionFactors
 
-    # Builds RULE 126. BUSINESS AUTO PROTECTION ENDORSEMENTS
+    # Builds RULE 126. FARM AUTO PROTECTION ENDORSEMENTS
     # Returns a dataframe
     @log_exceptions
     def buildProtectionFactors(self, company):
-        ProtectionFactors = pd.DataFrame(self.rateTables[company]['BusinessAutoProtectionFactor_Ext'][1:], index=None, columns=self.rateTables[company]['BusinessAutoProtectionFactor_Ext'][0]).rename(columns={'Business Auto Protection Type': 'SubTypeCode','Factor': 'Premium'})
+        ProtectionFactors = pd.DataFrame(self.rateTables[company]['BusinessAutoProtectionFactor_Ext'][1:], index=None, columns=self.rateTables[company]['BusinessAutoProtectionFactor_Ext'][0]).rename(columns={'Farm Auto Protection Type': 'SubTypeCode','Factor': 'Premium'})
         ProtectionFactors['PremiumType']= "Multiply the Developed Policy Premium by the Following Factor:"
         ProtectionMinFactors = pd.DataFrame(self.rateTables[company]['MiscellaneousMinimumMaximumPremium_Ext'][1:], index=None, columns=self.rateTables[company]['MiscellaneousMinimumMaximumPremium_Ext'][0]).query(f'CoverageType == "CA7BusinessAutoProtection_Ext"').drop(columns='CoverageType')
         ProtectionMinFactors['PremiumType'].replace('Minimum', 'Minimum Premium Per Policy:', inplace=True)
@@ -5743,11 +5743,11 @@ class Auto:
         }
 
         if self.StateAbb == "OH" and table_num == 10:
-            state_mapper = pd.read_excel(BA_INPUT_FILE, sheet_name=sheet_names[table_num])
+            state_mapper = pd.read_excel(FA_INPUT_FILE, sheet_name=sheet_names[table_num])
             state_mapper = state_mapper[state_mapper["state"] == self.StateAbb]
 
         sheet_name = sheet_names[table_num]
-        limits_list = pd.read_excel(BA_INPUT_FILE, sheet_name="UM-UIM-UMPD Limits", header=[0, 1])
+        limits_list = pd.read_excel(FA_INPUT_FILE, sheet_name="UM-UIM-UMPD Limits", header=[0, 1])
 
         # Fill forward the merged state names (top-level headers)
         limits_list.columns = limits_list.columns.to_frame().ffill().apply(tuple, axis=1)
@@ -5755,7 +5755,7 @@ class Auto:
         # Combine the two header levels into a single string for each column
         limits_list.columns = [f"{state}_{coverage}" for state, coverage in limits_list.columns]
 
-        um_info = pd.read_excel(BA_INPUT_FILE, sheet_name="297 Map")
+        um_info = pd.read_excel(FA_INPUT_FILE, sheet_name="297 Map")
 
         subtitle_name = um_info[(um_info["State"] == self.StateAbb)][f"Table {table_num}"]
         subtitle_name = subtitle_name.values[0]
@@ -5780,7 +5780,7 @@ class Auto:
         elif UM_flag:
             limits_list = limits_list[f"{self.StateAbb}_UM"].dropna()
 
-        state_mapper = pd.read_excel(BA_INPUT_FILE, sheet_name=sheet_name)
+        state_mapper = pd.read_excel(FA_INPUT_FILE, sheet_name=sheet_name)
 
         if self.StateAbb in state_mapper["state"].values:
             state_mapper = state_mapper[state_mapper["state"] == self.StateAbb]
@@ -5898,8 +5898,8 @@ class Auto:
         }
 
         sheet_name = sheet_names[table_num]
-        state_mapper = pd.read_excel(BA_INPUT_FILE, sheet_name=sheet_name)
-        limits_list = pd.read_excel(BA_INPUT_FILE, sheet_name="UM-UIM-UMPD Limits", header=[0, 1])
+        state_mapper = pd.read_excel(FA_INPUT_FILE, sheet_name=sheet_name)
+        limits_list = pd.read_excel(FA_INPUT_FILE, sheet_name="UM-UIM-UMPD Limits", header=[0, 1])
 
         # Fill forward the merged state names (top-level headers)
         limits_list.columns = limits_list.columns.to_frame().ffill().apply(tuple, axis=1)
@@ -5907,7 +5907,7 @@ class Auto:
         # Combine the two header levels into a single string for each column
         limits_list.columns = [f"{state}_{coverage}" for state, coverage in limits_list.columns]
 
-        um_info = pd.read_excel(BA_INPUT_FILE, sheet_name="297 Map")
+        um_info = pd.read_excel(FA_INPUT_FILE, sheet_name="297 Map")
 
         subtitle_name = um_info[(um_info["State"] == self.StateAbb)][f"Table {table_num}"]
         subtitle_name = subtitle_name.values[0]
@@ -8430,7 +8430,7 @@ class Auto:
         ws.column_dimensions['B'].width = self.pixelsToInches(100)
         ws['A9'] = "454.B. Commercial Broad Form Endorsement School Bus Operators"
         ws['A10'] = ""
-        ws['A11'] = "Charge is " + str(MinPremFactor154) + " of the scheduled auto liability and physical damage premium under Business Auto Coverage form, subject to minimum premiums of " + str(MinPrem154) + ". Minimum premium is not subject to increased limit factors."
+        ws['A11'] = "Charge is " + str(MinPremFactor154) + " of the scheduled auto liability and physical damage premium under Farm Auto Coverage form, subject to minimum premiums of " + str(MinPrem154) + ". Minimum premium is not subject to increased limit factors."
         for cell in ws['9:9']:
             cell.font = fontItalic
         for cell in ws['11:11']:
@@ -9149,14 +9149,14 @@ class Auto:
     # Sets up the Auto Service Excel file using the Excel class
     # A separate worksheet is generated for each table, and most worksheets are manually formatted afterwards
     # Returns the Excel file
-    def buildBAPages(self):
+    def buildFAPages(self):
         companies = []
         for company in self.rateTables.keys():
             if company == 'CW' or company == "MM": # country-wide is not a company, so ignoring it
                 continue
             companies.append(company)
 
-        RatePages = ExcelSettingsBA.Excel(StateAbb=self.StateAbb, State=self.State, nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+        RatePages = ExcelSettingsFA.Excel(StateAbb=self.StateAbb, State=self.State, nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
 
         fontName = RatePages.getFontName()
         fontSize = RatePages.getFontSize()
@@ -9171,7 +9171,7 @@ class Auto:
         # Performing Nesting Procedure
         self.nesting()
         # Grabbing input for file for sheets that vary
-        state_sheet_exceptions = pd.read_excel(BA_INPUT_FILE, sheet_name=None, engine='openpyxl')
+        state_sheet_exceptions = pd.read_excel(FA_INPUT_FILE, sheet_name=None, engine='openpyxl')
 
         if self.StateAbb == "MT":
             print("Warning: Rule 297 will not be correct.")
@@ -9193,7 +9193,7 @@ class Auto:
             Fetches the appropriate sheet names for a given state from the rule_sheet.
             Falls back to 'Default' if no match is found for a coverage or if 'SPECIAL' is the only entry.
 
-            returns a list of table codes that require state specific items from the BA Input file.
+            returns a list of table codes that require state specific items from the FA Input file.
             """
 
             sheet_df = state_sheet_exceptions[rule_sheet]
@@ -10065,7 +10065,7 @@ class Auto:
             "Utility Task Vehicles": [0.600, 2.000, 2.000, 0.500, 0.850, 1.000, 1.000]
         }
 
-        um_info = pd.read_excel(BA_INPUT_FILE, sheet_name = "297 Map")
+        um_info = pd.read_excel(FA_INPUT_FILE, sheet_name = "297 Map")
         um_info = um_info[um_info["State"] == self.StateAbb]
 
         combined_text = um_info.apply(lambda x: ' '.join(str(v) for v in x), axis=1).str.cat(sep=' ').lower()
@@ -10209,7 +10209,7 @@ class Auto:
             if book != "Not found" and book is not None:
                 available_companies.append(company)
 
-        map_293 = pd.read_excel(BA_INPUT_FILE, sheet_name="293 Map", engine='openpyxl')
+        map_293 = pd.read_excel(FA_INPUT_FILE, sheet_name="293 Map", engine='openpyxl')
 
         # Create a tables_list for each company
         company_tables_list = {name: [] for name in available_companies}
@@ -10324,7 +10324,7 @@ class Auto:
             if book != "Not found" and book is not None:
                 available_companies.append(company)
 
-        map_297 = pd.read_excel('BA Input File.xlsx', sheet_name="297 Map", engine='openpyxl')
+        map_297 = pd.read_excel('FA Input File.xlsx', sheet_name="297 Map", engine='openpyxl')
 
         # Create a tables_list for each company
         company_tables_list = {name: [] for name in available_companies}
@@ -10786,7 +10786,7 @@ class Auto:
             if len(self.CompanyListDif) == 1:
                 self.title_company_name = ""
             RatePages.generateWorksheet('Rule 426 ' + self.title_company_name,
-                                        'RULE 426. BUSINESS AUTO PROTECTION ENDORSEMENTS ' + self.title_company_name,
+                                        'RULE 426. FARM AUTO PROTECTION ENDORSEMENTS ' + self.title_company_name,
                                         '426.B. Premium Computation', self.buildProtectionFactors(comp_name), False,
                                         True)
 
@@ -10853,7 +10853,7 @@ class Auto:
 
         #Rule 452
 
-        leaf_list = pd.read_excel(BA_INPUT_FILE, sheet_name="452 Leaf")
+        leaf_list = pd.read_excel(FA_INPUT_FILE, sheet_name="452 Leaf")
         show_leaf = np.bool(leaf_list[leaf_list["State"] == self.State].iloc[0,1]) # Lsit from product has full state names.
 
         if show_leaf:
@@ -10908,7 +10908,7 @@ class Auto:
 
         # #Rule T1 THIS HAS BEEN DISCONTINUED AS OF 1/28/2026.
         # # Try except because state list is missing.
-        # t1_exclude_list = pd.read_excel(BA_INPUT_FILE, sheet_name = "T1 Exclude")
+        # t1_exclude_list = pd.read_excel(FA_INPUT_FILE, sheet_name = "T1 Exclude")
         # has_t1 = True if self.StateAbb not in t1_exclude_list["State"].values else False
         #
         # if has_t1:
@@ -10919,7 +10919,7 @@ class Auto:
         #         if len(self.CompanyListDif) == 1:
         #             self.title_company_name = ""
         #
-        #         RatePages.generateWorksheet('Rule T1 ' + self.title_company_name, 'RULE T-1. BUSINESS AUTO TELEMATICS - ' + self.title_company_name,
+        #         RatePages.generateWorksheet('Rule T1 ' + self.title_company_name, 'RULE T-1. FARM AUTO TELEMATICS - ' + self.title_company_name,
         #                                     '', self.buildTelematicsFactors(comp_name), False, True)
         #
         #         self.overideFooter(RatePages.getWB()['Rule T1 ' + self.title_company_name], CompanyTest)
@@ -10941,7 +10941,7 @@ class Auto:
                 self.overideFooter(RatePages.getWB()['Rule A1'], self.default_company)
 
             # CT: Rule R1
-            df_raw = pd.read_excel(BA_INPUT_FILE, sheet_name="CT R1", header=None)
+            df_raw = pd.read_excel(FA_INPUT_FILE, sheet_name="CT R1", header=None)
             R1 = df_raw.fillna('')
             R1.columns = ['']*9 # Making columns blank.
 

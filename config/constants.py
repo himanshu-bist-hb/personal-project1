@@ -29,6 +29,10 @@ from pathlib import Path
 # full path must be given.
 BA_INPUT_FILE: str = "BA Input File.xlsx"
 
+# Farm Auto equivalent.  Mirrors the BA Input File but for the Farm
+# Auto line of business.  Must be in CWD or a full path must be given.
+FA_INPUT_FILE: str = "FA Input File.xlsx"
+
 
 # ===========================================================================
 #  NETWORK PATHS  (shared across all LoB files)

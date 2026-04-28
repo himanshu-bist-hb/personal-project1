@@ -1,5 +1,5 @@
 # ==============================================================================
-# BARatePages.py  —  Refactored & Optimized
+# FARatePages.py  —  Refactored & Optimized
 # ------------------------------------------------------------------------------
 # Changes summary (detailed explanation is in the comments below):
 #   1.  Removed unused / duplicate imports (sqlite3, xlwings, tabulate,
@@ -13,13 +13,13 @@
 #       Details" sheet ONCE and returns a typed NamedTuple — avoids repeating
 #       .iloc[row, col] magic numbers all over the place.
 #   5.  Replaced bare except / silent swallowing of errors with explicit
-#       logging so problems surface in BA Exceptions.log.
+#       logging so problems surface in FA Exceptions.log.
 #   6.  Replaced the hard-coded CW / NAICS paths with named constants at the
 #       top of the file so they are easy to find and change.
 #   7.  Used pathlib.Path for all file-path construction — safer
 #       cross-platform joins than f-string "/" concatenation.
 #   8.  Added type hints throughout for readability.
-#   9.  Kept every external call (BA.Auto, RatePages.buildBAPages,
+#   9.  Kept every external call (FA.Auto, RatePages.buildFAPages,
 #       process_pagebreaks) identical — zero behaviour change for callers.
 # ==============================================================================
 
@@ -42,15 +42,15 @@ from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.worksheet.cell_range import CellRange
 from openpyxl.worksheet.pagebreak import Break
 
-from . import BARates as BA
-from .BApagebreaks import process_pagebreaks, export_to_pdf
+from . import FARates as FA
+from .FApagebreaks import process_pagebreaks, export_to_pdf
 
 
 # ==============================================================================
 #  LOGGING
 # ==============================================================================
 logging.basicConfig(
-    filename="BA Exceptions.log",
+    filename="FA Exceptions.log",
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
@@ -196,7 +196,7 @@ def process_sheet(sheet) -> Tuple[Optional[str], Optional[List]]:
         2. Cell A1 ends with 'RR' (actuarial marker meaning "exclude this").
 
     Why start at row 12?
-        The BA format reserves the first 11 rows for headers, logos, and
+        The FA format reserves the first 11 rows for headers, logos, and
         branding.  Real rate data always starts at row 12.
 
     Why use B6 as the sheet identifier?
@@ -206,7 +206,7 @@ def process_sheet(sheet) -> Tuple[Optional[str], Optional[List]]:
     Single-column vs multi-column:
         If max_column == 1 (width == 0), a flat list is returned.
         Otherwise a list-of-lists is returned (one inner list per row).
-        This matches what BARates.Auto expects.
+        This matches what FARates.Auto expects.
     """
     # Guard 1 — skip the metadata sheet
     if sheet.title == DETAIL_SHEET:
@@ -435,16 +435,16 @@ def run(
 
     # ── 6. Build the Excel output ─────────────────────────────────────────────
     if progress_callback: progress_callback("Building Excel rate pages...")
-    rate_pages_obj = BA.Auto(
+    rate_pages_obj = FA.Auto(
         info.state_abb, info.state, rate_tables,
         info.n_effective, info.r_effective,
         naics_descriptions, SchedRatingMod,
     )
-    ba_workbook = rate_pages_obj.buildBAPages()
+    ba_workbook = rate_pages_obj.buildFAPages()
 
     # ── 7. Determine file names and save ──────────────────────────────────────
     if progress_callback: progress_callback("Saving Excel file...")
-    market    = "BA Middle Market Rate Pages" if MMRatebook else "BA Small Market Rate Pages"
+    market    = "FA Middle Market Rate Pages" if MMRatebook else "FA Small Market Rate Pages"
     out_dir   = Path(folder_selected)
     file_stem = f"{info.state_abb} {info.n_effective} {market}"
     xlsx_out  = str(out_dir / f"{file_stem}.xlsx")
@@ -487,5 +487,5 @@ def generate_pdf_only(xlsx_path: str, pdf_path: str, progress_callback: Optional
     elapsed = time.perf_counter() - t0
     if progress_callback:
         progress_callback(f"PDF created in {elapsed:0.1f}s — {os.path.basename(out)} 🎉")
-    print(f"[BARatePages] PDF generated: {out}")
+    print(f"[FARatePages] PDF generated: {out}")
     return out

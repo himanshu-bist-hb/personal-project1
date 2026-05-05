@@ -13,7 +13,10 @@
       "Bash(git mv *)",
       "Bash('venv\\\\Scripts\\\\python.exe' -c ' *)",
       "Bash(\"venv\\\\Scripts\\\\python.exe\" generate_fa_package.py)",
-      "Bash(\"venv\\\\Scripts\\\\python.exe\" wire_fa_into_app.py)"
+      "Bash(\"venv\\\\Scripts\\\\python.exe\" wire_fa_into_app.py)",
+      "Bash(taskkill /f /im excel.exe)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\" -Recurse -Filter \"*.py\")",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }

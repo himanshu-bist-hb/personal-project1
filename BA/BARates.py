@@ -9149,159 +9149,100 @@ class Auto:
     # Sets up the Auto Service Excel file using the Excel class
     # A separate worksheet is generated for each table, and most worksheets are manually formatted afterwards
     # Returns the Excel file
-    def buildBAPages(self):
-        companies = []
-        for company in self.rateTables.keys():
-            if company == 'CW' or company == "MM": # country-wide is not a company, so ignoring it
-                continue
-            companies.append(company)
 
-        RatePages = ExcelSettingsBA.Excel(StateAbb=self.StateAbb, State=self.State, nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+    # =========================================================================
+    # VA uses different rule subtitles in many places.  This class-level dict
+    # is the single place to update them if the VA manual changes.
+    # =========================================================================
+    _VA_RULE_SUBTITLES = {
+        "Rule 241": ["241.C.2.d. Mechanical Lift Factor",
+                     "241.C.3.c. Specified Causes of Loss Coverage Factor",
+                     "241.D.(c). Commercial Lay-up Credit"],
+        "Rule 267": ["267.B. Auto Body Manufacturers And Installers Factor:"],
+        "Rule 268": ["268. Driver Training Owned Auto Factors",
+                     "268.D.2.c. Instructors in Excess of Owned Autos Used For Driver Training Liability and Medical Payments Coverages",
+                     "268.D.2.(d).(2). Medical Expense Coverage Factors"],
+        "Rule 275": ["275.B.1.(a).(2).Charge the following premiums for the Applicable Vehicle Type:",
+                     "(1). Trucks, Tractors, and Trailers Factors",
+                     "(2). Private Passenger Types Factor",
+                     "(3).(a). Motorcycles Factors",
+                     "(3).(b). Snowmobiles Factors",
+                     "(3).(c). All Other Special Types Except Motor Homes Factors",
+                     "(5). Motor Homes Factors"],
+        "Rule 281": ["281.C.2. Premium Computation",
+                     "281.D. Cost of Hire Basis Coverage Factors",
+                     "281.E Rental Period Basis Factors"],
+        "Rule 301.A": [
+            "301.A. Zone-Rated Trailers Vehicle Value Factors - Collision with Actual Cash Value Rating",
+            "301.A. Zone-Rated Non-Trailers Vehicle Value Factors - Collision with Actual Cash Value Rating",
+            "301.A. Zone-Rated Private Passenger Types Vehicle Value Factors - Collision with Actual Cash Value Rating",
+            "301.A. Non-Zone-Rated Trailers Vehicle Value Factors - Collision with Actual Cash Value Rating",
+            "301.A. All Other Vehicle Value Factors - Collision with Actual Cash Value Rating",
+            "301.A. Zone-Rated Vehicles Vehicle Value Factors - Other Than Collision With Actual Cash Value Rating",
+            "301.A. Private Passenger Types Vehicle Value Factors - Other Than Collision With Actual Cash Value Rating",
+            "301.A.  All Other Vehicles Vehicle Value Factors - Other Than Collision With Actual Cash Value Rating",
+        ],
+        "Rule 301.B": [
+            "301.B. Zone-Rated Trailers Vehicle Value Factors - Collision with Stated Amount Rating",
+            "301.B. Zone-Rated Non-Trailers Vehicle Value Factors - Collision with Stated Amount Rating",
+            "301.B. Zone-Rated Vehicles Vehicle Value Factors - Other Than Collision with Stated Amount Rating",
+            "301.B. Private Passenger Types Vehicle Value Factors - Collision with Stated Amount Rating",
+            "301.B. Non-Zone-Rated Trailers Vehicle Value Factors - Collision with Stated Amount Rating",
+            "301.B. All Other Vehicles Vehicle Value Factors - Collision with Stated Amount Rating",
+            "301.B. Private Passenger Types Vehicle Value Factors - Other Than Collision with Stated Amount Rating",
+            "301.B. All Other Vehicles Vehicle Value Factors - Other Than Collision with Stated Amount Rating",
+        ],
+        "Rule 301.C.1": ["301.C.1. Liability Original Cost New Factors"],
+        "Rule 301.C.2/3": [
+            "301.C.2 Liability Vehicle Age Factors - Original Cost New Vehicles",
+            "301.C.3 Liability Vehicle Age Factors - Stated Amount Vehicles",
+        ],
+    }
 
-        fontName = RatePages.getFontName()
-        fontSize = RatePages.getFontSize()
+    def _sheet_fetch(self, rule_sheet, state_sheet_exceptions):
+        """
+        Look up the sheet names for the current state from the BA Input File
+        exception tables (the pre-loaded state_sheet_exceptions dict).
 
-        ################################################################################################################################################################################
-        #Generates a tab for each rate page
-        #Pages with multiple tables on the same page need to be added and customized via the table specific functions in the ExcelSetting.py program
-        #Creates additional tables for the Migration Companies if the table values differ from NGIC
-        #Comment out any of the below Rules if they are not needed for your state or delete if they are no longer offered
-        ################################################################################################################################################################################
+        Falls back to 'Default' rows for any coverage not already listed for
+        this state.  Returns a list of ratebook table-code strings.
+        """
+        sheet_df = state_sheet_exceptions[rule_sheet]
+        state_rows_df   = sheet_df[sheet_df["state"] == self.StateAbb]
+        default_rows_df = sheet_df[sheet_df["state"] == "Default"]
+        state_coverages = set(
+            state_rows_df["coverage"].dropna().astype(str).str.strip().tolist()
+        )
+        supplemental_default_df = default_rows_df[
+            ~default_rows_df["coverage"].astype(str).str.strip().isin(state_coverages)
+        ]
+        combined = pd.concat([state_rows_df, supplemental_default_df], ignore_index=True)
+        sheet_list = (
+            combined["sheet"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+        )
+        sheet_list = sheet_list[
+            ~sheet_list.eq("") & ~sheet_list.str.casefold().eq("nan")
+        ].tolist()
 
-        # Performing Nesting Procedure
-        self.nesting()
-        # Grabbing input for file for sheets that vary
-        state_sheet_exceptions = pd.read_excel(BA_INPUT_FILE, sheet_name=None, engine='openpyxl')
+        if "SPECIAL" in sheet_list:
+            non_specials = [s for s in sheet_list if s != "SPECIAL"]
+            if not non_specials:
+                return (
+                    default_rows_df["sheet"]
+                    .dropna()
+                    .astype(str)
+                    .str.strip()
+                    .replace("nan", "")
+                    .tolist()
+                )
+            return non_specials
 
-        if self.StateAbb == "MT":
-            print("Warning: Rule 297 will not be correct.")
+        return sheet_list
 
-        if self.StateAbb == "DC":
-            print("Warning: Additional PIP Base Rate Tables for 222, 232, 239 will be absent.")
-
-        if (self.StateAbb == "MI"):
-            print("Warning: Base Rate Formatting incomplete. 298 has special exceptions not yet built.")
-
-        if  (self.StateAbb == "VA"):
-            print("Warning: Due to large shifts in manual presentation, this manual is incomplete.")
-
-        if (self.StateAbb == "NY") or (self.StateAbb == "CA"):
-            print("Warning: Rule 297 for this state was not built out.")
-
-        def sheet_fetch(rule_sheet):
-            """
-            Fetches the appropriate sheet names for a given state from the rule_sheet.
-            Falls back to 'Default' if no match is found for a coverage or if 'SPECIAL' is the only entry.
-
-            returns a list of table codes that require state specific items from the BA Input file.
-            """
-
-            sheet_df = state_sheet_exceptions[rule_sheet]
-
-            # --- State and Default dataframes ---
-            state_rows_df = sheet_df[sheet_df["state"] == self.StateAbb]
-            default_rows_df = sheet_df[sheet_df["state"] == "Default"]
-
-            # --- Determine coverage already included by state ---
-            state_coverages = set(
-                state_rows_df["coverage"].dropna().astype(str).str.strip().tolist()
-            )
-
-            # --- Default rows to supplement (coverage NOT already in state) ---
-            supplemental_default_df = default_rows_df[
-                ~default_rows_df["coverage"].astype(str).str.strip().isin(state_coverages)
-            ]
-
-            # --- Combine state + supplemental default ---
-            combined = pd.concat([state_rows_df, supplemental_default_df], ignore_index=True)
-
-            # --- Convert to a cleaned list of sheet names ---
-            sheet_list = (
-                combined["sheet"]
-                .dropna()
-                .astype(str)
-                .str
-                .strip()
-            )
-
-            sheet_list = sheet_list[~sheet_list.eq("") & ~sheet_list.str.casefold().eq("nan")].tolist()
-
-            # --- SPECIAL logic ---
-            if "SPECIAL" in sheet_list:
-                non_specials = [s for s in sheet_list if s != "SPECIAL"]
-
-                if not non_specials:
-                    # SPECIAL is the only item → fallback to Default
-                    return (
-                        default_rows_df["sheet"]
-                        .dropna()
-                        .astype(str)
-                        .str.strip()
-                        .replace("nan", "")
-                        .tolist()
-                    )
-                else:
-                    # SPECIAL + others → drop SPECIAL
-                    return non_specials
-
-            # --- Normal case ---
-            return sheet_list
-
-        # VA has many different rule numberings. This dictionary is to prevent lots of potential ugliness in the code later.
-        # This can quite easily be modified, or other dictionaries added, to support other states as well
-        VARules = {
-            # "Rule VAPCD": ["VAPCD.E. Premium Computation"],
-            # "Rule 222.C": ["222.C.2.b. Liability Fleet Size Factors", "222.C.3.d. Collision Fleet Size Factors", "222.C.3.d. Other Than Collision Fleet Size Factors"],
-            # "Rule 223.B.5": ["223.B.5. Primary Classification Factors and Statistical Codes - Truck, Tractors, and Trailers"],
-            # "Rule 223.C.": ["223.C.2. Secondary Classification Factors "],
-            # 222.C skipped for now
-            # 222.D skipped for now
-            # 224 skipped for now
-            # 240 skipped for now
-            "Rule 241": ["241.C.2.d. Mechanical Lift Factor", "241.C.3.c. Specified Causes of Loss Coverage Factor",
-                         "241.D.(c). Commercial Lay-up Credit"],
-            "Rule 267": ["267.B. Auto Body Manufacturers And Installers Factor:"],
-            "Rule 268": ["268. Driver Training Owned Auto Factors",
-                         "268.D.2.c. Instructors in Excess of Owned Autos Used For Driver Training Liability and Medical Payments Coverages",
-                         "268.D.2.(d).(2). Medical Expense Coverage Factors"],
-            "Rule 275": ["275.B.1.(a).(2).Charge the following premiums for the Applicable Vehicle Type:",
-                                         "(1). Trucks, Tractors, and Trailers Factors",
-                                         "(2). Private Passenger Types Factor",
-                                         "(3).(a). Motorcycles Factors",
-                                         "(3).(b). Snowmobiles Factors",
-                                         "(3).(c). All Other Special Types Except Motor Homes Factors",
-                                         "(5). Motor Homes Factors"],
-            "Rule 281": ["281.C.2. Premium Computation", "281.D. Cost of Hire Basis Coverage Factors",
-                         "281.E Rental Period Basis Factors"],
-            # 283 skipped for now
-            # "Rule 288": ["288.B.7. Individual Named Insured "],
-            # "Rule 289": ["289.C.1.a.(2). Other Than Social Service Agency Risks", "289.C.1.b. Extended Non-Ownership Liability Employee Coverage Factor", "289.C.1.c.(2). Partnership and LLC Non-ownership Liability Coverage Factor", "289.C.1.d.(2). Non-ownership Liability Coverage Factor", "289.C.1.e.(3).(c) Food or Goods Delivery Risks", "289 C.1.e.(3).(e). Apply the following factors for higher limits:", "289.C.1.e.(3).(f)", "289.C.2. Social Service Agency Risks"],
-            # 290 skipped for now
-            # 292 skipped for now
-            # "Rule 294": ["294.B.3. Rate per $100 limit for the selected coverage:"],
-            # "Rule 295": ["295.B.2.a. Audio, Visual and Data Electronic Equipment"],
-            # "Rule 300": ["300.C. Increased Limit Factors"]
-            "Rule 301.A": ["301.A. Zone-Rated Trailers Vehicle Value Factors - Collision with Actual Cash Value Rating",
-                        "301.A. Zone-Rated Non-Trailers Vehicle Value Factors - Collision with Actual Cash Value Rating",
-                        "301.A. Zone-Rated Private Passenger Types Vehicle Value Factors - Collision with Actual Cash Value Rating",
-                        "301.A. Non-Zone-Rated Trailers Vehicle Value Factors - Collision with Actual Cash Value Rating",
-                        "301.A. All Other Vehicle Value Factors - Collision with Actual Cash Value Rating",
-                        "301.A. Zone-Rated Vehicles Vehicle Value Factors - Other Than Collision With Actual Cash Value Rating",
-                        "301.A. Private Passenger Types Vehicle Value Factors - Other Than Collision With Actual Cash Value Rating",
-                        "301.A.  All Other Vehicles Vehicle Value Factors - Other Than Collision With Actual Cash Value Rating"],
-            "Rule 301.B": ["301.B. Zone-Rated Trailers Vehicle Value Factors - Collision with Stated Amount Rating",
-                        "301.B. Zone-Rated Non-Trailers Vehicle Value Factors - Collision with Stated Amount Rating",
-                        "301.B. Zone-Rated Vehicles Vehicle Value Factors - Other Than Collision with Stated Amount Rating",
-                        "301.B. Private Passenger Types Vehicle Value Factors - Collision with Stated Amount Rating",
-                        "301.B. Non-Zone-Rated Trailers Vehicle Value Factors - Collision with Stated Amount Rating",
-                        "301.B. All Other Vehicles Vehicle Value Factors - Collision with Stated Amount Rating",
-                        "301.B. Private Passenger Types Vehicle Value Factors - Other Than Collision with Stated Amount Rating",
-                        "301.B. All Other Vehicles Vehicle Value Factors - Other Than Collision with Stated Amount Rating"],
-            "Rule 301.C.1": ["301.C.1. Liability Original Cost New Factors"],
-            "Rule 301.C.2/3": ["301.C.2 Liability Vehicle Age Factors - Original Cost New Vehicles",
-                        "301.C.3 Liability Vehicle Age Factors - Stated Amount Vehicles"]
-        }
-
+    def _page_rule_vapcd(self, RatePages, state_sheet_exceptions):
         # Rule VAPCD
         if self.StateAbb == "VA":
             self.compareCompanies('AccidentPreventionDiscountFactorVA_Ext')
@@ -9313,6 +9254,8 @@ class Auto:
                 RatePages.generateWorksheet('Rule VAPCD '+ self.title_company_name, 'RULE VAPCD. VIRGINIA ACCIDENT PREVENTION COURSE DISCOUNT ' + self.title_company_name, 'VAPCD.E. Premium Computation', self.buildVAPCD(comp_name), False, True)
                 self.overideFooter(RatePages.getWB()['Rule VAPCD '+ self.title_company_name],CompanyTest)
 
+
+    def _page_rule_208(self, RatePages):
         #Rule 208
         self.compareCompanies('ExpenseConstant_Ext')
         for CompanyTest in self.CompanyListDif: # List of company clusters "XXXX,XXXXX,...."
@@ -9323,8 +9266,10 @@ class Auto:
             RatePages.generateWorksheet('Rule 208 '+ self.title_company_name, 'RULE 208. EXPENSE CONSTANT ' + self.title_company_name, '208.B. Rate and Premium Computation', self.buildExpenseConstant(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 208 '+ self.title_company_name],CompanyTest)
 
+
+    def _page_rule_222_ttt_base_rates(self, RatePages, state_sheet_exceptions):
         #Rule 222 Premium
-        sheet_to_compare = sheet_fetch("222 TTT")
+        sheet_to_compare = self._sheet_fetch("222 TTT", state_sheet_exceptions)
 
         self.compareCompanies(sheet_to_compare)
         for CompanyTest in self.CompanyListDif:
@@ -9337,6 +9282,12 @@ class Auto:
             RatePages.generateWorksheet('Rule 222 TTT BR '+ self.title_company_name, 'RULE 222. TRUCKS, TRACTORS, AND TRAILERS BASE RATES '+ self.title_company_name, ' ', self.buildBaseRates(comp_name, "TTT"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 222 TTT BR '+ self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 222 TTT'):
+                self.formatBaseRates(_wb[_sn], "222")
+
+    def _page_rule_222b(self, RatePages):
         #Rule 222 B
         self.compareCompanies(["LiabilityFleetSizeFactors_Ext","CollisionFleetSizeFactor_Ext","ComprehensiveAndSpecifiedCausesOfLossFleetSizeFactor_Ext"])
         for CompanyTest in self.CompanyListDif:
@@ -9349,6 +9300,12 @@ class Auto:
             RatePages.generateWorksheet3tables('Rule 222 B '+ self.title_company_name, 'RULE 222. PREMIUM DEVELOPMENT - TRUCK, TRACTOR, TRAILER TYPES ' + self.title_company_name, '222.B.1.a. Liability Fleet Size Factors', self.buildTTTLiabFleetFactors(comp_name), self.buildTTTPhysDamFleetFactors(comp_name), self.buildTTTOTCFleetFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 222 B '+ self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 222 B'):
+                self.format222B(_wb[_sn])
+
+    def _page_rule_222c(self, RatePages):
         #Rule 222 C
         self.compareCompanies(["ShowroomLiabilityFactor","TrucksAndTruckTractorsCollisionHeavyDumpingFactor_Ext","TruckDumpingRelativity", "TrucksAndTruckTractorsCollisionHeavyFarmingFactor_Ext"])
         for CompanyTest in self.CompanyListDif:
@@ -9370,6 +9327,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 222 C'+ self.title_company_name, 'RULE 222.C  TRUCKS, TRACTORS, TRAILERS CLASSIFICATION - Special Provisions for Certain Risks ' + self.title_company_name, subtitles, tables,False, True)
             self.overideFooter(RatePages.getWB()['Rule 222 C' + self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 222 C'):
+                self.format222C(_wb[_sn])
+
+    def _page_rule_222e(self, RatePages):
         #Rule 222 E
         self.compareCompanies("AutoLayUpFactor_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -9386,6 +9349,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 222 E'+ self.title_company_name, 'RULE 222.E PREMIUM DEVELOPMENT - TRUCK, TRACTOR, TRAILER TYPES ' + self.title_company_name, subtitles, tables,False, True)
             self.overideFooter(RatePages.getWB()['Rule 222 E' + self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 222 E'):
+                self.format222E(_wb[_sn])
+
+    def _page_rule_223b5(self, RatePages):
         #Rule 223 B.5
         # Below has been adjusted such that the zone is deleted in the format function. It's easier than rewriting the function.
         self.compareCompanies("TrucksTractorsAndTrailersPrimaryFactors_Ext")
@@ -9399,6 +9368,12 @@ class Auto:
             RatePages.generateWorksheet23B('Rule 223 B.5 '+ self.title_company_name, 'RULE 223. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION ' + self.title_company_name, '223.B.5. Primary Classification Factors and Statistical Codes - Truck, Tractors, and Trailers', self.buildPrimaryFactors(comp_name), self.buildZonePrimaryFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 223 B.5 '+ self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 223 B.5'):
+                self.format23B(_wb[_sn])
+
+    def _page_rule_223c(self, RatePages):
         #Rule 223 C
         self.compareCompanies("TrucksTractorsAndTrailersSecondaryFactorsLiabilityComprehensiveAndSCOL_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -9411,6 +9386,12 @@ class Auto:
             RatePages.generateWorksheet('Rule 223 C '+ self.title_company_name, 'RULE 223. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION ' + self.title_company_name, '223.C.4. Secondary Classification Factors ', self.buildTTTSecondaryFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 223 C '+ self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 223 C'):
+                self.format23C(_wb[_sn])
+
+    def _page_rule_225c2(self, RatePages):
         #Rule 225 C.2
         self.compareCompanies("TrucksTractorsAndTrailersPrimaryFactors_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -9428,6 +9409,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 225.C.2 ' + self.title_company_name,title_start + self.title_company_name, subtitles, tables,False, True)
             self.overideFooter(RatePages.getWB()['Rule 225.C.2 ' + self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 225.C.2'):
+                self.format225C2(_wb[_sn])
+
+    def _page_rule_225c3(self, RatePages):
         # Rule 225 C.3
         self.compareCompanies("Secondary Classification Factors Zone Rated_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -9447,6 +9434,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 225.C.3 ' + self.title_company_name,title_start + self.title_company_name, subtitles, tables,False, True)
             self.overideFooter(RatePages.getWB()['Rule 225.C.3 ' + self.title_company_name],CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 225.C.3'):
+                self.format225C3(_wb[_sn])
+
+    def _page_rule_225_zone_br(self, RatePages):
         # Rule 225
         self.compareCompanies(["ZoneRatedLiabilityBasePremium","ZoneRatedCollisionBasePremium","ZoneRatedOtherThanCollisionBasePremium"])
         for CompanyTest in self.CompanyListDif:
@@ -9481,6 +9474,12 @@ class Auto:
                                                subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 225 Zone BR' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 225 Zone'):
+                self.formatZoneRates(_wb[_sn])
+
+    def _page_rule_225d(self, RatePages):
         # #Rule 225 D
         self.compareCompanies("AutoLayUpFactor_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -9504,6 +9503,12 @@ class Auto:
                                                subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 225.D ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 225.D'):
+                self.format225D(_wb[_sn])
+
+    def _page_rule_231c(self, RatePages):
         #Rule 231 C
         self.compareCompanies(["PrivatePassengerClassCode","PrivatePassengerTypesClassFactors_Ext"])
         for CompanyTest in self.CompanyListDif:
@@ -9516,8 +9521,14 @@ class Auto:
             RatePages.generateWorksheet('Rule 231 C ' + self.title_company_name,'RULE 231. PRIVATE PASSENGER TYPES ' + self.title_company_name,'231.C.2.d. Use and Operator Experience Factors', self.build231C(comp_name),False, True)
             self.overideFooter(RatePages.getWB()['Rule 231 C ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 231 C'):
+                self.format31C(_wb[_sn])
+
+    def _page_rule_232_ppt_base_rates(self, RatePages, state_sheet_exceptions):
         #Rule 232
-        sheet_to_compare = sheet_fetch("232 PPT")
+        sheet_to_compare = self._sheet_fetch("232 PPT", state_sheet_exceptions)
 
         self.compareCompanies(sheet_to_compare)
         for CompanyTest in self.CompanyListDif:
@@ -9530,6 +9541,12 @@ class Auto:
             RatePages.generateWorksheet('Rule 232 PPT BR '+ self.title_company_name, 'RULE 232. PRIVATE PASSENGER BASE RATES ' + self.title_company_name, ' ', self.buildBaseRates(comp_name, "PPT"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 232 PPT BR ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 232 PPT'):
+                self.formatBaseRates(_wb[_sn], "232")
+
+    def _page_rule_232b(self, RatePages):
         #Rule 232 B
 
         self.compareCompanies(["LiabilityFleetSizeFactors_Ext","CollisionFleetSizeFactor_Ext","ComprehensiveAndSpecifiedCausesOfLossFleetSizeFactor_Ext"])
@@ -9543,6 +9560,12 @@ class Auto:
             RatePages.generateWorksheet2tables('Rule 232 B '+ self.title_company_name, 'RULE 232. PREMIUM DEVELOPMENT - PRIVATE PASSENGER TYPES ' + self.title_company_name, '232.B.1.b. Liability Fleet Size Factors', self.buildPPTLiabFleetFactors(comp_name), '232.B.4.d. Physical Damage Fleet Size Factors', self.buildPPTPhysDamFleetFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 232 B ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 232 B'):
+                self.format32B(_wb[_sn])
+
+    def _page_rule_233(self, RatePages):
         #Rule 233
         self.compareCompanies("PrivatePassengerFarmFactor2")
         for CompanyTest in self.CompanyListDif:
@@ -9555,8 +9578,14 @@ class Auto:
             RatePages.generateWorksheet('Rule 233 '+ self.title_company_name, 'RULE 233. PRIVATE PASSENGER TYPES CLASSIFICATIONS - FARM ' + self.title_company_name, '233.B.2. Farm Use - Fleet Vehicle Factors (class code 7399)', self.buildPPTFarmTypes(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 233 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 233'):
+                self.format33(_wb[_sn])
+
+    def _page_rule_239_school_bus_br(self, RatePages, state_sheet_exceptions):
         #Rule 239 School Bus Premium
-        sheet_to_compare = sheet_fetch("239 School Buses")
+        sheet_to_compare = self._sheet_fetch("239 School Buses", state_sheet_exceptions)
 
         self.compareCompanies(sheet_to_compare)
         for CompanyTest in self.CompanyListDif:
@@ -9568,8 +9597,14 @@ class Auto:
             RatePages.generateWorksheet('Rule 239 SB BR '+ self.title_company_name, 'RULE 239. SCHOOL AND CHURCH BUSES BASE RATES ' + self.title_company_name, ' ', self.buildBaseRates(comp_name, "School Buses"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 239 SB BR ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 239 SB'):
+                self.formatBaseRates(_wb[_sn], "239")
+
+    def _page_rule_239_other_bus_br(self, RatePages, state_sheet_exceptions):
         #Rule 239 Other Bus Premium
-        sheet_to_compare = sheet_fetch("239 Other Buses")
+        sheet_to_compare = self._sheet_fetch("239 Other Buses", state_sheet_exceptions)
         self.compareCompanies(sheet_to_compare)
 
         for CompanyTest in self.CompanyListDif:
@@ -9581,8 +9616,14 @@ class Auto:
             RatePages.generateWorksheet('Rule 239 OB BR '+ self.title_company_name, 'RULE 239. ALL OTHER BUSES BASE RATES ' + self.title_company_name, ' ', self.buildBaseRates(comp_name, "Other Buses"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 239 OB BR '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 239 OB'):
+                self.formatBaseRates(_wb[_sn], "239")
+
+    def _page_rule_239_van_pool_br(self, RatePages, state_sheet_exceptions):
         #Rule 239 Van Bus Premium
-        sheet_to_compare = sheet_fetch("239 Van Pools")
+        sheet_to_compare = self._sheet_fetch("239 Van Pools", state_sheet_exceptions)
 
         self.compareCompanies(sheet_to_compare)
         for CompanyTest in self.CompanyListDif:
@@ -9594,8 +9635,14 @@ class Auto:
             RatePages.generateWorksheet('Rule 239 VP BR '+ self.title_company_name, 'RULE 239. VAN POOLS BASE RATES ' + self.title_company_name, ' ', self.buildBaseRates(comp_name, "Van Pools"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 239 VP BR ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 239 VP'):
+                self.formatBaseRates(_wb[_sn], "239")
+
+    def _page_rule_239_taxi_br(self, RatePages, state_sheet_exceptions):
         #Rule 239 Taxi Premium
-        sheet_to_compare = sheet_fetch("239 Taxis")
+        sheet_to_compare = self._sheet_fetch("239 Taxis", state_sheet_exceptions)
         self.compareCompanies(sheet_to_compare)
         for CompanyTest in self.CompanyListDif:
             comp_name = self.extract_company_name(CompanyTest)
@@ -9606,6 +9653,12 @@ class Auto:
             RatePages.generateWorksheet('Rule 239 T-L BR '+ self.title_company_name, 'RULE 239. TAXICABS AND LIMOUSINES BASE RATES ' + self.title_company_name, ' ', self.buildBaseRates(comp_name, "Taxis"), False, True )
             self.overideFooter(RatePages.getWB()['Rule 239 T-L BR ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 239 T-L'):
+                self.formatBaseRates(_wb[_sn], "239")
+
+    def _page_rule_239c(self, RatePages):
         #Rule 239 C
         self.compareCompanies(["PublicTypesFleetSizeFactorsForLiabilityAndMedicalPayments_Ext",
                                "PublicTransportationCollisionFleetSizeFactor_Ext",
@@ -9630,6 +9683,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 239 C '+ self.title_company_name, 'RULE 239. PUBLIC AUTO PREMIUM DEVELOPMENT - OTHER THAN ZONE-RATED AUTOS ' + self.title_company_name, subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 239 C ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 239 C'):
+                self.format239C(_wb[_sn])
+
+    def _page_rule_239d(self, RatePages):
         #Rule 239 D
 
         self.compareCompanies("AutoLayUpFactor_Ext")
@@ -9646,6 +9705,8 @@ class Auto:
             RatePages.generateWorksheet('Rule 239 D '+ self.title_company_name, title_start + self.title_company_name, '239.D.1.c. Commercial Lay-up Credit', self.buildLayupFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 239 D '+ self.title_company_name], CompanyTest)
 
+
+    def _page_rule_240(self, RatePages):
         #Rule 240
         self.compareCompanies(["PublicTransportationLiabilityPrimaryFactor","PublicTransportationPhysicalDamagePrimaryFactor"])
         for CompanyTest in self.CompanyListDif:
@@ -9664,6 +9725,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 240 '+ self.title_company_name, 'RULE 240. PUBLIC AUTO CLASSIFICATIONS' + self.title_company_name, subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 240 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 240'):
+                self.format240(_wb[_sn])
+
+    def _page_rule_241(self, RatePages):
         #Rule 241
         self.compareCompanies(["AutoLayUpFactor_Ext","MechanicalLiftFactorOtherThanZoneRated"])
         for CompanyTest in self.CompanyListDif:
@@ -9673,7 +9740,7 @@ class Auto:
                 self.title_company_name = ""  # Every Company, no point in putting in sheet name.
 
             if self.StateAbb == "VA":
-                subtitles = VARules["Rule 241"]
+                subtitles = self._VA_RULE_SUBTITLES["Rule 241"]
             else:
                 subtitles = ['241.D.1.d Mechanical Lift Factor',
                              '241.E.1.c. Commercial Lay-up Credit']
@@ -9689,6 +9756,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 241 '+ self.title_company_name, 'RULE 241. PUBLIC AUTO PREMIUM DEVELOPMENT - ZONE-RATED AUTOS ' + self.title_company_name, subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 241 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 241'):
+                self.format241(_wb[_sn])
+
+    def _page_rule_243(self, RatePages):
         # Rule 243
         self.compareCompanies("FarmLaborContractorPassengerHazardFactor")
         if self.StateAbb == "FL" or self.StateAbb == "VA":
@@ -9707,6 +9780,12 @@ class Auto:
                                                    subtitles, tables, False, True)
                 self.overideFooter(RatePages.getWB()['Rule 243 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 243'):
+                self.format243(_wb[_sn])
+
+    def _page_rule_255(self, RatePages):
         #Rule 255
         self.compareCompanies(["GaragekeepersOtherThanCollisionPreliminaryBasePremium",
                                "GaragekeepersOtherThanCollisionDeductibleFactor",
@@ -9720,6 +9799,14 @@ class Auto:
             RatePages.generateWorksheet3tables('Rule 255 '+ self.title_company_name, 'RULE 255. GARAGEKEEPERS INSURANCE ' + self.title_company_name, '255.C. Rates', self.buildGarageKeepers1(comp_name), self.buildGarageKeepers2(comp_name), self.buildGarageKeepers3(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 255 '+ self.title_company_name], CompanyTest)
 
+        fn = RatePages.getFontName()
+        fs = RatePages.getFontSize()
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 255'):
+                self.format55(_wb[_sn], Font(name=fn, size=fs, bold=True))
+
+    def _page_rule_264(self, RatePages):
         #Rule 264
         self.compareCompanies("SpecialTypesAntiqueAutoFactor")
         for CompanyTest in self.CompanyListDif:
@@ -9734,6 +9821,12 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 264 '+ self.title_company_name, 'RULE 264. AMBULANCE SERVICES ' + self.title_company_name, subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 264 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 264'):
+                self.formatAmbulance(_wb[_sn])
+
+    def _page_rule_266(self, RatePages):
         #Rule 266
         self.compareCompanies(["SpecialTypesAntiqueAutoFactor","SpecialTypesAntiquePhysicalDamageRate_Ext"])
         for CompanyTest in self.CompanyListDif:
@@ -9745,6 +9838,12 @@ class Auto:
             RatePages.generateWorksheet2tables('Rule 266 '+ self.title_company_name, 'RULE 266. ANTIQUE AUTOS ' + self.title_company_name, 'Liability and Basic No-Fault', self.buildAntiqueAutoLiabFactors(comp_name), 'Physical Damage', self.buildAntiqueAutoPDRates(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 266 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 266'):
+                self.formatANTIQUEAUTOS(_wb[_sn])
+
+    def _page_rule_267(self, RatePages):
         # Rule 267
         self.compareCompanies("SpecialTypesAutoBodyFactor")
         if self.StateAbb == "FL" or self.StateAbb == "VA":
@@ -9755,7 +9854,7 @@ class Auto:
                     self.title_company_name = ""  # Every Company, no point in putting in sheet name.
 
                 if self.StateAbb == "VA":
-                    subtitles = VARules["Rule 267"]
+                    subtitles = self._VA_RULE_SUBTITLES["Rule 267"]
                 else:
                     subtitles = ['267.B.2. Auto Body Manufacturers And Installers Factor:']
 
@@ -9766,6 +9865,12 @@ class Auto:
                                                    subtitles, tables, False, True)
                 self.overideFooter(RatePages.getWB()['Rule 267 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 267'):
+                self.format267(_wb[_sn])
+
+    def _page_rule_268(self, RatePages):
         #Rule 268
         self.compareCompanies(["SpecialTypesDriverTrainingFactor",
                                "DriverTrainingLiabilityAndMedicalPaymentsCoveragesFactor",
@@ -9778,7 +9883,7 @@ class Auto:
                 self.title_company_name = ""  # Every Company, no point in putting in sheet name.
 
             if self.StateAbb == "VA":
-                subtitles = VARules["Rule 268"]
+                subtitles = self._VA_RULE_SUBTITLES["Rule 268"]
             else:
                 subtitles = ["268.C. Driver Training Owned Auto Factors",
                              "268.E.2.c.(3). Instructors in Excess of Owned Autos Used For Driver Training Liability and Medical Payments Coverages",
@@ -9791,6 +9896,14 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 268 '+ self.title_company_name], CompanyTest)
 
+        fn = RatePages.getFontName()
+        fs = RatePages.getFontSize()
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 268'):
+                self.format68(_wb[_sn], Font(name=fn, size=fs, bold=True))
+
+    def _page_rule_269(self, RatePages):
         # Rule 269
         self.compareCompanies("SpecialTypesDriveAwayContractorFactor")
         if self.StateAbb == "FL" or self.StateAbb == "VA":
@@ -9808,6 +9921,12 @@ class Auto:
                                                    'RULE 269. DRIVE-AWAY CONTRACTORS ' + self.title_company_name,
                                                    subtitles, tables, False, True)
                 self.overideFooter(RatePages.getWB()['Rule 269 ' + self.title_company_name], CompanyTest)
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 269'):
+                self.format269(_wb[_sn])
+
+    def _page_rule_271(self, RatePages):
         #Rule 271
         self.compareCompanies(["SpecialTypesFireDepartmentFactor","SpecialTypesEmergencyVehicleBuybackFactor"])
         for CompanyTest in self.CompanyListDif:
@@ -9827,6 +9946,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 271 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 271'):
+                self.formatFireDepartments(_wb[_sn])
+
+    def _page_rule_272(self, RatePages):
         #Rule 272
         self.compareCompanies(["SpecialTypesFuneralDirectorFactor","FuneralDirectorMedicalPaymentsHiredNonOwnedFactor"])
         for CompanyTest in self.CompanyListDif:
@@ -9846,6 +9971,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 272 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 272'):
+                self.format72(_wb[_sn])
+
+    def _page_rule_273(self, RatePages):
         #Rule 273
         self.compareCompanies("SpecialTypesGolfCartsAndLowSpeedVehiclesFactor")
         for CompanyTest in self.CompanyListDif:
@@ -9857,6 +9988,12 @@ class Auto:
             RatePages.generateWorksheet('Rule 273 '+ self.title_company_name, 'RULE 273. GOLF CARTS AND LOW SPEED VEHICLES ' + self.title_company_name, '273.C. Premium Computation',  self.buildSpecialGolfandLow(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 273 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 273'):
+                self.format73(_wb[_sn])
+
+    def _page_rule_274(self, RatePages):
         # Rule 274
 
         self.compareCompanies(["SpecialTypesLawEnforcementFactor","SpecialTypesEmergencyVehicleBuybackFactor"])
@@ -9874,12 +10011,18 @@ class Auto:
             RatePages.generateWorksheetTablesX('Rule 274 ' + self.title_company_name,'RULE 274. LAW ENFORCEMENT AGENCIES ' + self.title_company_name, subtitles, tables,False, True)
             self.overideFooter(RatePages.getWB()['Rule 274 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 274'):
+                self.format274(_wb[_sn])
+
+    def _page_rule_275(self, RatePages):
         #Rule 275
         if self.StateAbb == "VA":
             self.compareCompanies("LeasingOrRentalConcernsContingentBasePremium_Ext")
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
-                subtitles = VARules["Rule 275"]
+                subtitles = self._VA_RULE_SUBTITLES["Rule 275"]
                 tables = [self.buildLeasingOrRentalConcernsFactors(comp_name),
                           self.buildRule275VA_TTTFactors(comp_name),
                           self.buildRule275VA_PPTFactors(comp_name),
@@ -9905,6 +10048,14 @@ class Auto:
                                             self.buildLeasingOrRentalConcernsFactors(comp_name), False, True)
                 self.overideFooter(RatePages.getWB()['Rule 275 ' + self.title_company_name], CompanyTest)
 
+        fn = RatePages.getFontName()
+        fs = RatePages.getFontSize()
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 275'):
+                self.formatLEASINGORRENTALCONCERNS(_wb[_sn], Font(name=fn, size=fs, italic=True))
+
+    def _page_rule_276(self, RatePages):
         #Rule 276
 
         self.compareCompanies(["SpecialTypesMobileHomeFactor","MobileHomesAdditionalCoveragesFactor"])
@@ -9923,6 +10074,12 @@ class Auto:
                                                tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 276 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 276'):
+                self.format276(_wb[_sn])
+
+    def _page_rule_277(self, RatePages):
         #Rule 277
         self.compareCompanies(["SpecialTypesMotorcycleLiabilityFactor",
                                "SpecialTypesMotorcycleFactor"])
@@ -9946,6 +10103,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 277 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 277'):
+                self.format77(_wb[_sn])
+
+    def _page_rule_278(self, RatePages):
         #Rule 278
         self.compareCompanies("SpecialTypesRegistrationPlatesFactor_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -9959,6 +10122,12 @@ class Auto:
                                         self.buildRegistrationPlateFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 278 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 278'):
+                self.format78(_wb[_sn])
+
+    def _page_rule_279(self, RatePages):
         #Rule 279
         table_codes = ["SpecialTypesRepossessedAutosLiabilityBasePremium",
                       "GarageDealersOtherThanCollisionRate",
@@ -9981,6 +10150,14 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 279 '+ self.title_company_name], CompanyTest)
 
+        fn = RatePages.getFontName()
+        fs = RatePages.getFontSize()
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 279'):
+                self.format79(_wb[_sn], Font(name=fn, size=fs, bold=True))
+
+    def _page_rule_280(self, RatePages):
         #Rule 280
 
         self.compareCompanies(["SpecialTypesSnowmobileLiabilityBasePremium",
@@ -9997,12 +10174,18 @@ class Auto:
                                         True)
             self.overideFooter(RatePages.getWB()['Rule 280 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 280'):
+                self.format80(_wb[_sn])
+
+    def _page_rule_281(self, RatePages):
         # Rule 281
         self.compareCompanies("SpecialTypesSpecialEquipmentFactor1")
         for CompanyTest in self.CompanyListDif:
             comp_name = self.extract_company_name(CompanyTest)
             if self.StateAbb == "VA":
-                subtitles = VARules["Rule 281"]
+                subtitles = self._VA_RULE_SUBTITLES["Rule 281"]
             else:
                 subtitles = ["281.C.2. Premium Computation",
                              "281.D.2.b. Cost of Hire Basis Coverage Factors",
@@ -10018,6 +10201,12 @@ class Auto:
                                                tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 281 '+ self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 281'):
+                self.format81(_wb[_sn])
+
+    def _page_rule_283(self, RatePages):
         #Rule 283
         table_codes = ["GarageDealersOtherThanCollisionRate",
                       "GarageDealersCollisionBlanketRate",
@@ -10052,6 +10241,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 283 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 283'):
+                self.format283(_wb[_sn])
+
+    def _page_rule_284(self, RatePages):
         #Rule 284
         # This needed to be hardcoded.
         #
@@ -10098,6 +10293,12 @@ class Auto:
 
         self.overideFooter(RatePages.getWB()['Rule 284'], self.default_company)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 284'):
+                self.format284(_wb[_sn])
+
+    def _page_rule_288(self, RatePages):
         #Rule 288
         self.compareCompanies(["DriveOtherCarLiabilityFactor",
                                "DriveOtherCarMedicalPaymentsFactor",
@@ -10116,6 +10317,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 288 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 288'):
+                self.format88(_wb[_sn])
+
+    def _page_rule_289(self, RatePages):
         #Rule 289
         self.compareCompanies(["NonOwnedBasePremium",
                               "VolunteersAsInsuredsBasePremium",
@@ -10164,6 +10371,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 289 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 289'):
+                self.format89(_wb[_sn])
+
+    def _page_rule_290(self, RatePages):
         #Rule 290
 
         self.compareCompanies(["LiabilityCostOfHireRate",
@@ -10184,6 +10397,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 290 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 290'):
+                self.formathiredauto(_wb[_sn])
+
+    def _page_rule_292(self, RatePages):
         # Rule 292
         try:
             self.compareCompanies("ZoneRatedMedicalPaymentsTextFactor") # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
@@ -10200,6 +10419,12 @@ class Auto:
         # Needs an alternative approach for testing whether the companies are equal as it's unclear what speicific tables may differ
         # state to state. This was made before the current comparison system. It is much more powerful than even the current but also more rule specific.
         # This approach is probably overkill, but it's what I could make work with the current system.
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 292'):
+                self.format92(_wb[_sn])
+
+    def _page_rule_293(self, RatePages, shared):
         #Rule 293 (Varies by state)
         ratebook_names = ['NGIC', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
 
@@ -10254,6 +10479,11 @@ class Auto:
                     return False
             return True
 
+        # Store helpers in shared so _page_rule_297 and _page_rule_451 can access them
+        shared["cluster_companies"] = cluster_companies
+        shared["all_tables_empty"] = all_tables_empty
+        shared["available_companies"] = available_companies
+
         # Get the clusters of companies with equal tables_list
         company_clusters = cluster_companies(company_tables_list)
 
@@ -10274,6 +10504,12 @@ class Auto:
                     RatePages.generateWorksheetTablesX('Rule 293 ' + self.title_company_name, 'RULE 293. NO-FAULT COVERAGES ' + self.title_company_name, rule_names, company_tables_list[company_name], False, True)
                     self.overideFooter(RatePages.getWB()['Rule 293 ' + self.title_company_name], company_group)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 293'):
+                self.format293(_wb[_sn])
+
+    def _page_rule_294(self, RatePages):
         #Rule 294
         self.compareCompanies("RentalReimbursementFactor")
         for CompanyTest in self.CompanyListDif:
@@ -10286,6 +10522,12 @@ class Auto:
                                         self.buildRentalFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 294 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 294'):
+                self.format94(_wb[_sn])
+
+    def _page_rule_295(self, RatePages):
         #Rule 295
 
         self.compareCompanies("AudioVisualDataEquipmentBasePremium2")
@@ -10301,6 +10543,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 295 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 295'):
+                self.format95(_wb[_sn])
+
+    def _page_rule_296(self, RatePages):
         #Rule 296
         self.compareCompanies("TapesRecordsAndDiscsBasePremium") # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
         for CompanyTest in self.CompanyListDif:
@@ -10314,17 +10562,21 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 296 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 296'):
+                self.format96(_wb[_sn])
+
+    def _page_rule_297(self, RatePages, shared):
         ### An alteration of the 293 code.
         #Rule 297 (Varies by state)
-        ratebook_names_297 = ['NGIC', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
 
-        available_companies = []
-        for company in ratebook_names_297:
-            book = self.rateTables.get(company)
-            if book != "Not found" and book is not None:
-                available_companies.append(company)
+        # Re-use the helper functions and company list computed in _page_rule_293
+        cluster_companies   = shared["cluster_companies"]
+        all_tables_empty    = shared["all_tables_empty"]
+        available_companies = shared["available_companies"]
 
-        map_297 = pd.read_excel('BA Input File.xlsx', sheet_name="297 Map", engine='openpyxl')
+        map_297 = pd.read_excel(BA_INPUT_FILE, sheet_name="297 Map", engine='openpyxl')
 
         # Create a tables_list for each company
         company_tables_list = {name: [] for name in available_companies}
@@ -10358,6 +10610,10 @@ class Auto:
             # Filter out NaN values and convert to list
             rule_names = map_297.loc[map_297['State'] == self.StateAbb].dropna(axis=1).values.tolist()[0][1:]  # Not grabbing state name
 
+            # Store in shared so _page_rule_451 can use them
+            shared["rule_names_check"] = rule_names_check
+            shared["company_tables_list"] = company_tables_list
+
             # Check if rule_names does not contain only NaN values
             if not all_tables_empty(company_tables_list):
                 if not rule_names_check:
@@ -10370,6 +10626,12 @@ class Auto:
                         RatePages.generateWorksheetTablesX('Rule 297 ' + self.title_company_name,'RULE 297. UNINSURED MOTORISTS INSURANCE ' + self.title_company_name, rule_names, company_tables_list[company_name], True, True)
                         self.overideFooter(RatePages.getWB()['Rule 297 ' + self.title_company_name], company_group)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 297'):
+                self.format297(_wb[_sn])
+
+    def _page_rule_298(self, RatePages):
         #Rule 298
 
         self.compareCompanies(["LiabilityDeductibleFactor",
@@ -10410,6 +10672,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 298 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 298'):
+                self.format98(_wb[_sn])
+
+    def _page_rule_300(self, RatePages):
         #Rule 300
         self.compareCompanies("IncreasedLimitFactorText")
         for CompanyTest in self.CompanyListDif:
@@ -10423,6 +10691,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 300 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 300'):
+                self.format100(_wb[_sn])
+
+    def _page_rule_301c(self, RatePages):
         # 301.C
         # VA uses different numbers, but this is the contents of most other states rule 301.C
         if self.StateAbb == "VA":
@@ -10453,8 +10727,8 @@ class Auto:
                     self.buildAllOtherVehiclesVVFOTC(comp_name)
                 ]
 
-                subtitles_301A = VARules["Rule 301.A"]
-                subtitles_301B = VARules["Rule 301.B"]
+                subtitles_301A = self._VA_RULE_SUBTITLES["Rule 301.A"]
+                subtitles_301B = self._VA_RULE_SUBTITLES["Rule 301.B"]
 
                 self.title_company_name = CompanyTest
                 if len(self.CompanyListDif) == 1:
@@ -10538,6 +10812,17 @@ class Auto:
 
                 self.overideFooter(RatePages.getWB()['Rule 301.C ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        if self.StateAbb != "VA":
+            for _sn in _wb.sheetnames:
+                if _sn.startswith("Rule 301.C"):
+                    self.format301(_wb[_sn])
+        else:
+            for _sn in _wb.sheetnames:
+                if _sn.startswith("Rule 301.A") or _sn.startswith("Rule 301.B"):
+                    self.format301VA(_wb[_sn])
+
+    def _page_rule_301d1(self, RatePages):
         # 301.D.1
         if self.StateAbb != "VA":
             self.compareCompanies("LiabilityOriginalCostNewFactor_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
@@ -10562,7 +10847,7 @@ class Auto:
 
                 tables = [self.build301D1(comp_name)]
 
-                subtitles = VARules["Rule 301.C.1"]
+                subtitles = self._VA_RULE_SUBTITLES["Rule 301.C.1"]
 
                 self.title_company_name = CompanyTest
                 if len(self.CompanyListDif) == 1:
@@ -10572,6 +10857,17 @@ class Auto:
 
                 self.overideFooter(RatePages.getWB()['Rule 301.C.1 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        if self.StateAbb != "VA":
+            for _sn in _wb.sheetnames:
+                if _sn.startswith("Rule 301.D.1"):
+                    self.format301D1(_wb[_sn])
+        else:
+            for _sn in _wb.sheetnames:
+                if _sn.startswith("Rule 301.C.1"):
+                    self.format301D1(_wb[_sn])
+
+    def _page_rule_301d2(self, RatePages):
         # 301.D.2
         if self.StateAbb != "VA":
             self.compareCompanies(["LiabilityVehicleAgeFactorsStatedAmountVehicles_Ext","LiabilityVehicleAgeFactorsOriginalCostNewVehicle_Ext"])  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
@@ -10600,7 +10896,7 @@ class Auto:
                 tables = [self.build301D3(comp_name),
                           self.build301D2(comp_name)]
 
-                subtitles = VARules["Rule 301.C.2/3"]
+                subtitles = self._VA_RULE_SUBTITLES["Rule 301.C.2/3"]
 
                 self.title_company_name = CompanyTest
                 if len(self.CompanyListDif) == 1:
@@ -10612,6 +10908,17 @@ class Auto:
 
                 self.overideFooter(RatePages.getWB()['Rule 301.C.2 and 301.C.3' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        if self.StateAbb != "VA":
+            for _sn in _wb.sheetnames:
+                if _sn.startswith("Rule 301.D.2"):
+                    self.format301D2(_wb[_sn])
+        else:
+            for _sn in _wb.sheetnames:
+                if _sn.startswith("Rule 301.C.2"):
+                    self.format301D2(_wb[_sn])
+
+    def _page_rule_303(self, RatePages):
         #Rule 303
 
         self.compareCompanies(["PollutionLiabilityRate_Ext",
@@ -10627,10 +10934,22 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 303 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 303'):
+                self.format103(_wb[_sn])
+
+    def _page_rule_305(self, RatePages):
         #Rule 305
         RatePages.generateWorksheet('Rule 305', 'RULE 305. LIMITED MEXICO COVERAGE', '305.B. Premium Computation', self.buildBlank(), False, True )
         self.overideFooter(RatePages.getWB()['Rule 305'], self.default_company)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 305'):
+                self.format113(_wb[_sn])
+
+    def _page_rule_306(self, RatePages):
         #Rule 306 NAICS
 
         self.compareCompanies("NAICSFactors_Ext")
@@ -10644,6 +10963,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 306 NAICS ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 306 NAICS'):
+                self.formatNaics(_wb[_sn])
+
+    def _page_rule_307(self, RatePages):
         #Rule 307
         # Rule excluded from Florida
         if self.StateAbb != "FL":
@@ -10659,6 +10984,12 @@ class Auto:
 
                 self.overideFooter(RatePages.getWB()['Rule 307 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 307'):
+                self.formatFellowEmployee(_wb[_sn])
+
+    def _page_rule_309(self, RatePages):
         # Rule 309
         if self.StateAbb == "FL" or self.StateAbb == "VA":
             self.compareCompanies(["AutoLoanLeaseGapCoverageFactor"])
@@ -10677,6 +11008,12 @@ class Auto:
                                                    subtitles, tables, False, True)
                 self.overideFooter(RatePages.getWB()['Rule 309 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 309'):
+                self.format309(_wb[_sn])
+
+    def _page_rule_310(self, RatePages):
         #Rule 310
         self.compareCompanies("OptionalLimitsLossofUseExpensesBasePremium_Ext")
         for CompanyTest in self.CompanyListDif:
@@ -10690,10 +11027,22 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 310 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 310'):
+                self.formatLossofUse(_wb[_sn])
+
+    def _page_rule_313(self, RatePages):
         #Rule 313
         RatePages.generateWorksheet('Rule 313', 'RULE 313. SILICA OR SILICA-RELATED DUST LIABILITY', '313.B. Premium Computation',self.buildBlank(), False, True )
         self.overideFooter(RatePages.getWB()['Rule 313'], self.default_company)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 313'):
+                self.format113(_wb[_sn])
+
+    def _page_rule_315(self, RatePages):
         #Rule 315
 
         self.compareCompanies(["BusinessInterruptionCoverageOtherThanCollisionBaseLossCost",
@@ -10718,6 +11067,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 315 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 315'):
+                self.formatBusinessInterruption(_wb[_sn])
+
+    def _page_rule_317(self, RatePages):
         #Rule 317
         self.compareCompanies("TowingLaborRate")
         for CompanyTest in self.CompanyListDif:
@@ -10730,6 +11085,12 @@ class Auto:
             RatePages.generateWorksheet('Rule 317 '+ self.title_company_name, 'RULE 317. TOWING AND LABOR ' + self.title_company_name, '317.B. Premium Computation', self.buildTowingAndLabor(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 317 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 317'):
+                self.formatTowingAndLabor(_wb[_sn])
+
+    def _page_rule_416(self, RatePages):
         #Rule 416
 
         self.compareCompanies(["ExperienceRatingExpectedFrequencyPerPowerUnit_Ext",
@@ -10748,6 +11109,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 416 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 416'):
+                self.formatExperienceRating(_wb[_sn])
+
+    def _page_rule_417(self, RatePages):
         #Rule 417
 
         self.compareCompanies("ScheduleEligibility_Ext")
@@ -10761,6 +11128,14 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 417 ' + self.title_company_name], CompanyTest)
 
+        fn = RatePages.getFontName()
+        fs = RatePages.getFontSize()
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 417'):
+                self.format117(_wb[_sn], Font(name=fn, size=fs, italic=True))
+
+    def _page_rule_425(self, RatePages):
         #Rule 425
 
         self.compareCompanies(["WaiverofSubrogationBlanket_Ext","Waiver_of_Subrogation_Ext"])
@@ -10777,6 +11152,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 425 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 425'):
+                self.format125(_wb[_sn])
+
+    def _page_rule_426(self, RatePages):
         #Rule 426
 
         self.compareCompanies(["BusinessAutoProtectionFactor_Ext","MiscellaneousMinimumMaximumPremium_Ext"])
@@ -10792,6 +11173,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 426 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 426'):
+                self.format126(_wb[_sn])
+
+    def _page_rule_427(self, RatePages):
         #Rule 427
 
         self.compareCompanies("OriginalEquipmentManufacturerPartsCoverageFactor_Ext")
@@ -10807,6 +11194,12 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 427 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 427'):
+                self.format127(_wb[_sn])
+
+    def _page_rule_450(self, RatePages):
         #Rule 450
 
         self.compareCompanies(["DriverBasedRatingLiabilityFactor_Ext","DriverBasedRatingCollisionFactor_Ext"])
@@ -10820,7 +11213,19 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 450 ' + self.title_company_name], CompanyTest)
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 450'):
+                self.format150(_wb[_sn])
+
+    def _page_rule_451(self, RatePages, shared):
         #Rule 451
+        # Read shared state set by _page_rule_293 and _page_rule_297
+        available_companies  = shared.get("available_companies", [])
+        cluster_companies    = shared.get("cluster_companies", lambda x: list(x.keys()))
+        rule_names_check     = shared.get("rule_names_check", True)
+        company_tables_list  = shared.get("company_tables_list", {name: [] for name in available_companies})
+
         # CO and MT had objections over Rule 451 being filed after transition ended.
         if self.StateAbb in ["MT","CO"]:
             pass
@@ -10851,6 +11256,14 @@ class Auto:
                     RatePages.generateWorksheetTablesX('Rule 451 ' + self.title_company_name, 'RULE 451. TRANSITION CAPPING PROGRAM ' + self.title_company_name, subtitles, tables, False, True )
                     self.overideFooter(RatePages.getWB()['Rule 451 ' + self.title_company_name], company_group)
 
+        fn = RatePages.getFontName()
+        fs = RatePages.getFontSize()
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 451'):
+                self.format151(_wb[_sn], Font(name=fn, size=fs, italic=True))
+
+    def _page_rule_452(self, RatePages):
         #Rule 452
 
         leaf_list = pd.read_excel(BA_INPUT_FILE, sheet_name="452 Leaf")
@@ -10870,6 +11283,8 @@ class Auto:
 
                 self.overideFooter(RatePages.getWB()['Rule 452 ' + self.title_company_name], CompanyTest)
 
+
+    def _page_rule_453(self, RatePages):
         #Rule 453
 
         self.compareCompanies(["TieringLiabilityFactor_Ext","TieringCollisionFactor_Ext","TieringOtherThanCollisionFactor_Ext"])
@@ -10883,6 +11298,8 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 453 ' + self.title_company_name], CompanyTest)
 
+
+    def _page_rule_454(self, RatePages):
         #Rule 454
 
         self.compareCompanies(["CorporalPunishmentBaseRate_Ext","MiscellaneousMinimumMaximumPremium_Ext","BroadFormSchoolBusOperatorsCoverageFactor_Ext"])
@@ -10897,6 +11314,14 @@ class Auto:
 
             self.overideFooter(RatePages.getWB()['Rule 454 ' + self.title_company_name], CompanyTest)
 
+        fn = RatePages.getFontName()
+        fs = RatePages.getFontSize()
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule 454'):
+                self.formatSchoolBusOps(_wb[_sn], Font(name=fn, size=fs, italic=True))
+
+    def _page_rule_dp1(self, RatePages):
         #Rule DP1
         if self.StateAbb in ['AR', 'AZ', 'CT', 'DC', 'DE', 'IA', 'IL', 'KY', 'MD', 'ME', 'MI', 'MN', 'MO', 'MS', 'NC', 'NE', 'NH', 'NM', 'NV', 'OR', 'PA', 'RI', 'SD', 'TN', 'TX', 'UT', 'VT', 'WI', 'WV', 'WY']:
 
@@ -10926,6 +11351,12 @@ class Auto:
         # else:
         #     pass
 
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule DP-1'):
+                self.formatDp1(_wb[_sn])
+
+    def _page_rule_state_specific(self, RatePages):
         # Below begins the list of non standard rules starting with a letter.
         if self.StateAbb == "CT":
             # CT: Rule A1
@@ -11071,361 +11502,143 @@ class Auto:
                 self.overideFooter(RatePages.getWB()['Rule A2'], self.default_company)
 
         ################################################################################################################################################################################
-        #End of Rate Page Creation
-        #Formatting of specific rate pages below:
-        ################################################################################################################################################################################
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith('Rule A1'):
+                self.formatA1(_wb[_sn])
+            elif _sn.startswith('Rule A2'):
+                self.formatA2(_wb[_sn])
+            elif _sn.startswith('Rule A3'):
+                self.formatA3(_wb[_sn])
+            elif _sn.startswith('Rule A4'):
+                self.formatA4(_wb[_sn])
+            elif _sn.startswith('Rule A5'):
+                self.formatA5(_wb[_sn])
+            elif _sn.startswith('Rule R1'):
+                self.formatR1(_wb[_sn])
+
+    # Sets up the Business Auto Excel file using the Excel class.
+    # Each rule is its own _page_rule_XXX method above.
+    # To add a rule: implement _page_rule_new_xxx below, then add its call here.
+    # To remove a rule: comment out its line.
+    # To reorder: move its line up or down.
+    def buildBAPages(self):
+        """
+        Business Auto rate page sequence.
+        Each line = one rule tab (or set of tabs for multi-company states).
+        """
+        import BA.ExcelSettingsBA as ExcelSettingsBA
+
+        companies = [c for c in self.rateTables.keys() if c not in ('CW', 'MM')]
+        RatePages = ExcelSettingsBA.Excel(
+            StateAbb=self.StateAbb,
+            State=self.State,
+            nEffective=self.nEffective,
+            rEffective=self.rEffective,
+            companyList=companies,
+        )
+
+        self.nesting()
+        state_sheet_exceptions = pd.read_excel(BA_INPUT_FILE, sheet_name=None, engine='openpyxl')
+
+        if self.StateAbb == "MT":
+            print("Warning: Rule 297 will not be correct.")
+        if self.StateAbb == "DC":
+            print("Warning: Additional PIP Base Rate Tables for 222, 232, 239 will be absent.")
+        if self.StateAbb == "MI":
+            print("Warning: Base Rate Formatting incomplete. 298 has special exceptions not yet built.")
+        if self.StateAbb == "VA":
+            print("Warning: Due to large shifts in manual presentation, this manual is incomplete.")
+        if self.StateAbb in ("NY", "CA"):
+            print("Warning: Rule 297 for this state was not built out.")
+
+        # shared dict lets rules 293, 297, and 451 pass state to each other
+        shared = {}
+
+        # ── Rules ─────────────────────────────────────────────────────────────
+        self._page_rule_vapcd(RatePages, state_sheet_exceptions)
+        self._page_rule_208(RatePages)
+        self._page_rule_222_ttt_base_rates(RatePages, state_sheet_exceptions)
+        self._page_rule_222b(RatePages)
+        self._page_rule_222c(RatePages)
+        self._page_rule_222e(RatePages)
+        self._page_rule_223b5(RatePages)
+        self._page_rule_223c(RatePages)
+        self._page_rule_225c2(RatePages)
+        self._page_rule_225c3(RatePages)
+        self._page_rule_225_zone_br(RatePages)
+        self._page_rule_225d(RatePages)
+        self._page_rule_231c(RatePages)
+        self._page_rule_232_ppt_base_rates(RatePages, state_sheet_exceptions)
+        self._page_rule_232b(RatePages)
+        self._page_rule_233(RatePages)
+        self._page_rule_239_school_bus_br(RatePages, state_sheet_exceptions)
+        self._page_rule_239_other_bus_br(RatePages, state_sheet_exceptions)
+        self._page_rule_239_van_pool_br(RatePages, state_sheet_exceptions)
+        self._page_rule_239_taxi_br(RatePages, state_sheet_exceptions)
+        self._page_rule_239c(RatePages)
+        self._page_rule_239d(RatePages)
+        self._page_rule_240(RatePages)
+        self._page_rule_241(RatePages)
+        self._page_rule_243(RatePages)
+        self._page_rule_255(RatePages)
+        self._page_rule_264(RatePages)
+        self._page_rule_266(RatePages)
+        self._page_rule_267(RatePages)
+        self._page_rule_268(RatePages)
+        self._page_rule_269(RatePages)
+        self._page_rule_271(RatePages)
+        self._page_rule_272(RatePages)
+        self._page_rule_273(RatePages)
+        self._page_rule_274(RatePages)
+        self._page_rule_275(RatePages)
+        self._page_rule_276(RatePages)
+        self._page_rule_277(RatePages)
+        self._page_rule_278(RatePages)
+        self._page_rule_279(RatePages)
+        self._page_rule_280(RatePages)
+        self._page_rule_281(RatePages)
+        self._page_rule_283(RatePages)
+        self._page_rule_284(RatePages)
+        self._page_rule_288(RatePages)
+        self._page_rule_289(RatePages)
+        self._page_rule_290(RatePages)
+        self._page_rule_292(RatePages)
+        self._page_rule_293(RatePages, shared)
+        self._page_rule_294(RatePages)
+        self._page_rule_295(RatePages)
+        self._page_rule_296(RatePages)
+        self._page_rule_297(RatePages, shared)
+        self._page_rule_298(RatePages)
+        self._page_rule_300(RatePages)
+        self._page_rule_301c(RatePages)
+        self._page_rule_301d1(RatePages)
+        self._page_rule_301d2(RatePages)
+        self._page_rule_303(RatePages)
+        self._page_rule_305(RatePages)
+        self._page_rule_306(RatePages)
+        self._page_rule_307(RatePages)
+        self._page_rule_309(RatePages)
+        self._page_rule_310(RatePages)
+        self._page_rule_313(RatePages)
+        self._page_rule_315(RatePages)
+        self._page_rule_317(RatePages)
+        self._page_rule_416(RatePages)
+        self._page_rule_417(RatePages)
+        self._page_rule_425(RatePages)
+        self._page_rule_426(RatePages)
+        self._page_rule_427(RatePages)
+        self._page_rule_450(RatePages)
+        self._page_rule_451(RatePages, shared)
+        self._page_rule_452(RatePages)
+        self._page_rule_453(RatePages)
+        self._page_rule_454(RatePages)
+        self._page_rule_dp1(RatePages)
+        self._page_rule_state_specific(RatePages)
 
         RatePages.createIndex()
-        AutoPages = RatePages.getWB()
-        excel_Sheet_names = AutoPages.sheetnames
-
-        Rule22_TTTBaseRates = [name for name in excel_Sheet_names if name.startswith('Rule 222 TTT')]
-        for Rule in Rule22_TTTBaseRates:
-            self.formatBaseRates(AutoPages[Rule], "222")
-
-        Rule222_B_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 222 B')]
-        for Rule in Rule222_B_Sheets:
-            self.format222B(AutoPages[Rule])
-
-        Rule222C_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 222 C')]
-        for Rule in Rule222C_Sheets:
-            self.format222C(AutoPages[Rule])
-
-        Rule222E_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 222 E')]
-        for Rule in Rule222E_Sheets:
-            self.format222E(AutoPages[Rule])
-
-        Rule23_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 223 B.5')]
-        for Rule in Rule23_Sheets:
-            self.format23B(AutoPages[Rule])
-
-        Rule23C_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 223 C')]
-        for Rule in Rule23C_Sheets:
-            self.format23C(AutoPages[Rule])
-
-        Rule225C2_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 225.C.2')]
-        for Rule in Rule225C2_Sheets:
-            self.format225C2(AutoPages[Rule])
-
-        Rule225C3_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 225.C.3')]
-        for Rule in Rule225C3_Sheets:
-            self.format225C3(AutoPages[Rule])
-
-        Rule225Z_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 225 Zone BR')]
-        for Rule in Rule225Z_Sheets:
-            self.formatZoneRates(AutoPages[Rule])
-
-        Rule225D_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 225.D')]
-        for Rule in Rule225D_Sheets:
-            self.format225D(AutoPages[Rule])
-
-        Rule31C_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 231 C')]
-        for Rule in Rule31C_Sheets:
-            self.format31C(AutoPages[Rule])
-
-        Rule32_PPTBaseRates = [name for name in excel_Sheet_names if name.startswith('Rule 232 PPT')]
-        for Rule in Rule32_PPTBaseRates:
-            self.formatBaseRates(AutoPages[Rule], "232")
-
-        Rule32B_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 232 B')]
-        for Rule in Rule32B_Sheets:
-            self.format32B(AutoPages[Rule])
-
-        Rule33_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 233')]
-        for Rule in Rule33_Sheets:
-            self.format33(AutoPages[Rule])
-
-        Rule34_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 234')]
-        for Rule in Rule34_Sheets:
-            self.formatTowingAndLabor(AutoPages[Rule])
-
-        Rule39_SchoolBaseRates = [name for name in excel_Sheet_names if name.startswith('Rule 239 SB')]
-        for Rule in Rule39_SchoolBaseRates:
-            self.formatBaseRates(AutoPages[Rule], "239")
-
-        Rule39_OtherBusBaseRates = [name for name in excel_Sheet_names if name.startswith('Rule 239 OB')]
-        for Rule in Rule39_OtherBusBaseRates:
-            self.formatBaseRates(AutoPages[Rule], "239")
-
-        Rule39_VanBaseRates = [name for name in excel_Sheet_names if name.startswith('Rule 239 VP')]
-        for Rule in Rule39_VanBaseRates:
-            self.formatBaseRates(AutoPages[Rule],"239")
-
-        Rule39_TaxiBaseRates = [name for name in excel_Sheet_names if name.startswith('Rule 239 T-L')]
-        for Rule in Rule39_TaxiBaseRates:
-            self.formatBaseRates(AutoPages[Rule], "239")
-
-        Rule_239C = [name for name in excel_Sheet_names if name.startswith('Rule 239 C')]
-        for Rule in Rule_239C:
-            self.format239C(AutoPages[Rule])
-
-        Rule240_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 240')]
-        for Rule in Rule240_Sheets:
-            self.format240(AutoPages[Rule])
-
-        Rule241_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 241')]
-        for Rule in Rule241_Sheets:
-            self.format241(AutoPages[Rule])
-
-        # Currently FL and VA Only
-        Rule243_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 243')]
-        for Rule in Rule243_Sheets:
-            self.format243(AutoPages[Rule])
-
-        Rule55_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 255')]
-        for Rule in Rule55_Sheets:
-            self.format55(AutoPages[Rule], Font(name=fontName, size=fontSize, bold=True))
-
-        Rule264_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 264')]
-        for Rule in Rule264_Sheets:
-            self.formatAmbulance(AutoPages[Rule])
-
-        Rule266_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 266')]
-        for Rule in Rule266_Sheets:
-            self.formatANTIQUEAUTOS(AutoPages[Rule])
-
-        # Currently FL and VA Only
-        Rule267_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 267')]
-        for Rule in Rule267_Sheets:
-            self.format267(AutoPages[Rule])
-
-        Rule68_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 268')]
-        for Rule in Rule68_Sheets:
-            self.format68(AutoPages[Rule], Font(name=fontName, size=fontSize, bold=True))
-
-        # Currently FL and VA Only
-        Rule269_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 269')]
-        for Rule in Rule269_Sheets:
-            self.format269(AutoPages[Rule])
-
-        Rule271_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 271')]
-        for Rule in Rule271_Sheets:
-            self.formatFireDepartments(AutoPages[Rule])
-
-        Rule72_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 272')]
-        for Rule in Rule72_Sheets:
-            self.format72(AutoPages[Rule])
-
-        Rule73_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 273')]
-        for Rule in Rule73_Sheets:
-            self.format73(AutoPages[Rule])
-        Rule274_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 274')]
-        for Rule in Rule274_Sheets:
-            self.format274(AutoPages[Rule])
-        Rule75_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 275')]
-        for Rule in Rule75_Sheets:
-            self.formatLEASINGORRENTALCONCERNS(AutoPages[Rule], Font(name=fontName, size=fontSize, italic=True))
-        Rule276_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 276')]
-        for Rule in Rule276_Sheets:
-            self.format276(AutoPages[Rule])
-        Rule77_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 277')]
-        for Rule in Rule77_Sheets:
-            self.format77(AutoPages[Rule])
-
-        Rule78_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 278')]
-        for Rule in Rule78_Sheets:
-            self.format78(AutoPages[Rule])
-
-        Rule79_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 279')]
-        for Rule in Rule79_Sheets:
-            self.format79(AutoPages[Rule], Font(name=fontName, size=fontSize, bold=True))
-
-        Rule80_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 280')]
-        for Rule in Rule80_Sheets:
-            self.format80(AutoPages[Rule])
-
-        Rule81_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 281')]
-        for Rule in Rule81_Sheets:
-            self.format81(AutoPages[Rule])
-
-        Rule283_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 283')]
-        for Rule in Rule283_Sheets:
-            self.format283(AutoPages[Rule])
-
-        Rule284_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 284')]
-        for Rule in Rule284_Sheets:
-            self.format284(AutoPages[Rule])
-
-        Rule88_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 288')]
-        for Rule in Rule88_Sheets:
-            self.format88(AutoPages[Rule])
-
-        Rule89_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 289')]
-        for Rule in Rule89_Sheets:
-            self.format89(AutoPages[Rule])
-
-        Rule90_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 290')]
-        for Rule in Rule90_Sheets:
-            self.formathiredauto(AutoPages[Rule])
-
-        Rule92_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 292')]
-        for Rule in Rule92_Sheets:
-            self.format92(AutoPages[Rule])
-
-        Rule293_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 293')]
-        for Rule in Rule293_Sheets:
-            self.format293(AutoPages[Rule])
-
-        Rule94_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 294')]
-        for Rule in Rule94_Sheets:
-            self.format94(AutoPages[Rule])
-
-        Rule95_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 295')]
-        for Rule in Rule95_Sheets:
-            self.format95(AutoPages[Rule])
-
-        Rule96_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 296')]
-        for Rule in Rule96_Sheets:
-            self.format96(AutoPages[Rule])
-
-        Rule297_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 297')]
-        for Rule in Rule297_Sheets:
-            self.format297(AutoPages[Rule])
-
-        Rule98_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 298')]
-        for Rule in Rule98_Sheets:
-            self.format98(AutoPages[Rule])
-
-        Rule100_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 300')]
-        for Rule in Rule100_Sheets:
-            self.format100(AutoPages[Rule])
-
-        # VA rule 301 has an exception
-        if self.StateAbb != "VA":
-            Rule301_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 301.C')]
-            for Rule in Rule301_Sheets:
-                self.format301(AutoPages[Rule])
-        elif self.StateAbb == "VA":
-            Rule301A_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 301.A')]
-            for Rule in Rule301A_Sheets:
-                self.format301VA(AutoPages[Rule])
-            Rule301B_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 301.B')]
-            for Rule in Rule301B_Sheets:
-                self.format301VA(AutoPages[Rule])
-
-        # VA rule 301 has an exception
-        if self.StateAbb != "VA":
-            Rule301D1_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 301.D.1')]
-            for Rule in Rule301D1_Sheets:
-                self.format301D1(AutoPages[Rule])
-        elif self.StateAbb == "VA":
-            Rule301C1_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 301.C.1')]
-            for Rule in Rule301C1_Sheets:
-                self.format301D1(AutoPages[Rule])
-
-        # VA rule 301 has an exception
-        if self.StateAbb != "VA":
-            Rule301D2_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 301.D.2')]
-            for Rule in Rule301D2_Sheets:
-                self.format301D2(AutoPages[Rule])
-        elif self.StateAbb == "VA":
-            Rule301C2_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 301.C.2')]
-            for Rule in Rule301C2_Sheets:
-                self.format301D2(AutoPages[Rule])
-
-        Rule103_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 303')]
-        for Rule in Rule103_Sheets:
-            self.format103(AutoPages[Rule])
-
-        Rule105_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 305')]
-        for Rule in Rule105_Sheets:
-            self.format113(AutoPages[Rule])
-
-        Rule306_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 306 NAICS')]
-        for Rule in Rule306_Sheets:
-            self.formatNaics(AutoPages[Rule])
-
-        Rule107_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 307')]
-        for Rule in Rule107_Sheets:
-            self.formatFellowEmployee(AutoPages[Rule])
-
-        # Currently FL and VA Only
-        Rule309_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 309')]
-        for Rule in Rule309_Sheets:
-            self.format309(AutoPages[Rule])
-
-        Rule110_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 310')]
-        for Rule in Rule110_Sheets:
-            self.formatLossofUse(AutoPages[Rule])
-
-        Rule113_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 313')]
-        for Rule in Rule113_Sheets:
-            self.format113(AutoPages[Rule])
-
-        Rule115_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 315')]
-        for Rule in Rule115_Sheets:
-            self.formatBusinessInterruption(AutoPages[Rule])
-
-        Rule317_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 317')]
-        for Rule in Rule317_Sheets:
-            self.formatTowingAndLabor(AutoPages[Rule])
-
-        Rule116_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 416')]
-        for Rule in Rule116_Sheets:
-            self.formatExperienceRating(AutoPages[Rule])
-
-        Rule117_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 417')]
-        for Rule in Rule117_Sheets:
-            self.format117(AutoPages[Rule], Font(name=fontName, size=fontSize, italic=True))
-
-        Rule125_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 425')]
-        for Rule in Rule125_Sheets:
-            self.format125(AutoPages[Rule])
-
-        Rule126_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 426')]
-        for Rule in Rule126_Sheets:
-            self.format126(AutoPages[Rule])
-
-        Rule127_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 427')]
-        for Rule in Rule127_Sheets:
-            self.format127(AutoPages[Rule])
-
-        Rule150_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 450')]
-        for Rule in Rule150_Sheets:
-            self.format150(AutoPages[Rule])
-
-        Rule151_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 451')]
-        for Rule in Rule151_Sheets:
-            self.format151(AutoPages[Rule], Font(name=fontName, size=fontSize, italic=True))
-
-        Rule154_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule 454')]
-        for Rule in Rule154_Sheets:
-            self.formatSchoolBusOps(AutoPages[Rule], Font(name=fontName, size=fontSize, italic=True))
-
-        RuleDP1_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule DP-1')]
-        for Rule in RuleDP1_Sheets:
-            self.formatDp1(AutoPages[Rule])
-
-        RuleT1_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule T1')]
-        for Rule in RuleT1_Sheets:
-            self.formatT1(AutoPages[Rule])
-
-        RuleA1_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule A1')]
-        for Rule in RuleA1_Sheets:
-            self.formatA1(AutoPages[Rule])
-
-        RuleA2_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule A2')]
-        for Rule in RuleA2_Sheets:
-            self.formatA2(AutoPages[Rule])
-
-        RuleA3_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule A3')]
-        for Rule in RuleA3_Sheets:
-            self.formatA3(AutoPages[Rule])
-
-        RuleA4_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule A4')]
-        for Rule in RuleA4_Sheets:
-            self.formatA4(AutoPages[Rule])
-
-        RuleA5_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule A5')]
-        for Rule in RuleA5_Sheets:
-            self.formatA5(AutoPages[Rule])
-
-        RuleR1_Sheets = [name for name in excel_Sheet_names if name.startswith('Rule R1')]
-        for Rule in RuleR1_Sheets:
-            self.formatR1(AutoPages[Rule])
 
         if self.StateAbb == "FL":
-            # FL needs room to stamp
-            self.overideHeaderFL(AutoPages)
+            self.overideHeaderFL(RatePages.getWB())
 
-        return AutoPages
+        return RatePages.getWB()

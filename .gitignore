@@ -14,9 +14,6 @@ venv/
 .venv/
 env/
 
-# Excel/output files (generated or proprietary data)
-*.xlsx
-*.pdf
 
 # IDE
 .vscode/

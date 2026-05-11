@@ -29,9 +29,9 @@ from pathlib import Path
 # full path must be given.
 BA_INPUT_FILE: str = "BA Input File.xlsx"
 
-# Farm Auto equivalent.  Mirrors the BA Input File but for the Farm
-# Auto line of business.  Must be in CWD or a full path must be given.
-FA_INPUT_FILE: str = "FA Input File.xlsx"
+# Farm Auto uses the SAME input file as BA.
+# If FA ever gets its own input file, change this constant only.
+FA_INPUT_FILE: str = BA_INPUT_FILE
 
 
 # ===========================================================================

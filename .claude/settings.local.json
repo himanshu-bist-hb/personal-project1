@@ -16,7 +16,10 @@
       "Bash(\"venv\\\\Scripts\\\\python.exe\" wire_fa_into_app.py)",
       "Bash(taskkill /f /im excel.exe)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\" -Recurse -Filter \"*.py\")",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Remove-Item *)",
+      "PowerShell(cd \"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\"; $env:PYTHONIOENCODING=\"utf-8\"; python create_kt_docs.py)",
+      "PowerShell(cd \"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\"; Get-ChildItem \"BA_FA_Knowledge_Transfer.docx\",\"BA_Rule_Documentation.xlsx\",\"BA_Adding_New_Rule_Guide.docx\" | Select-Object Name, @{N=\"Size \\(KB\\)\";E={[math]::Round\\($_.Length/1KB,1\\)}})"
     ]
   }
 }

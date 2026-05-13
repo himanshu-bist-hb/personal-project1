@@ -346,14 +346,13 @@ def load_naics_descriptions() -> pd.DataFrame:
 # ==============================================================================
 
 def run(
-    NGICRatebook:    Optional[str],
+    NWAGRatebook:    Optional[str],
     MMRatebook:      Optional[str],
     NACORatebook:    Optional[str],
     NICOFRatebook:   Optional[str],
     NAFFRatebook:    Optional[str],
     HICNJRatebook:   Optional[str],
     CCMICRatebook:   Optional[str],
-    NWAGRatebook:    Optional[str],
     folder_selected: str,
     SchedRatingMod:  Optional[int],
     CWRatebook:      Optional[str],

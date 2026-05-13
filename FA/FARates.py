@@ -119,6 +119,29 @@ class Auto(_BABase):
     #       # ... build and return a pandas DataFrame
     # =========================================================================
 
+    def buildFAPolicyMinimumPremium(self, company):
+        raw = self.rateTables[company].get("PolicyMinimumPremium_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Description", "Minimum Premium"])
+
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        df = df[["MinimumPremiumType", "MinimumPremium"]].copy()
+
+        type_display = {
+            "All Other":                "All other policies:",
+            "Hired and Non-Owned Only": "Policies providing hired auto and/or "
+                                        "nonowned auto coverage only:",
+        }
+        df["MinimumPremiumType"] = (
+            df["MinimumPremiumType"]
+            .map(type_display)
+            .fillna(df["MinimumPremiumType"])
+        )
+        df["MinimumPremium"] = pd.to_numeric(df["MinimumPremium"], errors="coerce")
+        df.columns = ["Description", "Minimum Premium"]
+        return df
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -141,6 +164,35 @@ class Auto(_BABase):
     #               CompanyTest,
     #           )
     # =========================================================================
+
+    def _page_rule_208(self, RatePages):
+        """FA override — Rule 208 uses PolicyMinimumPremium_Ext instead of BA's table."""
+        self.compareCompanies("PolicyMinimumPremium_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            ws_name = "Rule 208 " + self.title_company_name
+            RatePages.generateWorksheet(
+                ws_name,
+                "RULE 208. MINIMUM PREMIUMS " + self.title_company_name,
+                "208.B. Rate and Premium Computation",
+                self.buildFAPolicyMinimumPremium(comp_name),
+                False,  # useIndex
+                False,  # useHeader — no column header row on the rate page
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+            self.formatRule208FA(RatePages.getWB()[ws_name])
+
+    def formatRule208FA(self, ws):
+        from config.constants import CURRENCY_FORMAT
+        ws.column_dimensions["A"].width = 58
+        ws.column_dimensions["B"].width = 14
+        for row_idx in range(4, ws.max_row + 1):
+            cell = ws.cell(row=row_idx, column=2)
+            if cell.value is not None:
+                cell.number_format = CURRENCY_FORMAT
 
     # =========================================================================
     # Section C: Main FA page generator

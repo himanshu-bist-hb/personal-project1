@@ -56,7 +56,59 @@ class Auto(_BABase):
     """
     Farm Auto rate page generator.
     Inherits all rules and formatting from Business Auto.
+
+    FA HIERARCHY DIFFERENCES vs BA
+    --------------------------------
+    BA:  Company ratebook → NGIC (state-level, mandatory) → BA CW ratebook
+    FA:  Company ratebook → NWAG (state-level, mandatory) → FA CW ratebook
+
+    These two class attributes override the BA defaults so that every method
+    that references the state-level company (compareCompanies, nesting) uses
+    NWAG automatically — without duplicating any method code.
     """
+
+    # ── FA hierarchy: NWAG is the state-level company (replaces BA's NGIC) ──
+    _STATE_LEVEL_COMPANY = "NWAG"
+    _COMPANIES_CHECK = [
+        "NWAG", "NACO", "NAFF", "CCMIC", "HICNJ",
+        "NICOF", "NMIC", "AICOA", "NICOA", "NPCIC",
+    ]
+
+    # =========================================================================
+    # FA nesting override
+    # =========================================================================
+
+    def nesting(self):
+        """
+        FA nesting — identical logic to BA but with NWAG as the Level 2
+        (state-level) ratebook instead of NGIC.
+
+        Level 1: individual FA company ratebook (NACO, NAFF, etc.)
+        Level 2: NWAG — mandatory FA state-level ratebook
+        Level 3: FA CW ratebook (loaded under the "CW" key by FARatePages.run)
+
+        NWAG MUST be last in ratebook_names so it is fully built (own tables +
+        CW cascade) before any other company's Level 2 cascade uses it.
+        """
+        ratebook_names = [
+            "NAFF", "NACO", "NICOF", "CCMIC", "HICNJ",
+            "NICOA", "AICOA", "NPCIC", "NMIC",
+            "NWAG",   # ← Level 2 for FA; must be last
+        ]
+
+        available_names = [
+            name for name in ratebook_names
+            if self.rateTables.get(name) not in (None, "Not found")
+        ]
+
+        for name in available_names:
+            name, LEVEL1 = self.process_ratebook(name, self.rateTables)
+            self.rateTables[name] = LEVEL1
+
+        # FA equivalent of BA's MM suppression: if NMIC (MM) is provided,
+        # suppress NWAG pages (same logic BA uses to suppress NGIC with NMIC).
+        if (self.rateTables.get("NMIC") is not None) or (self.rateTables.get("CCMIC") is not None):
+            self.rateTables["NWAG"] = None
 
     # =========================================================================
     # Section A: FA-only BUILD methods

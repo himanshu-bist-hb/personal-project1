@@ -71,6 +71,17 @@ def log_exceptions(func):
     return wrapper
 
 class Auto:
+    # ── Hierarchy configuration ────────────────────────────────────────────────
+    # These two class attributes control which company plays the "state-level"
+    # (Level 2) role in the nesting cascade and in compareCompanies().
+    # FA/FARates.Auto overrides both with NWAG so the FA subclass does not need
+    # to duplicate any method logic.
+    _STATE_LEVEL_COMPANY = "NGIC"
+    _COMPANIES_CHECK = [
+        "NGIC", "NACO", "NAFF", "CCMIC", "HICNJ",
+        "NICOF", "NMIC", "AICOA", "NICOA", "NPCIC",
+    ]
+
     def __init__(self, StateAbb, State, rateTables, nEffective, rEffective, NAICSDescriptions, SchedRatingMod) -> None:
         self.StateAbb = StateAbb
         self.State = State
@@ -259,10 +270,10 @@ class Auto:
             name, LEVEL1 = self.process_ratebook(name, self.rateTables)
             self.rateTables[name] = LEVEL1
 
-        # When MM runs we don't want to create the NGIC version of pages. So delete book before system recognizes it.
-        # Same thing for CCMIC.
+        # When MM runs we don't want to create the state-level company's pages.
+        # For BA: suppresses NGIC.  For FA: suppresses NWAG (same logic, different company).
         if (self.rateTables["NMIC"] is not None) or (self.rateTables["CCMIC"] is not None):
-            self.rateTables["NGIC"] = None
+            self.rateTables[self._STATE_LEVEL_COMPANY] = None
 
     def compareCompanies(self, tableCode):
         """
@@ -271,10 +282,9 @@ class Auto:
         If tableCode is a list, all tables must match for two companies to cluster.
         """
 
-        CompaniesCheck = ['NGIC', 'NACO', 'NAFF', 'CCMIC', 'HICNJ', 'NICOF',
-                          'NMIC', 'AICOA', 'NICOA', 'NPCIC']
+        CompaniesCheck = self._COMPANIES_CHECK
 
-        self.default_company = ["NGIC"]
+        self.default_company = [self._STATE_LEVEL_COMPANY]
         self.CompanyListDif = []
         self.RemainingCompanies = ""
 

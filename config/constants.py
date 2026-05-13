@@ -38,8 +38,9 @@ FA_INPUT_FILE: str = BA_INPUT_FILE
 #  NETWORK PATHS  (shared across all LoB files)
 # ===========================================================================
 
-CW_RATEBOOK_DEFAULT = Path(r"M:\Actshare\Com\BA\CW Ratebook\BA CW Ratebook.xlsx")
-NAICS_FILE          = Path(r"M:\Actshare\Com\BA\CW Ratebook\BA NAICS Codes and Definitions.xlsx")
+CW_RATEBOOK_DEFAULT    = Path(r"M:\Actshare\Com\BA\CW Ratebook\BA CW Ratebook.xlsx")
+FA_CW_RATEBOOK_DEFAULT = Path(r"M:\Actshare\Com\FA\CW Ratebook\FA CW Ratebook.xlsx")
+NAICS_FILE             = Path(r"M:\Actshare\Com\BA\CW Ratebook\BA NAICS Codes and Definitions.xlsx")
 NAICS_SHEET         = "NAICSDescriptions"
 NAICS_SKIP_ROWS     = list(range(11))        # rows 0-10 are headers/branding
 

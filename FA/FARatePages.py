@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 #  CONSTANTS  —  all paths / magic numbers live in config/constants.py
 # ==============================================================================
 from config.constants import (
-    CW_RATEBOOK_DEFAULT,
+    FA_CW_RATEBOOK_DEFAULT,   # FA uses its own CW ratebook, not BA's
     NAICS_FILE,
     NAICS_SHEET,
     NAICS_SKIP_ROWS,
@@ -136,31 +136,20 @@ def load_ratebook(ratebook_path: Optional[str]) -> Union[pd.ExcelFile, str]:
 
 
 def get_rate_book_info(
-    ngic_loaded: Union[pd.ExcelFile, str],
+    nwag_loaded: Union[pd.ExcelFile, str],
     mm_loaded:   Union[pd.ExcelFile, str],
 ) -> RateBookInfo:
     """
-    Read the 'Rate Book Details' sheet from the appropriate ratebook and
-    return a RateBookInfo NamedTuple.
+    Read the 'Rate Book Details' sheet from the FA state-level ratebook (NWAG)
+    and return a RateBookInfo NamedTuple with state name, abbreviation, and
+    effective dates.
 
-    Decision rule (same as original):
-        Use NGIC details if NGIC loaded OK AND MM was NOT provided.
-        Otherwise fall back to MM details.
-
-    Why a NamedTuple instead of loose variables?
-        Original code had State, StateAbb, nEffective, rEffective scattered as
-        four separate variables.  Grouping them in a NamedTuple means:
-            • One object to pass around.
-            • Named access (info.state_abb) instead of positional confusion.
-            • No risk of accidentally using the wrong variable.
-
-    Why read with pd.read_excel by path instead of from the ExcelFile object?
-        pd.ExcelFile objects need pd.read_excel(excelfile_obj, ...).  We use
-        the raw path string here because we only need this one sheet and
-        pd.read_excel(path, sheet_name=...) is slightly simpler.
+    FA version: uses NWAG as the primary source (NWAG is the FA equivalent
+    of NGIC in BA).  Falls back to MM details if an MM ratebook was provided
+    instead of NWAG (same fallback logic BA uses for NGIC/MM).
     """
-    use_ngic   = (ngic_loaded != "Not found") and (mm_loaded == "Not found")
-    loaded_ef  = ngic_loaded if use_ngic else mm_loaded
+    use_nwag  = (nwag_loaded != "Not found") and (mm_loaded == "Not found")
+    loaded_ef = nwag_loaded if use_nwag else mm_loaded
 
     # Use the raw bytes stored by load_ratebook to create a fresh BytesIO.
     # The original UploadedFile stream is already exhausted at this point.
@@ -388,48 +377,53 @@ def run(
     pd.options.display.width = None
     pd.options.mode.chained_assignment = None
 
-    # ── 1. Open every ratebook ─────────────────────────────────────────────────
+    # ── 1. Open every FA ratebook ─────────────────────────────────────────────
+    # FA hierarchy: Company ratebook → NWAG (state-level) → FA CW ratebook
+    # NWAG is mandatory for FA (equivalent of NGIC in BA).
+    # FA does NOT use an NGIC ratebook — that key is intentionally absent.
     ratebooks = {
-        "NGICRatebook":  load_ratebook(NGICRatebook),
+        "NWAGRatebook":  load_ratebook(NWAGRatebook),   # state-level, required
         "MMRatebook":    load_ratebook(MMRatebook),
         "NACORatebook":  load_ratebook(NACORatebook),
         "NAFFRatebook":  load_ratebook(NAFFRatebook),
         "NICOFRatebook": load_ratebook(NICOFRatebook),
         "HICNJRatebook": load_ratebook(HICNJRatebook),
         "CCMICRatebook": load_ratebook(CCMICRatebook),
-        "NWAGRatebook":  load_ratebook(NWAGRatebook),
     }
 
-    if ratebooks["NGICRatebook"] == "Not found":
-        raise ValueError("NGIC ratebook is required.")
+    if ratebooks["NWAGRatebook"] == "Not found":
+        raise ValueError("NWAG ratebook is required for Farm Auto.")
 
-    # ── 2. Extract state / date metadata ──────────────────────────────────────
+    # ── 2. Extract state / date metadata from NWAG ────────────────────────────
     info = get_rate_book_info(
-        ngic_loaded=ratebooks["NGICRatebook"],
+        nwag_loaded=ratebooks["NWAGRatebook"],
         mm_loaded=ratebooks["MMRatebook"],
     )
 
-    # ── 3. Resolve CW ratebook ────────────────────────────────────────────────
-    cw_source = CWRatebook if CWRatebook else str(CW_RATEBOOK_DEFAULT)
+    # ── 3. Resolve FA CW ratebook ─────────────────────────────────────────────
+    # FA uses its own countrywide ratebook — different file from BA's CW.
+    cw_source = CWRatebook if CWRatebook else str(FA_CW_RATEBOOK_DEFAULT)
     cw_file   = load_ratebook(cw_source)
     if cw_file == "Not found":
-        raise ValueError(f"CW ratebook could not be loaded: {CW_RATEBOOK_DEFAULT}")
+        raise ValueError(f"FA CW ratebook could not be loaded: {FA_CW_RATEBOOK_DEFAULT}")
 
     # ── 4. Load NAICS descriptions ────────────────────────────────────────────
     if progress_callback: progress_callback("Loading NAICS descriptions...")
     naics_descriptions = load_naics_descriptions()
 
     # ── 5. Assemble the rate_books dict & extract all tables ──────────────────
+    # "CW" key is the FA CW ratebook (loaded above).
+    # "NWAG" is the state-level book — nesting() in FA/FARates.py uses it as Level 2.
+    # "NGIC" is deliberately absent: FA does not use an NGIC ratebook.
     rate_books: Dict[str, Union[pd.ExcelFile, str]] = {
         "CW":    cw_file,
-        "NGIC":  ratebooks["NGICRatebook"],
+        "NWAG":  ratebooks["NWAGRatebook"],
         "NACO":  ratebooks["NACORatebook"],
         "NAFF":  ratebooks["NAFFRatebook"],
         "NICOF": ratebooks["NICOFRatebook"],
         "MM":    ratebooks["MMRatebook"],
         "HICNJ": ratebooks["HICNJRatebook"],
         "CCMIC": ratebooks["CCMICRatebook"],
-        "NWAG":  ratebooks["NWAGRatebook"],
     }
     rate_tables = load_all_ratebooks(rate_books, progress_callback)
 

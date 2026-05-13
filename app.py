@@ -117,7 +117,7 @@ def _fa_valid(k):
 def n_fa_req():     return sum(1 for k in REQUIRED if _fa_valid(k))
 def all_fa_req():   return n_fa_req() == len(REQUIRED)
 def any_fa_req():   return n_fa_req() > 0
-def has_fa_ngic():  return _fa_valid("NGIC")
+def has_fa_nwag():  return _fa_valid("NWAG")   # NWAG = FA state-level ratebook (equivalent of NGIC in BA)
 
 def chip(f):
     if f:
@@ -1383,7 +1383,7 @@ elif active_lob == "Business Auto":
 # ─── FARM AUTO ───────────────────────────────────────────────────────────────
 elif active_lob == "Farm Auto":
 
-    DETECT_ORDER = ["HICNJ", "CCMIC", "NICOF", "NWAG", "NACO", "NAFF", "NGIC", "MM", "CW"]
+    DETECT_ORDER = ["HICNJ", "CCMIC", "NICOF", "NWAG", "NACO", "NAFF", "MM", "CW"]
 
     def scan_states(src_path):
         states = []
@@ -1397,11 +1397,11 @@ elif active_lob == "Farm Auto":
                             matched = next((k for k in DETECT_ORDER if k in name_up), None)
                             if matched:
                                 books.setdefault(matched, []).append(f)
-                    has_ngic  = "NGIC" in books and len(books["NGIC"]) == 1
+                    has_nwag  = "NWAG" in books and len(books["NWAG"]) == 1
                     conflicts = [k for k, v in books.items() if len(v) > 1]
                     states.append({"name": item.name, "path": item, "books": books,
-                                   "ready": has_ngic and not conflicts,
-                                   "conflicts": conflicts, "has_ngic": has_ngic})
+                                   "ready": has_nwag and not conflicts,
+                                   "conflicts": conflicts, "has_nwag": has_nwag})
         except Exception:
             pass
         return states
@@ -1436,7 +1436,7 @@ elif active_lob == "Farm Auto":
             st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
 
             uploaded = st.file_uploader(
-            "Select all ratebook files at once — filenames must contain the company code (NGIC, MM, NACO, …)",
+            "Select all ratebook files at once — filenames must contain the company code (NWAG, MM, NACO, …)",
             type=["xlsx", "xlsm", "xls"],
             accept_multiple_files=True,
             key=f"fa_multi_up_{st.session_state.fa_upload_reset}",
@@ -1457,7 +1457,7 @@ elif active_lob == "Farm Auto":
                         st.session_state[f"fa_file_{key}"] = {"error": "multiple", "names": [f.name for f in files]}
 
             # ── Assignment table ───────────────────────────────────────────
-            LABELS = {"NGIC": "Required", "CW": "Optional"}
+            LABELS = {"NWAG": "Required", "CW": "Optional"}
             rows_html = ""; n_ok = n_err = 0
             for key in ALL_KEYS:
                 val = st.session_state.get(f"fa_file_{key}")
@@ -1521,15 +1521,15 @@ elif active_lob == "Farm Auto":
                 d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
                 return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
 
-            ngic_uploaded = has_ngic(); ngic_sub = "Uploaded" if ngic_uploaded else "Required — please upload NGIC"
+            nwag_uploaded = has_fa_nwag(); nwag_sub = "Uploaded" if nwag_uploaded else "Required — please upload NWAG"
             st.markdown('<div class="rdy-card">'
-                + rdy(ngic_uploaded, 'NGIC Ratebook <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', ngic_sub)
+                + rdy(nwag_uploaded, 'NWAG Ratebook <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', nwag_sub)
                 + rdy(has_files, f'Other Ratebooks &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{nr_now}/{len(REQUIRED)}</span>', req_sub)
                 + rdy(save_ok, "Save location", save_sub)
                 + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{mv}%</span>', "Rule 417 threshold")
                 + '</div>', unsafe_allow_html=True)
 
-            ngic_ok = has_ngic(); ready = ngic_ok and save_ok
+            nwag_ok = has_fa_nwag(); ready = nwag_ok and save_ok
 
             if st.session_state.fa_confirm_step == "idle":
                 if ready:
@@ -1538,7 +1538,7 @@ elif active_lob == "Farm Auto":
                         st.session_state.fa_confirm_step = "confirm"; st.session_state.fa_run_status = "idle"; st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
-                    missing = (["NGIC ratebook"] if not ngic_ok else []) + (["save location"] if not save_ok else [])
+                    missing = (["NWAG ratebook"] if not nwag_ok else []) + (["save location"] if not save_ok else [])
                     st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
                     st.button(f"Waiting \u2014 {', '.join(missing)}", key="fa_run_btn_dis", use_container_width=True, disabled=True)
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -1571,9 +1571,9 @@ elif active_lob == "Farm Auto":
                         f = st.session_state.get(f"fa_file_{k}")
                         return io.BytesIO(f["bytes"]) if f and "error" not in f else None
                     xlsx_out, pdf_out = run_rate_pages(
-                        NGICRatebook=_rb("NGIC"), MMRatebook=_rb("MM"), NACORatebook=_rb("NACO"),
+                        NWAGRatebook=_rb("NWAG"), MMRatebook=_rb("MM"), NACORatebook=_rb("NACO"),
                         NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"), HICNJRatebook=_rb("HICNJ"),
-                        CCMICRatebook=_rb("CCMIC"), NWAGRatebook=_rb("NWAG"), CWRatebook=_rb("CW"),
+                        CCMICRatebook=_rb("CCMIC"), CWRatebook=_rb("CW"),
                         folder_selected=st.session_state.fa_save_dir,
                         SchedRatingMod=int(st.session_state.fa_sched_mod) or None,
                         progress_callback=update_progress, skip_pdf=True)
@@ -1656,8 +1656,8 @@ elif active_lob == "Farm Auto":
                                 state_rows += f'<div class="arow arow-ok" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile afile-assigned">{found_str}</span><span class="astat astat-ok">&#10003;</span></div>'
                             elif s["conflicts"]:
                                 state_rows += f'<div class="arow arow-error" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile afile-err">&#9888;&nbsp; Conflicts: {", ".join(s["conflicts"])}</span><span class="astat astat-err">&#9888;</span></div>'
-                            elif not s["has_ngic"]:
-                                state_rows += f'<div class="arow arow-error" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile afile-err">Missing NGIC &nbsp;({found_str})</span><span class="astat astat-err">&#10005;</span></div>'
+                            elif not s["has_nwag"]:
+                                state_rows += f'<div class="arow arow-error" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile afile-err">Missing NWAG &nbsp;({found_str})</span><span class="astat astat-err">&#10005;</span></div>'
                             else:
                                 state_rows += f'<div class="arow arow-empty" style="grid-template-columns:110px 1fr 28px;"><span class="aco">{s["name"]}</span><span class="afile">{found_str}</span><span class="astat astat-empty">—</span></div>'
                         st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>States Detected &nbsp;({len(states)})</span><span>{n_ready} ready{issue_txt}</span></div>{state_rows}</div>', unsafe_allow_html=True)
@@ -1830,7 +1830,7 @@ elif active_lob == "Farm Auto":
             save_sub = (("…"+st.session_state.fa_multi_save_dir[-36:]) if len(st.session_state.fa_multi_save_dir)>38 else st.session_state.fa_multi_save_dir) if save_ok_m else "Not yet selected"
             st.markdown('<div class="rdy-card">'
                 + rdy(src_ok and bool(states_list), "Source Folder", src_sub)
-                + rdy(n_ready_m > 0, f'States Ready &nbsp;<span style="font-size:10px;color:#6B7A9E;">{n_ready_m}/{len(states_list)}</span>', f"{n_ready_m} state{'s' if n_ready_m!=1 else ''} with valid NGIC ratebook")
+                + rdy(n_ready_m > 0, f'States Ready &nbsp;<span style="font-size:10px;color:#6B7A9E;">{n_ready_m}/{len(states_list)}</span>', f"{n_ready_m} state{'s' if n_ready_m!=1 else ''} with valid NWAG ratebook")
                 + rdy(save_ok_m, "Save Location", save_sub)
                 + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;">Per State</span>', f'{sum(1 for s in states_list if st.session_state.fa_multi_sched_map.get(s["name"],0)>0)} of {len(states_list)} states configured' if states_list else "No states detected")
                 + '</div>', unsafe_allow_html=True)
@@ -1885,9 +1885,9 @@ elif active_lob == "Farm Auto":
                     def _p(k): files = s["books"].get(k); return files[0] if files and len(files)==1 else None
                     try:
                         xlsx_out, _ = run_rate_pages(
-                            NGICRatebook=_p("NGIC"), MMRatebook=_p("MM"), NACORatebook=_p("NACO"),
+                            NWAGRatebook=_p("NWAG"), MMRatebook=_p("MM"), NACORatebook=_p("NACO"),
                             NAFFRatebook=_p("NAFF"), NICOFRatebook=_p("NICOF"), HICNJRatebook=_p("HICNJ"),
-                            CCMICRatebook=_p("CCMIC"), NWAGRatebook=_p("NWAG"), CWRatebook=None,
+                            CCMICRatebook=_p("CCMIC"), CWRatebook=None,
                             folder_selected=str(out_dir), SchedRatingMod=int(st.session_state.fa_multi_sched_map.get(sname, 0)) or None, skip_pdf=True)
                         pdf_out = None
                         if st.session_state.fa_multi_gen_pdf:

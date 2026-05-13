@@ -161,7 +161,7 @@ class Auto:
         # Nesting protocol. Assign books to levels. If a lower level doesn't have a sheet, take it from the higher level.
         # Some sheets are naturally ignored. It is important that deep copies are used.
         LEVEL1 = rateTables[name]
-        LEVEL2 = rateTables["NGIC"] or rateTables["NWAG"]
+        LEVEL2 = rateTables.get(self._STATE_LEVEL_COMPANY)   # "NGIC" for BA, "NWAG" for FA
         LEVEL3 = rateTables["CW"]
 
         # Cascade LEVEL2 → LEVEL1: skip if LEVEL2 is unavailable (None) or if

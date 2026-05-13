@@ -142,6 +142,27 @@ class Auto(_BABase):
         df.columns = ["Description", "Minimum Premium"]
         return df
 
+    def buildFALayupFactors(self, company):
+        # FA uses FarmLayUpFactor_Ext (2-column table: Months Laid Up | Factor).
+        # BA uses AutoLayUpFactor_Ext (many vehicle-type columns).
+        raw = self.rateTables[company].get("FarmLayUpFactor_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Months Laid Up", "Factor"])
+
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+
+        # Ratebook stores "7-12"; rate page shows "7+"
+        df["Months Laid Up"] = df["Months Laid Up"].replace("7-12", "7+")
+
+        # Sort into display order: 0-2, 3, 4, 5, 6, 7+
+        _order = {"0-2": 0, "3": 1, "4": 2, "5": 3, "6": 4, "7+": 5}
+        df["_sort"] = df["Months Laid Up"].map(_order)
+        df = df.sort_values("_sort").drop(columns=["_sort"]).reset_index(drop=True)
+
+        df["Factor"] = df["Factor"].astype(float).map(lambda x: f"{x:.3f}")
+        return df
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -193,6 +214,113 @@ class Auto(_BABase):
             cell = ws.cell(row=row_idx, column=2)
             if cell.value is not None:
                 cell.number_format = CURRENCY_FORMAT
+
+    def _page_rule_222e(self, RatePages):
+        # FA override — uses FarmLayUpFactor_Ext (2-col) instead of AutoLayUpFactor_Ext (multi-col).
+        # Subtitle changes from "Commercial Lay-up Credit" to "Farm Lay-up Credit".
+        self.compareCompanies("FarmLayUpFactor_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            tables    = [self.buildFALayupFactors(comp_name)]
+            subtitles = ["222.E. Farm Lay-up Credit"]
+            RatePages.generateWorksheetTablesX(
+                "Rule 222 E" + self.title_company_name,
+                "RULE 222.E PREMIUM DEVELOPMENT - TRUCK, TRACTOR, TRAILER TYPES " + self.title_company_name,
+                subtitles, tables, False, True,
+            )
+            self.overideFooter(RatePages.getWB()["Rule 222 E" + self.title_company_name], CompanyTest)
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 222 E"):
+                self.format222E(_wb[_sn])
+
+    def _page_rule_225d(self, RatePages):
+        # FA override — layup table changes; fleet-size table is the same.
+        self.compareCompanies("FarmLayUpFactor_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            subtitles = [
+                "225.D Fleet Size Rating Factors - Zone Rated",
+                "225.D. Farm Lay-up Credit",
+            ]
+            tables = [
+                self.buildFleetSizeRatingFactorsZone(comp_name),
+                self.buildFALayupFactors(comp_name),
+            ]
+            title_start = "RULE 225.​​​ PREMIUM DEVELOPMENT - ZONE-RATED AUTOS "
+            RatePages.generateWorksheetTablesX(
+                "Rule 225.D " + self.title_company_name,
+                title_start + self.title_company_name,
+                subtitles, tables, False, True,
+            )
+            self.overideFooter(RatePages.getWB()["Rule 225.D " + self.title_company_name], CompanyTest)
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 225.D"):
+                self.format225D(_wb[_sn])
+
+    def _page_rule_239d(self, RatePages):
+        # FA override — uses FarmLayUpFactor_Ext and Farm subtitle.
+        self.compareCompanies("FarmLayUpFactor_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            title_start = "RULE 239.​ PUBLIC AUTO PREMIUM DEVELOPMENT - OTHER THAN ZONE-RATED AUTOS "
+            RatePages.generateWorksheet(
+                "Rule 239 D " + self.title_company_name,
+                title_start + self.title_company_name,
+                "239.D. Farm Lay-up Credit",
+                self.buildFALayupFactors(comp_name), False, True,
+            )
+            self.overideFooter(RatePages.getWB()["Rule 239 D " + self.title_company_name], CompanyTest)
+
+    def _page_rule_241(self, RatePages):
+        # FA override — layup table and subtitle change; mechanical lift table is unchanged.
+        self.compareCompanies(["FarmLayUpFactor_Ext", "MechanicalLiftFactorOtherThanZoneRated"])
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+
+            if self.StateAbb == "VA":
+                subtitles = self._VA_RULE_SUBTITLES["Rule 241"]
+            else:
+                subtitles = [
+                    "241.D.1.d Mechanical Lift Factor",
+                    "241.E. Farm Lay-up Credit",
+                ]
+
+            if self.StateAbb == "VA":
+                tables = [
+                    self.buildMechanicalLiftFactor(comp_name),
+                    self.buildSpecifiecCausesofLossCoverageFactor(comp_name),
+                    self.buildFALayupFactors(comp_name),
+                ]
+            else:
+                tables = [
+                    self.buildMechanicalLiftFactor(comp_name),
+                    self.buildFALayupFactors(comp_name),
+                ]
+
+            RatePages.generateWorksheetTablesX(
+                "Rule 241 " + self.title_company_name,
+                "RULE 241. PUBLIC AUTO PREMIUM DEVELOPMENT - ZONE-RATED AUTOS " + self.title_company_name,
+                subtitles, tables, False, True,
+            )
+            self.overideFooter(RatePages.getWB()["Rule 241 " + self.title_company_name], CompanyTest)
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 241"):
+                self.format241(_wb[_sn])
 
     # =========================================================================
     # Section C: Main FA page generator

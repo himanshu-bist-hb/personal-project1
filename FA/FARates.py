@@ -163,6 +163,37 @@ class Auto(_BABase):
         df["Factor"] = df["Factor"].astype(float).map(lambda x: f"{x:.3f}")
         return df
 
+    def buildFAPollutionBaseRate(self, company):
+        # FA Rule 303 — FarmPollutionLiabilityBaseRate_Ext
+        # Ratebook: Constant | BaseRate  →  Rate page: Base Rate: | Per $25,000 Limit of Liability
+        raw = self.rateTables[company].get("FarmPollutionLiabilityBaseRate_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["", "Per $25,000 Limit of Liability"])
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        base_rate = pd.to_numeric(df["BaseRate"].iloc[0], errors="coerce")
+        return pd.DataFrame({
+            "": ["Base Rate:"],
+            "Per $25,000 Limit of Liability": [f"${base_rate:,.2f}"],
+        })
+
+    def buildFAPollutionFleetFactor(self, company):
+        # FA Rule 303 — FarmPollutionLiabilityFleetFactor_Ext
+        # Ratebook: PowerUnitMinimum | Factor  →  Rate page: Fleet Size (ranges) | Fleet Factor
+        raw = self.rateTables[company].get("FarmPollutionLiabilityFleetFactor_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Fleet Size", "Fleet Factor"])
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        _range_map = {0: "0-4", 5: "5-9", 10: "10-19", 20: "20-29", 30: "30+"}
+        df["PowerUnitMinimum"] = (
+            pd.to_numeric(df["PowerUnitMinimum"], errors="coerce")
+            .apply(lambda v: _range_map.get(int(v), str(int(v))) if pd.notna(v) else v)
+        )
+        df["Factor"] = pd.to_numeric(df["Factor"], errors="coerce").map(lambda x: f"{x:.2f}")
+        df = df.rename(columns={"PowerUnitMinimum": "Fleet Size", "Factor": "Fleet Factor"})
+        return df
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -321,6 +352,72 @@ class Auto(_BABase):
         for _sn in _wb.sheetnames:
             if _sn.startswith("Rule 241"):
                 self.format241(_wb[_sn])
+
+    def _page_rule_303(self, RatePages):
+        # FA override — Rule 303 uses FarmPollutionLiability tables (different from BA).
+        # Not applicable in New York.
+        if self.StateAbb == "NY":
+            return
+
+        self.compareCompanies(["FarmPollutionLiabilityBaseRate_Ext",
+                               "FarmPollutionLiabilityFleetFactor_Ext"])
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+
+            ws_name   = "Rule 303 " + self.title_company_name
+            subtitles = ["303.B.1 Premium Computation", "Liability Factor:", "Fleet Factor:"]
+            tables    = [
+                pd.DataFrame(),                              # separator — produces the subtitle row only
+                self.buildFAPollutionBaseRate(comp_name),
+                self.buildFAPollutionFleetFactor(comp_name),
+            ]
+            RatePages.generateWorksheetTablesX(
+                ws_name,
+                "RULE 303. POLLUTION LIABILITY " + self.title_company_name,
+                subtitles, tables, False, True,
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 303"):
+                self.formatRule303FA(_wb[_sn])
+
+    def formatRule303FA(self, ws):
+        from openpyxl.styles import Font, Alignment, Border, Side
+
+        ws.column_dimensions["A"].width = 22
+        ws.column_dimensions["B"].width = 30
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+        _subtitle_vals = {"303.B.1 Premium Computation", "Liability Factor:", "Fleet Factor:"}
+        _header_vals   = {"Per $25,000 Limit of Liability", "Fleet Size", "Fleet Factor"}
+
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is None:
+                    continue
+                val = str(cell.value)
+                if cell.row == 1:
+                    cell.font = Font(bold=True, name="Arial", size=10)
+                elif val in _subtitle_vals:
+                    cell.font = Font(italic=True, name="Arial", size=10)
+                elif val in _header_vals:
+                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+                    cell.border    = border
+                else:
+                    cell.font      = Font(name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                    cell.border    = border
 
     # =========================================================================
     # Section C: Main FA page generator

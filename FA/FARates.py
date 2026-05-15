@@ -194,6 +194,36 @@ class Auto(_BABase):
         df = df.rename(columns={"PowerUnitMinimum": "Fleet Size", "Factor": "Fleet Factor"})
         return df
 
+    def buildFATieringFactor(self, company):
+        # FA Rule 420 — TieringFactor_Ext
+        # Ratebook: Loss Grade | Factor  →  Rate page: Grade | Loss Factor
+        raw = self.rateTables[company].get("TieringFactor_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Grade", "Loss Factor"])
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        df["Factor"] = pd.to_numeric(df["Factor"], errors="coerce").map(lambda x: f"{x:.4f}")
+        df = df.rename(columns={"Loss Grade": "Grade", "Factor": "Loss Factor"})
+        return df[["Grade", "Loss Factor"]]
+
+    def buildFAMitigationFactor(self, company):
+        # FA Rule 420 — TieringMitigationFactor_Ext
+        # Ratebook: Power Units | Factor  →  Rate page: Number of Vehicles | Factor
+        # Row 0 is a boundary marker (dropped). Row 1 → "1-24". Last row (30) → "30+".
+        raw = self.rateTables[company].get("TieringMitigationFactor_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Number of Vehicles", "Factor"])
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        df["Power Units"] = pd.to_numeric(df["Power Units"], errors="coerce")
+        df = df[df["Power Units"] != 0].reset_index(drop=True)
+        df["Power Units"] = df["Power Units"].apply(
+            lambda v: "1-24" if v == 1 else ("30+" if v == 30 else str(int(v)))
+        )
+        df["Factor"] = pd.to_numeric(df["Factor"], errors="coerce").map(lambda x: f"{x:.3f}")
+        df = df.rename(columns={"Power Units": "Number of Vehicles"})
+        return df[["Number of Vehicles", "Factor"]]
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -424,6 +454,72 @@ class Auto(_BABase):
                 if cell.value is None:
                     continue
                 val = str(cell.value)
+                if val == "":
+                    continue
+                if cell.row == 1:
+                    cell.font = Font(bold=True, name="Arial", size=10)
+                elif val in _subtitle_vals:
+                    cell.font = Font(italic=True, name="Arial", size=10)
+                elif val in _header_vals:
+                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+                    cell.border    = border
+                else:
+                    cell.font      = Font(name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                    cell.border    = border
+
+    def _page_rule_fa_420(self, RatePages):
+        # FA-only — Rule 420 Segmentation Rating Plan.
+        # Two tables: TieringFactor_Ext (Implementation Factor) and
+        # TieringMitigationFactor_Ext (Mitigation Factors).
+        self.compareCompanies(["TieringFactor_Ext", "TieringMitigationFactor_Ext"])
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+
+            ws_name   = "Rule 420 " + self.title_company_name
+            subtitles = ["420.C.1. Implementation Factor", "420.C.2. Mitigation Factors"]
+            tables    = [
+                self.buildFATieringFactor(comp_name),
+                self.buildFAMitigationFactor(comp_name),
+            ]
+            RatePages.generateWorksheetTablesX(
+                ws_name,
+                "RULE 420. SEGMENTATION RATING PLAN " + self.title_company_name,
+                subtitles, tables, False, True,
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 420"):
+                self.formatRule420FA(_wb[_sn])
+
+    def formatRule420FA(self, ws):
+        from openpyxl.styles import Font, Alignment, Border, Side
+
+        ws.column_dimensions["A"].width = 22
+        ws.column_dimensions["B"].width = 22
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+        _subtitle_vals = {"420.C.1. Implementation Factor", "420.C.2. Mitigation Factors"}
+        _header_vals   = {"Grade", "Loss Factor", "Number of Vehicles", "Factor"}
+
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is None:
+                    continue
+                val = str(cell.value)
+                if val == "":
+                    continue
                 if cell.row == 1:
                     cell.font = Font(bold=True, name="Arial", size=10)
                 elif val in _subtitle_vals:
@@ -568,6 +664,7 @@ class Auto(_BABase):
         self._page_rule_317(RatePages)
         self._page_rule_416(RatePages)
         self._page_rule_417(RatePages)
+        self._page_rule_fa_420(RatePages)
         self._page_rule_425(RatePages)
         self._page_rule_426(RatePages)
         self._page_rule_427(RatePages)

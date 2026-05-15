@@ -224,6 +224,25 @@ class Auto(_BABase):
         df = df.rename(columns={"Power Units": "Number of Vehicles"})
         return df[["Number of Vehicles", "Factor"]]
 
+    def buildFAMultiplePolicyDiscount(self, company):
+        # FA Rule 440 — MultiplePolicyDiscountFactor_Ext
+        # Ratebook: MPD Applies | Factor → Rate page shows only the TRUE row factor.
+        raw = self.rateTables[company].get("MultiplePolicyDiscountFactor_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Description", "Factor"])
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        true_row = df[df["MPD Applies"].astype(str).str.upper() == "TRUE"]
+        if true_row.empty:
+            factor = ""
+        else:
+            val = pd.to_numeric(true_row["Factor"].iloc[0], errors="coerce")
+            factor = f"{val:.2f}"
+        return pd.DataFrame({
+            "Description": ["Multiply the Eligible Policy Premiums by the Following Factor:"],
+            "Factor": [factor],
+        })
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -533,6 +552,52 @@ class Auto(_BABase):
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border    = border
 
+    def _page_rule_fa_440(self, RatePages):
+        # FA-only — Rule 440 Multiple Policy Discount.
+        # Shows the TRUE row factor alongside a fixed description line.
+        self.compareCompanies("MultiplePolicyDiscountFactor_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            ws_name = "Rule 440 " + self.title_company_name
+            RatePages.generateWorksheet(
+                ws_name,
+                "RULE 440. MULTIPLE POLICY DISCOUNT " + self.title_company_name,
+                "440.B.",
+                self.buildFAMultiplePolicyDiscount(comp_name),
+                False,  # useIndex
+                False,  # useHeader
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+            self.formatRule440FA(RatePages.getWB()[ws_name])
+
+    def formatRule440FA(self, ws):
+        from openpyxl.styles import Font, Alignment, Border, Side
+
+        ws.column_dimensions["A"].width = 58
+        ws.column_dimensions["B"].width = 14
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+
+        for row_idx in range(4, ws.max_row + 1):
+            cell_a = ws.cell(row=row_idx, column=1)
+            if cell_a.value is not None:
+                cell_a.font      = Font(name="Arial", size=10)
+                cell_a.alignment = Alignment(horizontal="left", vertical="center")
+                cell_a.border    = border
+            cell_b = ws.cell(row=row_idx, column=2)
+            if cell_b.value is not None:
+                cell_b.font      = Font(name="Arial", size=10)
+                cell_b.alignment = Alignment(horizontal="center", vertical="center")
+                cell_b.border    = border
+
     # =========================================================================
     # Section C: Main FA page generator
     # =========================================================================
@@ -668,6 +733,7 @@ class Auto(_BABase):
         self._page_rule_425(RatePages)
         self._page_rule_426(RatePages)
         self._page_rule_427(RatePages)
+        self._page_rule_fa_440(RatePages)
         self._page_rule_450(RatePages)
         self._page_rule_451(RatePages, shared)
         self._page_rule_452(RatePages)

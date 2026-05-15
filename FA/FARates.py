@@ -239,12 +239,30 @@ class Auto(_BABase):
 
     def formatRule208FA(self, ws):
         from config.constants import CURRENCY_FORMAT
+        from openpyxl.styles import Font, Alignment, Border, Side
+
         ws.column_dimensions["A"].width = 58
         ws.column_dimensions["B"].width = 14
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+
         for row_idx in range(4, ws.max_row + 1):
-            cell = ws.cell(row=row_idx, column=2)
-            if cell.value is not None:
-                cell.number_format = CURRENCY_FORMAT
+            cell_a = ws.cell(row=row_idx, column=1)
+            if cell_a.value is not None:
+                cell_a.font      = Font(name="Arial", size=10)
+                cell_a.alignment = Alignment(horizontal="left", vertical="center")
+                cell_a.border    = border
+            cell_b = ws.cell(row=row_idx, column=2)
+            if cell_b.value is not None:
+                cell_b.font          = Font(name="Arial", size=10)
+                cell_b.alignment     = Alignment(horizontal="center", vertical="center")
+                cell_b.border        = border
+                cell_b.number_format = CURRENCY_FORMAT
 
     def _page_rule_222e(self, RatePages):
         # FA override — uses FarmLayUpFactor_Ext (2-col) instead of AutoLayUpFactor_Ext (multi-col).

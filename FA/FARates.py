@@ -258,6 +258,48 @@ class Auto(_BABase):
         df = df.rename(columns={"Risk Score Reporting Class": "Financial Reporting Class"})
         return df[["Financial Reporting Class", "Factor"]]
 
+    def buildFARule284(self, company):
+        # FA Rule 284 — reads from motorcycle factor tables instead of BA's hardcoded data.
+        # Liability  → SpecialTypesMotorcycleLiabilityFactor, engine size 501-800
+        # Medical    → SpecialTypesMotorcycleFactor MedicalPayments
+        # OTC        → SpecialTypesMotorcycleFactor PhysDamOTCACV (ACV chosen over SA)
+        # Collision  → SpecialTypesMotorcycleFactor PhysDamCollACV (ACV chosen over SA)
+        # UM         → SpecialTypesMotorcycleFactor UM/UIM
+        _empty = pd.DataFrame(columns=["Coverage", "All-terrain Vehicles", "Utility Task Vehicles"])
+        raw_factor = self.rateTables[company].get("SpecialTypesMotorcycleFactor")
+        raw_liab   = self.rateTables[company].get("SpecialTypesMotorcycleLiabilityFactor")
+        if raw_factor is None and raw_liab is None:
+            return _empty
+
+        df_f = pd.DataFrame(raw_factor[1:], columns=raw_factor[0])
+        df_f = df_f.dropna(how="all").reset_index(drop=True)
+
+        def _get(tc):
+            row = df_f[df_f["TypeCoverage"] == tc]
+            return pd.to_numeric(row["Factor"].iloc[0], errors="coerce") if not row.empty else None
+
+        med_f  = _get("MedicalPayments")
+        otc_f  = _get("PhysDamOTCACV")
+        coll_f = _get("PhysDamCollACV")
+        um_f   = _get("UM/UIM")
+
+        liab_f = None
+        if raw_liab is not None:
+            df_l = pd.DataFrame(raw_liab[1:], columns=raw_liab[0])
+            df_l = df_l.dropna(how="all").reset_index(drop=True)
+            row_l = df_l[df_l["EngineSize"] == "501-800"]
+            if not row_l.empty:
+                liab_f = pd.to_numeric(row_l["Factor"].iloc[0], errors="coerce")
+
+        fmt = lambda v: f"{v:.2f}" if v is not None else ""
+        factors = [fmt(liab_f), fmt(med_f), fmt(otc_f), fmt(coll_f), fmt(um_f)]
+
+        return pd.DataFrame({
+            "Coverage":              ["Liability", "Medical", "Other than Collision", "Collision", "UM"],
+            "All-terrain Vehicles":  factors,
+            "Utility Task Vehicles": factors,
+        })
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -434,6 +476,70 @@ class Auto(_BABase):
         for _sn in _wb.sheetnames:
             if _sn.startswith("Rule 241"):
                 self.format241(_wb[_sn])
+
+    def _page_rule_284(self, RatePages):
+        # FA override — Rule 284 reads factors from SpecialTypesMotorcycleFactor and
+        # SpecialTypesMotorcycleLiabilityFactor instead of BA's hardcoded ATV/UTV data.
+        self.compareCompanies(["SpecialTypesMotorcycleFactor",
+                               "SpecialTypesMotorcycleLiabilityFactor"])
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            ws_name   = "Rule 284 " + self.title_company_name
+            subtitles = ["284.C. Premium Computation"]
+            tables    = [self.buildFARule284(comp_name)]
+            RatePages.generateWorksheetTablesX(
+                ws_name,
+                "RULE 284. ALL-TERRAIN VEHICLES AND UTILITY TASK VEHICLES " + self.title_company_name,
+                subtitles, tables, False, True,
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 284"):
+                self.formatRule284FA(_wb[_sn])
+
+    def formatRule284FA(self, ws):
+        from openpyxl.styles import Font, Alignment, Border, Side
+
+        ws.column_dimensions["A"].width = 22
+        ws.column_dimensions["B"].width = 20
+        ws.column_dimensions["C"].width = 20
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+        _subtitle_vals = {"284.C. Premium Computation"}
+        _header_vals   = {"Coverage", "All-terrain Vehicles", "Utility Task Vehicles"}
+
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is None:
+                    continue
+                val = str(cell.value)
+                if val == "":
+                    continue
+                if cell.row == 1:
+                    cell.font = Font(bold=True, name="Arial", size=10)
+                elif val in _subtitle_vals:
+                    cell.font = Font(italic=True, name="Arial", size=10)
+                elif val in _header_vals:
+                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+                    cell.border    = border
+                else:
+                    cell.font   = Font(name="Arial", size=10)
+                    cell.border = border
+                    if cell.column == 1:
+                        cell.alignment = Alignment(horizontal="left", vertical="center")
+                    else:
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
 
     def _page_rule_303(self, RatePages):
         # FA override — Rule 303 uses FarmPollutionLiability tables (different from BA).

@@ -243,6 +243,21 @@ class Auto(_BABase):
             "Factor": [factor],
         })
 
+    def buildFARiskScoreFactor(self, company):
+        # FA Rule 455 — RiskScoreFactor_Ext
+        # Ratebook: Risk Score Reporting Class | Customer Type | Factor
+        # Rate page: Financial Reporting Class | Factor (CountryChoice rows only)
+        raw = self.rateTables[company].get("RiskScoreFactor_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Financial Reporting Class", "Factor"])
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        df = df[df["Customer Type"].astype(str).str.strip() == "CountryChoice"].copy()
+        df = df.drop_duplicates(subset=["Risk Score Reporting Class"]).reset_index(drop=True)
+        df["Factor"] = pd.to_numeric(df["Factor"], errors="coerce").map(lambda x: f"{x:.2f}")
+        df = df.rename(columns={"Risk Score Reporting Class": "Financial Reporting Class"})
+        return df[["Financial Reporting Class", "Factor"]]
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -598,6 +613,68 @@ class Auto(_BABase):
                 cell_b.alignment = Alignment(horizontal="center", vertical="center")
                 cell_b.border    = border
 
+    def _page_rule_fa_455(self, RatePages):
+        # FA-only — Rule 455 Risk Score Factor.
+        # Not applicable in CA, MT, NY, UT, WA.
+        if self.StateAbb in ("CA", "MT", "NY", "UT", "WA"):
+            return
+
+        self.compareCompanies("RiskScoreFactor_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            ws_name = "Rule 455 " + self.title_company_name
+            RatePages.generateWorksheet(
+                ws_name,
+                "RULE 455. RISK SCORE FACTOR " + self.title_company_name,
+                "455.A Risk Score Factors",
+                self.buildFARiskScoreFactor(comp_name),
+                False,  # useIndex
+                True,   # useHeader
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 455"):
+                self.formatRule455FA(_wb[_sn])
+
+    def formatRule455FA(self, ws):
+        from openpyxl.styles import Font, Alignment, Border, Side
+
+        ws.column_dimensions["A"].width = 28
+        ws.column_dimensions["B"].width = 14
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+        _header_vals = {"Financial Reporting Class", "Factor"}
+
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is None:
+                    continue
+                val = str(cell.value)
+                if val == "":
+                    continue
+                if cell.row == 1:
+                    cell.font = Font(bold=True, name="Arial", size=10)
+                elif val == "455.A Risk Score Factors":
+                    cell.font = Font(italic=True, name="Arial", size=10)
+                elif val in _header_vals:
+                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+                    cell.border    = border
+                else:
+                    cell.font      = Font(name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                    cell.border    = border
+
     # =========================================================================
     # Section C: Main FA page generator
     # =========================================================================
@@ -739,6 +816,7 @@ class Auto(_BABase):
         self._page_rule_452(RatePages)
         self._page_rule_453(RatePages)
         self._page_rule_454(RatePages)
+        self._page_rule_fa_455(RatePages)
         self._page_rule_dp1(RatePages)
         self._page_rule_state_specific(RatePages)
 

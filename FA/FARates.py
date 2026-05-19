@@ -224,6 +224,34 @@ class Auto(_BABase):
         df = df.rename(columns={"Power Units": "Number of Vehicles"})
         return df[["Number of Vehicles", "Factor"]]
 
+    def buildFATieringFactorMatrix(self, company):
+        # FA Rule 420 exception states (CA, MT, NY, UT, WA).
+        # Cross-product: TieringFactor_Ext (rows=Loss Grade) × RetentionFactor_Ext (cols=Retention Grade).
+        # Each cell = TieringFactor × RetentionFactor, formatted to 4 decimal places.
+        raw_tier = self.rateTables[company].get("TieringFactor_Ext")
+        raw_ret  = self.rateTables[company].get("RetentionFactor_Ext")
+        if raw_tier is None or raw_ret is None:
+            return pd.DataFrame(columns=["Loss Grade"])
+
+        df_tier = pd.DataFrame(raw_tier[1:], columns=raw_tier[0])
+        df_tier = df_tier.dropna(how="all").reset_index(drop=True)
+        df_tier["Factor"] = pd.to_numeric(df_tier["Factor"], errors="coerce")
+
+        df_ret = pd.DataFrame(raw_ret[1:], columns=raw_ret[0])
+        df_ret = df_ret.dropna(how="all").reset_index(drop=True)
+        df_ret["Factor"] = pd.to_numeric(df_ret["Factor"], errors="coerce")
+
+        ret_grades  = df_ret["Retention Grade"].tolist()
+        ret_factors = df_ret["Factor"].tolist()
+
+        data = {"Loss Grade": df_tier["Loss Grade"].tolist()}
+        for rg, rf in zip(ret_grades, ret_factors):
+            data[rg] = [
+                f"{tf * rf:.4f}" if pd.notna(tf) and pd.notna(rf) else ""
+                for tf in df_tier["Factor"]
+            ]
+        return pd.DataFrame(data)
+
     def buildFAMultiplePolicyDiscount(self, company):
         # FA Rule 440 — MultiplePolicyDiscountFactor_Ext
         # Ratebook: MPD Applies | Factor → Rate page shows only the TRUE row factor.
@@ -611,9 +639,14 @@ class Auto(_BABase):
 
     def _page_rule_fa_420(self, RatePages):
         # FA-only — Rule 420 Segmentation Rating Plan.
-        # Two tables: TieringFactor_Ext (Implementation Factor) and
-        # TieringMitigationFactor_Ext (Mitigation Factors).
-        self.compareCompanies(["TieringFactor_Ext", "TieringMitigationFactor_Ext"])
+        # Exception states (CA, MT, NY, UT, WA): Implementation Factor is a cross-product
+        # matrix of TieringFactor_Ext × RetentionFactor_Ext.
+        # All other states: single Grade | Loss Factor column (TieringFactor_Ext only).
+        # Mitigation Factors table is the same for all states.
+        _EXCEPTION_STATES = {"CA", "MT", "NY", "UT", "WA"}
+
+        self.compareCompanies(["TieringFactor_Ext", "TieringMitigationFactor_Ext",
+                               "RetentionFactor_Ext"])
         for CompanyTest in self.CompanyListDif:
             comp_name = self.extract_company_name(CompanyTest)
             self.title_company_name = CompanyTest
@@ -622,10 +655,13 @@ class Auto(_BABase):
 
             ws_name   = "Rule 420 " + self.title_company_name
             subtitles = ["420.C.1. Implementation Factor", "420.C.2. Mitigation Factors"]
-            tables    = [
-                self.buildFATieringFactor(comp_name),
-                self.buildFAMitigationFactor(comp_name),
-            ]
+
+            if self.StateAbb in _EXCEPTION_STATES:
+                impl_table = self.buildFATieringFactorMatrix(comp_name)
+            else:
+                impl_table = self.buildFATieringFactor(comp_name)
+
+            tables = [impl_table, self.buildFAMitigationFactor(comp_name)]
             RatePages.generateWorksheetTablesX(
                 ws_name,
                 "RULE 420. SEGMENTATION RATING PLAN " + self.title_company_name,
@@ -636,7 +672,11 @@ class Auto(_BABase):
         _wb = RatePages.getWB()
         for _sn in _wb.sheetnames:
             if _sn.startswith("Rule 420"):
-                self.formatRule420FA(_wb[_sn])
+                ws = _wb[_sn]
+                if ws.max_column > 3:
+                    self.formatRule420FAMatrix(ws)
+                else:
+                    self.formatRule420FA(ws)
 
     def formatRule420FA(self, ws):
         from openpyxl.styles import Font, Alignment, Border, Side
@@ -665,6 +705,53 @@ class Auto(_BABase):
                 elif val in _subtitle_vals:
                     cell.font = Font(italic=True, name="Arial", size=10)
                 elif val in _header_vals:
+                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+                    cell.border    = border
+                else:
+                    cell.font      = Font(name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                    cell.border    = border
+
+    def formatRule420FAMatrix(self, ws):
+        # Formatter for exception-state Rule 420: Loss Grade × Retention Grade matrix.
+        # Header rows are detected by checking column A for "Loss Grade" or "Number of Vehicles",
+        # so the single-letter Retention Grade column headers (D, I, M, Q, U) are automatically
+        # made bold along with their anchor cell without value-based conflicts.
+        from openpyxl.styles import Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        ws.column_dimensions["A"].width = 12
+        for col_idx in range(2, ws.max_column + 1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = 10
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+        _subtitle_vals = {"420.C.1. Implementation Factor", "420.C.2. Mitigation Factors"}
+
+        # First pass: find header rows by anchor value in column A
+        header_rows = set()
+        for row in ws.iter_rows():
+            if row[0].value in ("Loss Grade", "Number of Vehicles"):
+                header_rows.add(row[0].row)
+
+        # Second pass: apply formatting
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is None:
+                    continue
+                val = str(cell.value)
+                if val == "":
+                    continue
+                if cell.row == 1:
+                    cell.font = Font(bold=True, name="Arial", size=10)
+                elif val in _subtitle_vals:
+                    cell.font = Font(italic=True, name="Arial", size=10)
+                elif cell.row in header_rows:
                     cell.font      = Font(bold=True, name="Arial", size=10)
                     cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
                     cell.border    = border

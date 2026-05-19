@@ -328,6 +328,49 @@ class Auto(_BABase):
             "Utility Task Vehicles": factors,
         })
 
+    def buildFARule231cFarm(self, company):
+        # FA Rule 231c supplement — PrivatePassengerClassFactorFarm_Ext (Liability rows only).
+        # Pivots Use Class (rows) × Body Style (columns) with Factor to 2 decimal places; NA if missing.
+        raw = self.rateTables[company].get("PrivatePassengerClassFactorFarm_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Use Class"])
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        df = df[df["Coverage Type"].astype(str).str.strip() == "Liability"].copy()
+        if df.empty:
+            return pd.DataFrame(columns=["Use Class"])
+        df["Factor"] = pd.to_numeric(df["Factor"], errors="coerce")
+        pivot = df.pivot_table(
+            index="Use Class", columns="Body Style", values="Factor", aggfunc="first"
+        ).reset_index()
+        pivot.columns.name = None
+        _row_order = [
+            "Not Driven to Work or School",
+            "Driven to Work or School",
+            "Business Use & All Other",
+            "Farm Use",
+        ]
+        pivot["_sort"] = pivot["Use Class"].apply(
+            lambda v: _row_order.index(v) if v in _row_order else 999
+        )
+        pivot = pivot.sort_values("_sort").drop(columns=["_sort"]).reset_index(drop=True)
+        _col_order = [
+            "Use Class",
+            "Private Passenger or Station Wagon",
+            "Utility Vehicle or Sports Utility Vehicle",
+            "Pickup",
+            "Van",
+        ]
+        ordered_cols = [c for c in _col_order if c in pivot.columns]
+        remaining    = [c for c in pivot.columns if c not in ordered_cols]
+        pivot = pivot[ordered_cols + remaining]
+        for col in pivot.columns:
+            if col != "Use Class":
+                pivot[col] = pivot[col].apply(
+                    lambda v: f"{v:.2f}" if pd.notna(v) else "NA"
+                )
+        return pivot
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -447,6 +490,83 @@ class Auto(_BABase):
         for _sn in _wb.sheetnames:
             if _sn.startswith("Rule 225.D"):
                 self.format225D(_wb[_sn])
+
+    def _page_rule_231c(self, RatePages):
+        # FA override — same Class Code table as BA, plus a Farm Use Class Factors table below.
+        # Extra table: Use Class × Body Style from PrivatePassengerClassFactorFarm_Ext, Liability only.
+        self.compareCompanies([
+            "PrivatePassengerClassCode",
+            "PrivatePassengerTypesClassFactors_Ext",
+            "PrivatePassengerClassFactorFarm_Ext",
+        ])
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            ws_name = "Rule 231 C " + self.title_company_name
+            RatePages.generateWorksheet(
+                ws_name,
+                "RULE 231. PRIVATE PASSENGER TYPES " + self.title_company_name,
+                "231.C.2.d. Use and Operator Experience Factors",
+                self.build231C(comp_name),
+                False, True,
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+            ws = RatePages.getWB()[ws_name]
+            self.format31C(ws)
+            self.appendFARule231cFarm(ws, self.buildFARule231cFarm(comp_name))
+
+    def appendFARule231cFarm(self, ws, farm_df):
+        # Writes the Farm Use Class Factors table starting two rows below the existing content.
+        from openpyxl.styles import Font, Alignment, Border, Side
+        from openpyxl.utils import get_column_letter
+
+        if farm_df.empty or len(farm_df.columns) <= 1:
+            return
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+
+        row = ws.max_row + 2
+
+        # Subtitle
+        cell = ws.cell(row=row, column=1)
+        cell.value = "231.C. Farm Use Class Factors"
+        cell.font  = Font(italic=True, name="Arial", size=10)
+        row += 2  # subtitle row + one blank spacer row
+
+        # Header row
+        headers = list(farm_df.columns)
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=row, column=col_idx)
+            cell.value     = header
+            cell.font      = Font(bold=True, name="Arial", size=10)
+            cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+            cell.border    = border
+        row += 1
+
+        # Data rows
+        for _, data_row in farm_df.iterrows():
+            for col_idx, val in enumerate(data_row, start=1):
+                cell = ws.cell(row=row, column=col_idx)
+                cell.value  = val
+                cell.font   = Font(name="Arial", size=10)
+                cell.border = border
+                if col_idx == 1:
+                    cell.alignment = Alignment(horizontal="left", vertical="center")
+                else:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+            row += 1
+
+        # Column widths for the whole sheet (Use Class needs more room than Class Code)
+        ws.column_dimensions["A"].width = 28
+        for col_idx in range(2, len(headers) + 1):
+            ws.column_dimensions[get_column_letter(col_idx)].width = 22
 
     def _page_rule_239d(self, RatePages):
         # FA override — uses FarmLayUpFactor_Ext and Farm subtitle.

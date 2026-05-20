@@ -376,8 +376,7 @@ class Auto(_BABase):
         # Logic:
         #   Truck Is A Trailer = No  → Liability, Other Than Collision, Collision columns
         #   Truck Is A Trailer = Yes, Coverage Type = Collision → Trailers Collision column
-        # Secondary Class display text and Primary Class grouping come from the class mapping file.
-        import os
+        # Secondary Class display text and Primary Class grouping come from the "FA Rule223" sheet in BA Input File.xlsx.
         _COLS = [
             "Primary Class", "Secondary Class",
             "4th-5th Digits of\nClass Code",
@@ -385,19 +384,12 @@ class Auto(_BABase):
         ]
         _EMPTY = pd.DataFrame(columns=_COLS)
 
-        mapping_path = os.path.join(os.path.dirname(__file__), "FA_Rule223C2_ClassMapping.xlsx")
         try:
-            mapping = pd.read_excel(mapping_path, sheet_name="ClassMapping", dtype=str)
+            mapping = pd.read_excel(BA_INPUT_FILE, sheet_name="FA Rule223", dtype=str)
         except Exception:
             return _EMPTY
 
-        mapping["Class Code"]   = mapping["Class Code"].astype(str).str.strip().str.zfill(2)
-        # Normalise dashes so em-dash and regular hyphen both match
-        mapping["Farmers Use"]  = (
-            mapping["Farmers Use"].astype(str).str.strip()
-            .str.replace("–", "-", regex=False)
-            .str.replace("—", "-", regex=False)
-        )
+        mapping["Class Code"] = mapping["Class Code"].astype(str).str.strip().str.zfill(2)
 
         raw = self.rateTables[company].get("TruckSecondaryClassFactorFarm_Ext")
         if raw is None:
@@ -409,19 +401,13 @@ class Auto(_BABase):
         df["Secondary Class Numeric"] = pd.to_numeric(
             df["Secondary Class Numeric"], errors="coerce"
         ).apply(lambda v: str(int(v)).zfill(2) if pd.notna(v) else "")
-        df["Farmers Use"] = (
-            df["Farmers Use"].fillna("").astype(str).str.strip()
-            .str.replace("–", "-", regex=False)
-            .str.replace("—", "-", regex=False)
-        )
         df["Truck Is A Trailer"] = df["Truck Is A Trailer"].fillna("").astype(str).str.strip().str.upper()
         df["Coverage Type"]      = df["Coverage Type"].fillna("").astype(str).str.strip()
         df["Factor"]             = pd.to_numeric(df["Factor"], errors="coerce")
 
-        def _factor(code, fu, trailer, coverage):
+        def _factor(code, trailer, coverage):
             sub = df[
                 (df["Secondary Class Numeric"] == code) &
-                (df["Farmers Use"] == fu) &
                 (df["Truck Is A Trailer"] == trailer) &
                 (df["Coverage Type"] == coverage)
             ]
@@ -432,15 +418,14 @@ class Auto(_BABase):
         rows = []
         for _, m in mapping.iterrows():
             code = m["Class Code"]
-            fu   = m["Farmers Use"]
             rows.append({
                 "Primary Class":              m["Primary Class"],
                 "Secondary Class":            m["Secondary Class"],
                 "4th-5th Digits of\nClass Code": code,
-                "Liability":                  fmt(_factor(code, fu, "NO",  "Liability")),
-                "OTC":                        fmt(_factor(code, fu, "NO",  "Other Than Collision")),
-                "Collision":                  fmt(_factor(code, fu, "NO",  "Collision")),
-                "Trailers\nCollision":        fmt(_factor(code, fu, "YES", "Collision")),
+                "Liability":                  fmt(_factor(code, "NO",  "Liability")),
+                "OTC":                        fmt(_factor(code, "NO",  "Other Than Collision")),
+                "Collision":                  fmt(_factor(code, "NO",  "Collision")),
+                "Trailers\nCollision":        fmt(_factor(code, "YES", "Collision")),
             })
 
         return pd.DataFrame(rows, columns=_COLS)
@@ -651,8 +636,7 @@ class Auto(_BABase):
             self.appendFARule231cFarm(ws, self.buildFARule231cFarm(comp_name))
 
     def appendFARule231cFarm(self, ws, farm_df):
-        # Appends Use Class × Body Style data rows two rows below the existing content.
-        # No subtitle, no header row — data only, all cells regular (non-bold) font.
+        # Appends Use Class × Body Style data below the existing content, with a non-bold column header row.
         from openpyxl.styles import Font, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
 
@@ -668,8 +652,20 @@ class Auto(_BABase):
 
         row = ws.max_row + 2
 
-        # Data rows only (no subtitle, no column headers)
         num_cols = len(farm_df.columns)
+
+        # Column header row — non-bold
+        for col_idx, col_name in enumerate(farm_df.columns, start=1):
+            cell = ws.cell(row=row, column=col_idx)
+            cell.value = col_name
+            cell.font = Font(name="Arial", size=10, bold=False)
+            cell.border = border
+            if col_idx == 1:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+        row += 1
+
         for _, data_row in farm_df.iterrows():
             for col_idx, val in enumerate(data_row, start=1):
                 cell = ws.cell(row=row, column=col_idx)
@@ -878,7 +874,7 @@ class Auto(_BABase):
 
     def _page_rule_fa_223c2(self, RatePages):
         # FA-only — Rule 223.C.2 Secondary Classification Factors.
-        # Reads TruckSecondaryClassFactorFarm_Ext; class groupings from FA_Rule223C2_ClassMapping.xlsx.
+        # Reads TruckSecondaryClassFactorFarm_Ext; class groupings from "FA Rule223" sheet in BA Input File.xlsx.
         # Truck Is A Trailer=No  → Liability / OTC / Collision columns.
         # Truck Is A Trailer=Yes, Coverage=Collision → Trailers Collision column.
         self.compareCompanies("TruckSecondaryClassFactorFarm_Ext")

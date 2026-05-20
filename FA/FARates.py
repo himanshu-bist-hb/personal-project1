@@ -371,6 +371,139 @@ class Auto(_BABase):
                 )
         return pivot
 
+    def buildFARule223c2(self, company):
+        # FA Rule 223.C.2 — TruckSecondaryClassFactorFarm_Ext
+        # Logic:
+        #   Truck Is A Trailer = No  → Liability, Other Than Collision, Collision columns
+        #   Truck Is A Trailer = Yes, Coverage Type = Collision → Trailers Collision column
+        # Secondary Class display text and Primary Class grouping come from the class mapping file.
+        import os
+        _COLS = [
+            "Primary Class", "Secondary Class",
+            "4th-5th Digits of\nClass Code",
+            "Liability", "OTC", "Collision", "Trailers\nCollision",
+        ]
+        _EMPTY = pd.DataFrame(columns=_COLS)
+
+        mapping_path = os.path.join(os.path.dirname(__file__), "FA_Rule223C2_ClassMapping.xlsx")
+        try:
+            mapping = pd.read_excel(mapping_path, sheet_name="ClassMapping", dtype=str)
+        except Exception:
+            return _EMPTY
+
+        mapping["Class Code"]   = mapping["Class Code"].astype(str).str.strip().str.zfill(2)
+        # Normalise dashes so em-dash and regular hyphen both match
+        mapping["Farmers Use"]  = (
+            mapping["Farmers Use"].astype(str).str.strip()
+            .str.replace("–", "-", regex=False)
+            .str.replace("—", "-", regex=False)
+        )
+
+        raw = self.rateTables[company].get("TruckSecondaryClassFactorFarm_Ext")
+        if raw is None:
+            return _EMPTY
+
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+
+        df["Secondary Class Numeric"] = pd.to_numeric(
+            df["Secondary Class Numeric"], errors="coerce"
+        ).apply(lambda v: str(int(v)).zfill(2) if pd.notna(v) else "")
+        df["Farmers Use"] = (
+            df["Farmers Use"].fillna("").astype(str).str.strip()
+            .str.replace("–", "-", regex=False)
+            .str.replace("—", "-", regex=False)
+        )
+        df["Truck Is A Trailer"] = df["Truck Is A Trailer"].fillna("").astype(str).str.strip().str.upper()
+        df["Coverage Type"]      = df["Coverage Type"].fillna("").astype(str).str.strip()
+        df["Factor"]             = pd.to_numeric(df["Factor"], errors="coerce")
+
+        def _factor(code, fu, trailer, coverage):
+            sub = df[
+                (df["Secondary Class Numeric"] == code) &
+                (df["Farmers Use"] == fu) &
+                (df["Truck Is A Trailer"] == trailer) &
+                (df["Coverage Type"] == coverage)
+            ]
+            return sub["Factor"].iloc[0] if not sub.empty else None
+
+        fmt = lambda v: f"{v:.3f}" if v is not None and pd.notna(v) else ""
+
+        rows = []
+        for _, m in mapping.iterrows():
+            code = m["Class Code"]
+            fu   = m["Farmers Use"]
+            rows.append({
+                "Primary Class":              m["Primary Class"],
+                "Secondary Class":            m["Secondary Class"],
+                "4th-5th Digits of\nClass Code": code,
+                "Liability":                  fmt(_factor(code, fu, "NO",  "Liability")),
+                "OTC":                        fmt(_factor(code, fu, "NO",  "Other Than Collision")),
+                "Collision":                  fmt(_factor(code, fu, "NO",  "Collision")),
+                "Trailers\nCollision":        fmt(_factor(code, fu, "YES", "Collision")),
+            })
+
+        return pd.DataFrame(rows, columns=_COLS)
+
+    def _build_fa450_age_rows(self, company, gender_code, coverage_key):
+        # Returns [(age_label, factor_str)] for one gender/coverage pair.
+        # Age 0 → "17 and under"; consecutive missing ages extend the group;
+        # last age → "X+"; always appends Neutral Factor and No Hit = 1.00.
+        raw = self.rateTables[company].get(coverage_key)
+        if raw is None:
+            return [("Neutral Factor", "1.00"), ("No Hit", "1.00")]
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+        df["GenderCode"] = df["GenderCode"].fillna("").astype(str).str.strip()
+        df = df[df["GenderCode"] == gender_code].copy()
+        if df.empty:
+            return [("Neutral Factor", "1.00"), ("No Hit", "1.00")]
+        df["_age"] = pd.to_numeric(df["Age or Experience"], errors="coerce")
+        df = df.dropna(subset=["_age"]).sort_values("_age").reset_index(drop=True)
+        df["Factor"] = pd.to_numeric(df["Factor"], errors="coerce")
+        ages    = df["_age"].astype(int).tolist()
+        factors = df["Factor"].tolist()
+        rows = []
+        for i, (age, factor) in enumerate(zip(ages, factors)):
+            if age == 0:
+                label = "17 and under"
+            elif i + 1 < len(ages):
+                next_age = ages[i + 1]
+                label = str(age) if next_age == age + 1 else f"{age}-{next_age - 1}"
+            else:
+                label = f"{age}+"
+            rows.append((label, f"{factor:.2f}" if pd.notna(factor) else "1.00"))
+        rows.append(("Neutral Factor", "1.00"))
+        rows.append(("No Hit", "1.00"))
+        return rows
+
+    def buildFARule450Violation(self, company):
+        # Returns [(violations_label, liab_str, coll_str)] for the violation factor table.
+        # Violations 0, 1, 2 shown individually; 3+ groups all remaining at violation=3's factor.
+        def _extract(key):
+            raw = self.rateTables[company].get(key)
+            if raw is None:
+                return {}
+            df = pd.DataFrame(raw[1:], columns=raw[0])
+            df = df.dropna(how="all").reset_index(drop=True)
+            result = {}
+            for _, row in df.iterrows():
+                v = pd.to_numeric(row.get("Violations", None), errors="coerce")
+                f = pd.to_numeric(row.get("Factor", None), errors="coerce")
+                if pd.notna(v) and pd.notna(f):
+                    result[int(v)] = f
+            return result
+
+        liab = _extract("DriverBasedRatingLiabilityViolationFactor_Ext")
+        coll = _extract("DriverBasedRatingCollisionViolationFactor_Ext")
+        fmt  = lambda v, d: f"{d[v]:.2f}" if v in d and pd.notna(d[v]) else "1.00"
+
+        rows = [(str(v), fmt(v, liab), fmt(v, coll)) for v in [0, 1, 2]]
+        rows.append(("3+", fmt(3, liab), fmt(3, coll)))
+        rows.append(("No Hit", "1.00", "1.00"))
+        rows.append(("Neutral Factor", "1.00", "1.00"))
+        return rows
+
     # =========================================================================
     # Section B: FA-only PAGE methods
     # Add a method here when FA needs a new rule page that BA does not have.
@@ -518,7 +651,8 @@ class Auto(_BABase):
             self.appendFARule231cFarm(ws, self.buildFARule231cFarm(comp_name))
 
     def appendFARule231cFarm(self, ws, farm_df):
-        # Writes the Farm Use Class Factors table starting two rows below the existing content.
+        # Appends Use Class × Body Style data rows two rows below the existing content.
+        # No subtitle, no header row — data only, all cells regular (non-bold) font.
         from openpyxl.styles import Font, Alignment, Border, Side
         from openpyxl.utils import get_column_letter
 
@@ -534,23 +668,8 @@ class Auto(_BABase):
 
         row = ws.max_row + 2
 
-        # Subtitle
-        cell = ws.cell(row=row, column=1)
-        cell.value = "231.C. Farm Use Class Factors"
-        cell.font  = Font(italic=True, name="Arial", size=10)
-        row += 2  # subtitle row + one blank spacer row
-
-        # Header row
-        headers = list(farm_df.columns)
-        for col_idx, header in enumerate(headers, start=1):
-            cell = ws.cell(row=row, column=col_idx)
-            cell.value     = header
-            cell.font      = Font(bold=True, name="Arial", size=10)
-            cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
-            cell.border    = border
-        row += 1
-
-        # Data rows
+        # Data rows only (no subtitle, no column headers)
+        num_cols = len(farm_df.columns)
         for _, data_row in farm_df.iterrows():
             for col_idx, val in enumerate(data_row, start=1):
                 cell = ws.cell(row=row, column=col_idx)
@@ -563,9 +682,9 @@ class Auto(_BABase):
                     cell.alignment = Alignment(horizontal="center", vertical="center")
             row += 1
 
-        # Column widths for the whole sheet (Use Class needs more room than Class Code)
+        # Column widths (Use Class column needs room for long use-class names)
         ws.column_dimensions["A"].width = 28
-        for col_idx in range(2, len(headers) + 1):
+        for col_idx in range(2, num_cols + 1):
             ws.column_dimensions[get_column_letter(col_idx)].width = 22
 
     def _page_rule_239d(self, RatePages):
@@ -756,6 +875,103 @@ class Auto(_BABase):
                     cell.font      = Font(name="Arial", size=10)
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border    = border
+
+    def _page_rule_fa_223c2(self, RatePages):
+        # FA-only — Rule 223.C.2 Secondary Classification Factors.
+        # Reads TruckSecondaryClassFactorFarm_Ext; class groupings from FA_Rule223C2_ClassMapping.xlsx.
+        # Truck Is A Trailer=No  → Liability / OTC / Collision columns.
+        # Truck Is A Trailer=Yes, Coverage=Collision → Trailers Collision column.
+        self.compareCompanies("TruckSecondaryClassFactorFarm_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            ws_name = "Rule 223 C2 " + self.title_company_name
+            df = self.buildFARule223c2(comp_name)
+            # Blank out the "Primary Class" column header so it doesn't print as a label
+            df_display = df.rename(columns={"Primary Class": ""})
+            RatePages.generateWorksheet(
+                ws_name,
+                "RULE 223. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION " + self.title_company_name,
+                "223.C.2. Secondary Classification Factors",
+                df_display,
+                False, True,
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 223 C2"):
+                self.formatRule223c2FA(_wb[_sn])
+
+    def formatRule223c2FA(self, ws):
+        # generateWorksheet layout (subtitle != ' '):
+        #   row 1 = title, row 2 = subtitle, row 3 = blank, row 4 = headers, row 5+ = data
+        from openpyxl.styles import Font, Alignment, Border, Side
+
+        ws.column_dimensions["A"].width = 18   # Primary Class group label
+        ws.column_dimensions["B"].width = 44   # Secondary Class description
+        ws.column_dimensions["C"].width = 10   # 4th-5th Digits of Class Code
+        ws.column_dimensions["D"].width = 11   # Liability
+        ws.column_dimensions["E"].width = 11   # OTC
+        ws.column_dimensions["F"].width = 11   # Collision
+        ws.column_dimensions["G"].width = 12   # Trailers Collision
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+
+        ws.row_dimensions[4].height = 30   # taller header row for wrapped text
+
+        DATA_START = 5
+        if ws.max_row < DATA_START:
+            return
+
+        # First pass: format all data cells and collect Primary Class group ranges
+        groups = []
+        current_group = None
+        group_start   = None
+
+        for row_idx in range(DATA_START, ws.max_row + 1):
+            group_val = ws.cell(row=row_idx, column=1).value
+
+            if group_val and group_val != current_group:
+                if current_group is not None:
+                    groups.append((group_start, row_idx - 1, current_group))
+                current_group = group_val
+                group_start   = row_idx
+
+            for col_idx in range(1, 8):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell.border = border
+                if col_idx == 1:
+                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                elif col_idx == 2:
+                    cell.font      = Font(name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+                else:
+                    cell.font      = Font(name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            ws.row_dimensions[row_idx].height = 28
+
+        if current_group is not None:
+            groups.append((group_start, ws.max_row, current_group))
+
+        # Second pass: merge Primary Class column for each contiguous group
+        for (start_r, end_r, label) in groups:
+            if end_r > start_r:
+                ws.merge_cells(start_row=start_r, start_column=1,
+                               end_row=end_r,   end_column=1)
+            top = ws.cell(row=start_r, column=1)
+            top.value     = label
+            top.font      = Font(bold=True, name="Arial", size=10)
+            top.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     def _page_rule_fa_420(self, RatePages):
         # FA-only — Rule 420 Segmentation Rating Plan.
@@ -988,6 +1204,152 @@ class Auto(_BABase):
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border    = border
 
+    def _page_rule_450(self, RatePages):
+        # FA override — Driver Based Rating Plan with 5 tables on one sheet.
+        # Page 1: Male Liability | Male Collision (side by side)
+        # Page 2: Female Liability | Female Collision (side by side) + Violation table below
+        # Page break is inserted after the last Male data row.
+        self.compareCompanies([
+            "DriverBasedRatingLiabilityAgeGenderFactor_Ext",
+            "DriverBasedRatingCollisionAgeGenderFactor_Ext",
+            "DriverBasedRatingLiabilityViolationFactor_Ext",
+            "DriverBasedRatingCollisionViolationFactor_Ext",
+        ])
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+
+            ws_name = "Rule 450 " + self.title_company_name
+            wb  = RatePages.getWB()
+            ws  = wb.create_sheet(ws_name)
+            RatePages._apply_page_header_footer(ws)
+
+            from openpyxl.styles import Font, Alignment, Border, Side
+
+            thin   = Side(border_style="thin", color="C1C1C1")
+            border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+            def _cell(r, c, val="", bold=False, italic=False,
+                      center=False, wrap=False, brdr=False):
+                cell = ws.cell(row=r, column=c, value=val)
+                cell.font = Font(name="Arial", size=10, bold=bold, italic=italic)
+                cell.alignment = Alignment(
+                    horizontal="center" if center else "left",
+                    vertical="center", wrap_text=wrap,
+                )
+                if brdr:
+                    cell.border = border
+                return cell
+
+            # ── Rows 1-3: print-title area ─────────────────────────────────
+            title = ("RULE 450.  DRIVER BASED RATING PLAN " + self.title_company_name).strip()
+            _cell(1, 1, title, bold=True)          # row 1 repeats on every page
+            # rows 2-3 intentionally blank (clean margin on page 2)
+
+            # ── Rows 4-6: page-1-only intro ────────────────────────────────
+            _cell(4, 1, "450.B.5. Premium Computation")
+            _cell(5, 1,
+                  "Use the neutral factor for driver characteristics for large "
+                  "fleets (100+ vehicles)",
+                  italic=True)
+
+            # ── Row 7: section heading ──────────────────────────────────────
+            _cell(7, 1, "450.B.1.a. Age/Gender/Coverage Factor")
+
+            # ── Row 8: gender header (Male | Male) ─────────────────────────
+            _cell(8, 1, "Male", bold=True, center=True)
+            ws.merge_cells(start_row=8, start_column=1, end_row=8, end_column=2)
+            _cell(8, 4, "Male", bold=True, center=True)
+            ws.merge_cells(start_row=8, start_column=4, end_row=8, end_column=5)
+
+            # ── Row 9: column headers ───────────────────────────────────────
+            _cell(9, 1, "Age",       bold=True, center=True, brdr=True)
+            _cell(9, 2, "Liability", bold=True, center=True, brdr=True)
+            _cell(9, 4, "Age",       bold=True, center=True, brdr=True)
+            _cell(9, 5, "Collision", bold=True, center=True, brdr=True)
+
+            # ── Rows 10+: Male data ─────────────────────────────────────────
+            male_liab = self._build_fa450_age_rows(
+                comp_name, "M", "DriverBasedRatingLiabilityAgeGenderFactor_Ext")
+            male_coll = self._build_fa450_age_rows(
+                comp_name, "M", "DriverBasedRatingCollisionAgeGenderFactor_Ext")
+
+            row = 10
+            for i in range(max(len(male_liab), len(male_coll))):
+                if i < len(male_liab):
+                    _cell(row, 1, male_liab[i][0], center=False, brdr=True)
+                    _cell(row, 2, male_liab[i][1], center=True,  brdr=True)
+                if i < len(male_coll):
+                    _cell(row, 4, male_coll[i][0], center=False, brdr=True)
+                    _cell(row, 5, male_coll[i][1], center=True,  brdr=True)
+                row += 1
+
+            # ── Female section (page 2) ──────────────────────────────────────
+            # (page break inserted by FApagebreaks._handle_fa_rule_450)
+            row += 1   # one blank row separating Male and Female sections
+
+            _cell(row, 1, "450.B.1.a. Age/Gender/Coverage Factor")
+            row += 1
+
+            _cell(row, 1, "Female", bold=True, center=True)
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=2)
+            _cell(row, 4, "Female", bold=True, center=True)
+            ws.merge_cells(start_row=row, start_column=4, end_row=row, end_column=5)
+            row += 1
+
+            _cell(row, 1, "Age",       bold=True, center=True, brdr=True)
+            _cell(row, 2, "Liability", bold=True, center=True, brdr=True)
+            _cell(row, 4, "Age",       bold=True, center=True, brdr=True)
+            _cell(row, 5, "Collision", bold=True, center=True, brdr=True)
+            row += 1
+
+            female_liab = self._build_fa450_age_rows(
+                comp_name, "F", "DriverBasedRatingLiabilityAgeGenderFactor_Ext")
+            female_coll = self._build_fa450_age_rows(
+                comp_name, "F", "DriverBasedRatingCollisionAgeGenderFactor_Ext")
+
+            for i in range(max(len(female_liab), len(female_coll))):
+                if i < len(female_liab):
+                    _cell(row, 1, female_liab[i][0], center=False, brdr=True)
+                    _cell(row, 2, female_liab[i][1], center=True,  brdr=True)
+                if i < len(female_coll):
+                    _cell(row, 4, female_coll[i][0], center=False, brdr=True)
+                    _cell(row, 5, female_coll[i][1], center=True,  brdr=True)
+                row += 1
+
+            # ── Violation table ─────────────────────────────────────────────
+            row += 1   # blank separator
+
+            _cell(row, 1, "450.B.1.b. Violation Factor")
+            row += 1
+
+            # "Factor" header spanning Liability and Collision columns
+            _cell(row, 2, "Factor", bold=True, center=True)
+            ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
+            row += 1
+
+            _cell(row, 1, "Total Violations", bold=True, center=True, brdr=True)
+            _cell(row, 2, "Liability",         bold=True, center=True, brdr=True)
+            _cell(row, 3, "Collision",         bold=True, center=True, brdr=True)
+            row += 1
+
+            for (label, lf, cf) in self.buildFARule450Violation(comp_name):
+                _cell(row, 1, label, center=True, brdr=True)
+                _cell(row, 2, lf,    center=True, brdr=True)
+                _cell(row, 3, cf,    center=True, brdr=True)
+                row += 1
+
+            # ── Column widths ───────────────────────────────────────────────
+            ws.column_dimensions["A"].width = 20
+            ws.column_dimensions["B"].width = 14
+            ws.column_dimensions["C"].width = 14
+            ws.column_dimensions["D"].width = 20
+            ws.column_dimensions["E"].width = 14
+
+            self.overideFooter(ws, CompanyTest)
+
     # =========================================================================
     # Section C: Main FA page generator
     # =========================================================================
@@ -1058,6 +1420,7 @@ class Auto(_BABase):
         self._page_rule_222e(RatePages)
         self._page_rule_223b5(RatePages)
         self._page_rule_223c(RatePages)
+        self._page_rule_fa_223c2(RatePages)   # FA-only: 223.C.2 Secondary Classification Factors
         self._page_rule_225c2(RatePages)
         self._page_rule_225c3(RatePages)
         self._page_rule_225_zone_br(RatePages)

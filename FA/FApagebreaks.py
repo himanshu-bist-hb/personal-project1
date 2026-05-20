@@ -58,13 +58,23 @@ from BA.BApagebreaks import (
 FA_SHEET_RULES = list(_BA_SHEET_RULES)
 
 # ── Add FA-only rules here ──────────────────────────────────────────────────
-# Example (uncomment and fill in when needed):
-#
-#   def _handle_fa_farm_machinery(ws, dest_filename):
-#       fit_single_page(ws)
-#       ws.print_title_rows = "1:3"
-#
-#   FA_SHEET_RULES.append(("Rule FA Farm Machinery", _handle_fa_farm_machinery))
+
+def _handle_fa_rule_450(ws, dest_filename):
+    # Rule 450: Driver Based Rating Plan — 5 tables, two printed pages.
+    # Page 1: Male Liability | Male Collision side by side.
+    # Page 2: Female Liability | Female Collision + Violation table.
+    # The Female section begins with "Female" in col A.  Break after the blank
+    # separator row that precedes the "450.B.1.a." section heading on page 2,
+    # so page 2 opens cleanly at that heading.
+    disable_fit_to_page(ws)
+    ws.print_area = f"A1:E{ws.max_row}"
+    for row in range(1, ws.max_row + 1):
+        if str(ws.cell(row=row, column=1).value or "") == "Female":
+            add_break_after(ws, row - 2)   # break after the blank separator row
+            break
+
+
+FA_SHEET_RULES.append(("Rule 450", _handle_fa_rule_450))
 
 
 # ---------------------------------------------------------------------------

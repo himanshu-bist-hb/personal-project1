@@ -84,26 +84,43 @@ def _handle_fa_rule_450(ws, dest_filename):
     #   Page 1: Male Liability + Male Collision (complete, no mid-table cuts).
     #   Page 2: Female Liability + Female Collision + Violation table (complete).
     #
-    # fitToWidth=1 / fitToHeight=2 tells Excel to scale the whole sheet so it
-    # fills exactly 2 portrait pages.  Because both sections have roughly the
-    # same number of rows, each one lands on its own page.  The manual break
-    # at the Male/Female boundary (found dynamically) enforces the split.
+    # Strategy: find the female section heading (second "450.B.1.a." in col A),
+    # insert a manual break just before it, then compute an explicit scale % so
+    # the taller of the two halves fits on exactly one portrait page.
+    # Using fitToHeight=2 was unreliable — Excel sometimes ignores manual breaks
+    # when auto-fit is active, so we use an explicit scale instead.
     ws.print_area = f"A1:E{ws.max_row}"
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.fitToWidth  = 1
-    ws.page_setup.fitToHeight = 2
 
-    # Find the female "450.B.1.a." heading directly (second occurrence in col A;
-    # the first is the male heading near the top).  Break after the row immediately
-    # before it so the heading — and all female content — land on page 2.
-    # Layout: ... last-male-row | [blank] | "450.B.1.a..."(female) | "Female" | ...
+    # Locate the female "450.B.1.a." heading (second occurrence; first is male).
+    female_heading_row = None
     count = 0
     for row in range(1, ws.max_row + 1):
         if str(ws.cell(row=row, column=1).value or "").strip().startswith("450.B.1.a."):
             count += 1
-            if count == 2:          # second occurrence = female section heading
-                add_break_after(ws, row - 1)   # break after blank row, before heading
+            if count == 2:
+                female_heading_row = row
                 break
+
+    if female_heading_row is None:
+        fit_single_page(ws)
+        return
+
+    # Break after the blank separator row so the female heading starts page 2.
+    break_row = female_heading_row - 1
+    add_break_after(ws, break_row)
+
+    # Compute scale so the larger section fits on one portrait page.
+    # Portrait letter: printable height ≈ 9.5" (11" − 0.75" top − 0.75" bottom).
+    # Default Excel row height = 15 pt = 15/72".
+    PAGE_H     = 9.5
+    ROW_H      = 15 / 72
+    page1_rows = break_row
+    page2_rows = ws.max_row - break_row
+    scale_f    = PAGE_H / (max(page1_rows, page2_rows) * ROW_H)
+    scale_pct  = max(50, min(100, int(scale_f * 100)))
+
+    ws.sheet_properties.pageSetUpPr.fitToPage = False
+    ws.page_setup.scale = scale_pct
 
 
 FA_SHEET_RULES.append(("Rule 450", _handle_fa_rule_450))

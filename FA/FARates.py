@@ -925,11 +925,16 @@ class Auto(_BABase):
         )
 
         ws.row_dimensions[3].height = 4    # collapse blank gap row
-        ws.row_dimensions[4].height = 22   # column header row
+        ws.row_dimensions[4].height = 30   # column header row (two-line headers need 30pt)
 
         DATA_START = 5
         if ws.max_row < DATA_START:
             return
+
+        import math
+        # Col B width is 50 units ≈ 48 chars at Arial 11pt; each line is 14pt tall.
+        _CHARS_PER_LINE = 48
+        _LINE_HEIGHT_PT = 14
 
         # First pass: format all data cells and collect Primary Class group ranges
         groups = []
@@ -958,7 +963,10 @@ class Auto(_BABase):
                     cell.font      = Font(name="Arial", size=11)
                     cell.alignment = Alignment(horizontal="center", vertical="center")
 
-            ws.row_dimensions[row_idx].height = 14
+            # Dynamic row height: expand when Secondary Class text wraps to multiple lines.
+            text_b   = str(ws.cell(row=row_idx, column=2).value or "")
+            num_lines = max(1, math.ceil(len(text_b) / _CHARS_PER_LINE))
+            ws.row_dimensions[row_idx].height = num_lines * _LINE_HEIGHT_PT
 
         if current_group is not None:
             groups.append((group_start, ws.max_row, current_group))

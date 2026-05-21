@@ -93,15 +93,17 @@ def _handle_fa_rule_450(ws, dest_filename):
     ws.page_setup.fitToWidth  = 1
     ws.page_setup.fitToHeight = 2
 
-    # Find the "Female" gender header in col A and break just before its section.
-    # Layout: ... last-male-row | [blank] | "450.B.1.a..." | "Female" | ...
-    # "Female" is 3 rows after the last male data row:
-    #   female_row - 3 = last male data row  ← break here so the blank row
-    #   AND the "450.B.1.a." heading both land on page 2, not page 1.
+    # Find the female "450.B.1.a." heading directly (second occurrence in col A;
+    # the first is the male heading near the top).  Break after the row immediately
+    # before it so the heading — and all female content — land on page 2.
+    # Layout: ... last-male-row | [blank] | "450.B.1.a..."(female) | "Female" | ...
+    count = 0
     for row in range(1, ws.max_row + 1):
-        if str(ws.cell(row=row, column=1).value or "").strip() == "Female":
-            add_break_after(ws, row - 3)
-            break
+        if str(ws.cell(row=row, column=1).value or "").strip().startswith("450.B.1.a."):
+            count += 1
+            if count == 2:          # second occurrence = female section heading
+                add_break_after(ws, row - 1)   # break after blank row, before heading
+                break
 
 
 FA_SHEET_RULES.append(("Rule 450", _handle_fa_rule_450))

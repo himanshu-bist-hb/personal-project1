@@ -59,22 +59,27 @@ FA_SHEET_RULES = list(_BA_SHEET_RULES)
 
 # ── Add FA-only rules here ──────────────────────────────────────────────────
 
-# ---------------------------------------------------------------------------
-# Rule 450 — page-break tuning
-# ---------------------------------------------------------------------------
-# Change this number to control where page 1 ends.
-# Row 1  = title; rows 2-3 blank; rows 4-9 = headings/column headers;
-# rows 10+ = Male age data (each age group is one row).
-# Set this to the last row you want visible on page 1, then re-run.
-FA_RULE_450_PAGE_BREAK_ROW = 30
-# ---------------------------------------------------------------------------
-
 def _handle_fa_rule_450(ws, dest_filename):
-    # Rule 450: Driver Based Rating Plan — two printed pages.
-    # Page break is controlled by FA_RULE_450_PAGE_BREAK_ROW above.
-    disable_fit_to_page(ws)
+    # Rule 450: Driver Based Rating Plan — exactly 2 printed pages.
+    #   Page 1: Male Liability + Male Collision (complete, no mid-table cuts).
+    #   Page 2: Female Liability + Female Collision + Violation table (complete).
+    #
+    # fitToWidth=1 / fitToHeight=2 tells Excel to scale the whole sheet so it
+    # fills exactly 2 portrait pages.  Because both sections have roughly the
+    # same number of rows, each one lands on its own page.  The manual break
+    # at the Male/Female boundary (found dynamically) enforces the split.
     ws.print_area = f"A1:E{ws.max_row}"
-    add_break_after(ws, FA_RULE_450_PAGE_BREAK_ROW)
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth  = 1
+    ws.page_setup.fitToHeight = 2
+
+    # Find the "Female" gender header in col A and break just before its section.
+    # Layout: ... last-male-row | "450.B.1.a..." | "Female" | col-headers | data
+    # "Female" is 2 rows after the last male row, so break = female_row - 2.
+    for row in range(1, ws.max_row + 1):
+        if str(ws.cell(row=row, column=1).value or "").strip() == "Female":
+            add_break_after(ws, row - 2)
+            break
 
 
 FA_SHEET_RULES.append(("Rule 450", _handle_fa_rule_450))

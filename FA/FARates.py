@@ -654,16 +654,19 @@ class Auto(_BABase):
 
         num_cols = len(farm_df.columns)
 
-        # Column header row — non-bold
+        # Column header row — non-bold, wrapped so long names show on two lines
+        header_row = row
         for col_idx, col_name in enumerate(farm_df.columns, start=1):
             cell = ws.cell(row=row, column=col_idx)
             cell.value = col_name
             cell.font = Font(name="Arial", size=10, bold=False)
             cell.border = border
-            if col_idx == 1:
-                cell.alignment = Alignment(horizontal="left", vertical="center")
-            else:
-                cell.alignment = Alignment(horizontal="center", vertical="center")
+            cell.alignment = Alignment(
+                horizontal="center" if col_idx > 1 else "left",
+                vertical="center",
+                wrap_text=True,
+            )
+        ws.row_dimensions[header_row].height = 30
         row += 1
 
         for _, data_row in farm_df.iterrows():
@@ -906,13 +909,13 @@ class Auto(_BABase):
         #   row 1 = title, row 2 = subtitle, row 3 = blank, row 4 = headers, row 5+ = data
         from openpyxl.styles import Font, Alignment, Border, Side
 
-        ws.column_dimensions["A"].width = 18   # Primary Class group label
-        ws.column_dimensions["B"].width = 44   # Secondary Class description
-        ws.column_dimensions["C"].width = 10   # 4th-5th Digits of Class Code
-        ws.column_dimensions["D"].width = 11   # Liability
-        ws.column_dimensions["E"].width = 11   # OTC
-        ws.column_dimensions["F"].width = 11   # Collision
-        ws.column_dimensions["G"].width = 12   # Trailers Collision
+        ws.column_dimensions["A"].width = 22   # Primary Class group label
+        ws.column_dimensions["B"].width = 72   # Secondary Class description (wide to minimise wrapping)
+        ws.column_dimensions["C"].width = 12   # 4th-5th Digits of Class Code
+        ws.column_dimensions["D"].width = 16   # Liability
+        ws.column_dimensions["E"].width = 16   # OTC
+        ws.column_dimensions["F"].width = 16   # Collision
+        ws.column_dimensions["G"].width = 18   # Trailers Collision
 
         border = Border(
             left=Side(border_style="thin", color="C1C1C1"),
@@ -921,7 +924,7 @@ class Auto(_BABase):
             bottom=Side(border_style="thin", color="C1C1C1"),
         )
 
-        ws.row_dimensions[4].height = 30   # taller header row for wrapped text
+        ws.row_dimensions[4].height = 26   # header row for wrapped text
 
         DATA_START = 5
         if ws.max_row < DATA_START:
@@ -954,7 +957,7 @@ class Auto(_BABase):
                     cell.font      = Font(name="Arial", size=10)
                     cell.alignment = Alignment(horizontal="center", vertical="center")
 
-            ws.row_dimensions[row_idx].height = 28
+            ws.row_dimensions[row_idx].height = 24
 
         if current_group is not None:
             groups.append((group_start, ws.max_row, current_group))

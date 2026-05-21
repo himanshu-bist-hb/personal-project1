@@ -924,8 +924,8 @@ class Auto(_BABase):
             bottom=Side(border_style="thin", color="C1C1C1"),
         )
 
-        ws.row_dimensions[3].height = 4    # collapse blank gap row
-        ws.row_dimensions[4].height = 20   # column header row (two-line headers at 8pt)
+        ws.row_dimensions[3].height = 8    # small gap between subtitle and header
+        ws.row_dimensions[4].height = 28   # column header row — 2-line headers at 10pt bold need ~28pt
 
         DATA_START = 5
         if ws.max_row < DATA_START:

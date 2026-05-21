@@ -925,16 +925,16 @@ class Auto(_BABase):
         )
 
         ws.row_dimensions[3].height = 4    # collapse blank gap row
-        ws.row_dimensions[4].height = 30   # column header row (two-line headers need 30pt)
+        ws.row_dimensions[4].height = 24   # column header row (two-line headers at 9pt)
 
         DATA_START = 5
         if ws.max_row < DATA_START:
             return
 
         import math
-        # Col B width is 50 units ≈ 48 chars at Arial 11pt; each line is 14pt tall.
-        _CHARS_PER_LINE = 48
-        _LINE_HEIGHT_PT = 14
+        # Col B width is 50 units ≈ 59 chars at Arial 9pt; each line is 12pt tall.
+        _CHARS_PER_LINE = 59
+        _LINE_HEIGHT_PT = 12
 
         # First pass: format all data cells and collect Primary Class group ranges
         groups = []
@@ -954,13 +954,13 @@ class Auto(_BABase):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 cell.border = border
                 if col_idx == 1:
-                    cell.font      = Font(bold=True, name="Arial", size=11)
+                    cell.font      = Font(bold=True, name="Arial", size=9)
                     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 elif col_idx == 2:
-                    cell.font      = Font(name="Arial", size=11)
+                    cell.font      = Font(name="Arial", size=9)
                     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 else:
-                    cell.font      = Font(name="Arial", size=11)
+                    cell.font      = Font(name="Arial", size=9)
                     cell.alignment = Alignment(horizontal="center", vertical="center")
 
             # Dynamic row height: expand when Secondary Class text wraps to multiple lines.
@@ -978,7 +978,7 @@ class Auto(_BABase):
                                end_row=end_r,   end_column=1)
             top = ws.cell(row=start_r, column=1)
             top.value     = label
-            top.font      = Font(bold=True, name="Arial", size=11)
+            top.font      = Font(bold=True, name="Arial", size=9)
             top.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     def _page_rule_fa_420(self, RatePages):

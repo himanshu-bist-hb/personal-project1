@@ -66,12 +66,12 @@ def _handle_fa_rule_223c2(ws, dest_filename):
     # making the 11pt font appear as ~7-8pt — far more readable than the
     # previous ~35% scale with 10pt font.
     ws.page_setup.orientation = "portrait"
-    ws.page_margins.top    = 0.4
-    ws.page_margins.bottom = 0.4
-    ws.page_margins.left   = 0.5
-    ws.page_margins.right  = 0.5
-    ws.page_margins.header = 0.25
+    ws.page_margins.header = 0.5    # standard; right header is 3 lines tall at 10pt
+    ws.page_margins.top    = 1.0    # must be > header + header_text_height (~0.75")
+    ws.page_margins.bottom = 0.35   # tighter than standard to reclaim space at bottom
     ws.page_margins.footer = 0.25
+    ws.page_margins.left   = 0.25   # restore standard (was 0.5, wider than needed)
+    ws.page_margins.right  = 0.25
     fit_single_page(ws)
 
 # Insert before "Rule 223 C" so the more-specific prefix wins.

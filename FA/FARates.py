@@ -909,13 +909,13 @@ class Auto(_BABase):
         #   row 1 = title, row 2 = subtitle, row 3 = blank, row 4 = headers, row 5+ = data
         from openpyxl.styles import Font, Alignment, Border, Side
 
-        ws.column_dimensions["A"].width = 22   # Primary Class group label
-        ws.column_dimensions["B"].width = 72   # Secondary Class description (wide to minimise wrapping)
-        ws.column_dimensions["C"].width = 12   # 4th-5th Digits of Class Code
-        ws.column_dimensions["D"].width = 16   # Liability
-        ws.column_dimensions["E"].width = 16   # OTC
-        ws.column_dimensions["F"].width = 16   # Collision
-        ws.column_dimensions["G"].width = 18   # Trailers Collision
+        ws.column_dimensions["A"].width = 15   # Primary Class group label
+        ws.column_dimensions["B"].width = 50   # Secondary Class description
+        ws.column_dimensions["C"].width = 10   # 4th-5th Digits of Class Code
+        ws.column_dimensions["D"].width = 12   # Liability
+        ws.column_dimensions["E"].width = 11   # OTC
+        ws.column_dimensions["F"].width = 12   # Collision
+        ws.column_dimensions["G"].width = 13   # Trailers Collision
 
         border = Border(
             left=Side(border_style="thin", color="C1C1C1"),
@@ -924,7 +924,8 @@ class Auto(_BABase):
             bottom=Side(border_style="thin", color="C1C1C1"),
         )
 
-        ws.row_dimensions[4].height = 26   # header row for wrapped text
+        ws.row_dimensions[3].height = 4    # collapse blank gap row
+        ws.row_dimensions[4].height = 22   # column header row
 
         DATA_START = 5
         if ws.max_row < DATA_START:
@@ -948,16 +949,16 @@ class Auto(_BABase):
                 cell = ws.cell(row=row_idx, column=col_idx)
                 cell.border = border
                 if col_idx == 1:
-                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.font      = Font(bold=True, name="Arial", size=11)
                     cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
                 elif col_idx == 2:
-                    cell.font      = Font(name="Arial", size=10)
+                    cell.font      = Font(name="Arial", size=11)
                     cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
                 else:
-                    cell.font      = Font(name="Arial", size=10)
+                    cell.font      = Font(name="Arial", size=11)
                     cell.alignment = Alignment(horizontal="center", vertical="center")
 
-            ws.row_dimensions[row_idx].height = 24
+            ws.row_dimensions[row_idx].height = 14
 
         if current_group is not None:
             groups.append((group_start, ws.max_row, current_group))
@@ -969,7 +970,7 @@ class Auto(_BABase):
                                end_row=end_r,   end_column=1)
             top = ws.cell(row=start_r, column=1)
             top.value     = label
-            top.font      = Font(bold=True, name="Arial", size=10)
+            top.font      = Font(bold=True, name="Arial", size=11)
             top.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     def _page_rule_fa_420(self, RatePages):

@@ -59,6 +59,26 @@ FA_SHEET_RULES = list(_BA_SHEET_RULES)
 
 # ── Add FA-only rules here ──────────────────────────────────────────────────
 
+def _handle_fa_rule_223c2(ws, dest_filename):
+    # Rule 223 C2 needs its own handler so it doesn't match "Rule 223 C"
+    # (which would inherit BA's fit_single_page with default margins).
+    # Tighter margins eliminate the large white gap and give ~65-70% scale,
+    # making the 11pt font appear as ~7-8pt — far more readable than the
+    # previous ~35% scale with 10pt font.
+    ws.page_setup.orientation = "portrait"
+    ws.page_margins.top    = 0.4
+    ws.page_margins.bottom = 0.4
+    ws.page_margins.left   = 0.5
+    ws.page_margins.right  = 0.5
+    ws.page_margins.header = 0.25
+    ws.page_margins.footer = 0.25
+    fit_single_page(ws)
+
+# Insert before "Rule 223 C" so the more-specific prefix wins.
+_223c_idx = next(i for i, (p, _) in enumerate(FA_SHEET_RULES) if p == "Rule 223 C")
+FA_SHEET_RULES.insert(_223c_idx, ("Rule 223 C2", _handle_fa_rule_223c2))
+
+
 def _handle_fa_rule_450(ws, dest_filename):
     # Rule 450: Driver Based Rating Plan — exactly 2 printed pages.
     #   Page 1: Male Liability + Male Collision (complete, no mid-table cuts).
@@ -74,11 +94,13 @@ def _handle_fa_rule_450(ws, dest_filename):
     ws.page_setup.fitToHeight = 2
 
     # Find the "Female" gender header in col A and break just before its section.
-    # Layout: ... last-male-row | "450.B.1.a..." | "Female" | col-headers | data
-    # "Female" is 2 rows after the last male row, so break = female_row - 2.
+    # Layout: ... last-male-row | [blank] | "450.B.1.a..." | "Female" | ...
+    # "Female" is 3 rows after the last male data row:
+    #   female_row - 3 = last male data row  ← break here so the blank row
+    #   AND the "450.B.1.a." heading both land on page 2, not page 1.
     for row in range(1, ws.max_row + 1):
         if str(ws.cell(row=row, column=1).value or "").strip() == "Female":
-            add_break_after(ws, row - 2)
+            add_break_after(ws, row - 3)
             break
 
 

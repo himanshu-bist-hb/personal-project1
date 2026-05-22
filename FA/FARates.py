@@ -1294,6 +1294,7 @@ class Auto(_BABase):
                 if i < len(male_coll):
                     _cell(row, 4, male_coll[i][0], center=False, brdr=True, size=7)
                     _cell(row, 5, male_coll[i][1], center=True,  brdr=True, size=7)
+                ws.row_dimensions[row].height = 11
                 row += 1
 
             # ── Female section (page 2) ──────────────────────────────────────
@@ -1327,6 +1328,7 @@ class Auto(_BABase):
                 if i < len(female_coll):
                     _cell(row, 4, female_coll[i][0], center=False, brdr=True, size=7)
                     _cell(row, 5, female_coll[i][1], center=True,  brdr=True, size=7)
+                ws.row_dimensions[row].height = 11
                 row += 1
 
             # ── Violation table ─────────────────────────────────────────────
@@ -1349,6 +1351,7 @@ class Auto(_BABase):
                 _cell(row, 1, label, center=True, brdr=True, size=7)
                 _cell(row, 2, lf,    center=True, brdr=True, size=7)
                 _cell(row, 3, cf,    center=True, brdr=True, size=7)
+                ws.row_dimensions[row].height = 11
                 row += 1
 
             # ── Column widths ───────────────────────────────────────────────

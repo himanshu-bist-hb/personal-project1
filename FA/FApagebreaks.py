@@ -109,15 +109,11 @@ def _handle_fa_rule_450(ws, dest_filename):
     break_row = female_heading_row - 1
     add_break_after(ws, break_row)
 
-    # Tighten bottom margin to use empty space above footer.
-    ws.page_margins.bottom = 0.35
-    ws.page_margins.footer = 0.25
-
     # Compute scale so the larger section fits on one portrait page.
-    # Portrait letter: printable height = 11" − 0.75" top − 0.35" bottom = 9.90".
-    # Data rows use 8pt font with defaultRowHeight=11pt → ROW_H = 11/72".
-    PAGE_H     = 9.90
-    ROW_H      = 11 / 72
+    # Portrait letter: printable height ≈ 9.5" (11" − 0.75" top − 0.75" bottom).
+    # Default Excel row height = 15 pt = 15/72".
+    PAGE_H     = 9.5
+    ROW_H      = 15 / 72
     page1_rows = break_row
     page2_rows = ws.max_row - break_row
     scale_f    = PAGE_H / (max(page1_rows, page2_rows) * ROW_H)

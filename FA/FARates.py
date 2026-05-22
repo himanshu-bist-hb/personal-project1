@@ -1289,11 +1289,11 @@ class Auto(_BABase):
             row = 10
             for i in range(max(len(male_liab), len(male_coll))):
                 if i < len(male_liab):
-                    _cell(row, 1, male_liab[i][0], center=False, brdr=True, size=8)
-                    _cell(row, 2, male_liab[i][1], center=True,  brdr=True, size=8)
+                    _cell(row, 1, male_liab[i][0], center=False, brdr=True, size=9)
+                    _cell(row, 2, male_liab[i][1], center=True,  brdr=True, size=9)
                 if i < len(male_coll):
-                    _cell(row, 4, male_coll[i][0], center=False, brdr=True, size=8)
-                    _cell(row, 5, male_coll[i][1], center=True,  brdr=True, size=8)
+                    _cell(row, 4, male_coll[i][0], center=False, brdr=True, size=9)
+                    _cell(row, 5, male_coll[i][1], center=True,  brdr=True, size=9)
                 row += 1
 
             # ── Female section (page 2) ──────────────────────────────────────
@@ -1322,11 +1322,11 @@ class Auto(_BABase):
 
             for i in range(max(len(female_liab), len(female_coll))):
                 if i < len(female_liab):
-                    _cell(row, 1, female_liab[i][0], center=False, brdr=True, size=8)
-                    _cell(row, 2, female_liab[i][1], center=True,  brdr=True, size=8)
+                    _cell(row, 1, female_liab[i][0], center=False, brdr=True, size=9)
+                    _cell(row, 2, female_liab[i][1], center=True,  brdr=True, size=9)
                 if i < len(female_coll):
-                    _cell(row, 4, female_coll[i][0], center=False, brdr=True, size=8)
-                    _cell(row, 5, female_coll[i][1], center=True,  brdr=True, size=8)
+                    _cell(row, 4, female_coll[i][0], center=False, brdr=True, size=9)
+                    _cell(row, 5, female_coll[i][1], center=True,  brdr=True, size=9)
                 row += 1
 
             # ── Violation table ─────────────────────────────────────────────
@@ -1346,14 +1346,10 @@ class Auto(_BABase):
             row += 1
 
             for (label, lf, cf) in self.buildFARule450Violation(comp_name):
-                _cell(row, 1, label, center=True, brdr=True, size=8)
-                _cell(row, 2, lf,    center=True, brdr=True, size=8)
-                _cell(row, 3, cf,    center=True, brdr=True, size=8)
+                _cell(row, 1, label, center=True, brdr=True, size=9)
+                _cell(row, 2, lf,    center=True, brdr=True, size=9)
+                _cell(row, 3, cf,    center=True, brdr=True, size=9)
                 row += 1
-
-            # ── Compact row heights to match 8pt data font ─────────────────
-            ws.sheet_format.defaultRowHeight = 11
-            ws.sheet_format.customHeight = True
 
             # ── Column widths ───────────────────────────────────────────────
             ws.column_dimensions["A"].width = 20

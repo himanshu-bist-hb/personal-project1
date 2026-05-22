@@ -109,7 +109,7 @@ def _handle_fa_rule_450(ws, dest_filename):
     break_row = female_heading_row - 1
     add_break_after(ws, break_row)
 
-    # Tighten bottom margin to use space above footer.
+    # Tighten bottom margin to use empty space above footer.
     ws.page_margins.bottom = 0.35
     ws.page_margins.footer = 0.25
 

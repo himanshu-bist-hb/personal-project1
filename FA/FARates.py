@@ -385,7 +385,7 @@ class Auto(_BABase):
         _EMPTY = pd.DataFrame(columns=_COLS)
 
         try:
-            mapping = pd.read_excel(BA_INPUT_FILE, sheet_name="FA Rule223", dtype=str)
+            mapping = pd.read_excel(BA_INPUT_FILE, sheet_name="FA_Rule223C2", dtype=str)
         except Exception:
             return _EMPTY
 
@@ -1507,7 +1507,7 @@ class Auto(_BABase):
         self._page_rule_453(RatePages)
         self._page_rule_454(RatePages)
         self._page_rule_fa_455(RatePages)
-        self._page_rule_dp1(RatePages)
+        # self._page_rule_dp1(RatePages)
         self._page_rule_state_specific(RatePages)
 
         # ── FA-only rules (add here when Farm Auto has unique rules) ──────────

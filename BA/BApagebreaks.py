@@ -128,12 +128,12 @@ def _handle_rule_223c(ws, dest_filename):
 
 
 def _handle_rule_225_zone(ws, dest_filename):
-    ws.print_area = f"A1:M{ws.max_row}"
+    ws.print_area = f"A1:G{ws.max_row}"
     ws.print_options.horizontalCentered = False
     ws.print_options.verticalCentered = False
-    disable_fit_to_page(ws)
-    for row in range(52, ws.max_row, 51):
-        add_break_after(ws, row)
+    fit_width_only(ws)
+    add_break_after(ws, 51)
+    add_break_after(ws, 103)
 
 
 def _handle_rule_225c3(ws, dest_filename):

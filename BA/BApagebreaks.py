@@ -108,7 +108,8 @@ def _handle_index(ws, dest_filename):
 
 
 def _handle_rule_222b(ws, dest_filename):
-    disable_fit_to_page(ws)
+    ws.print_area = f"A1:J{ws.max_row}"
+    fit_width_only(ws)
     add_break_after(ws, 25)
     add_break_after(ws, 49)
 

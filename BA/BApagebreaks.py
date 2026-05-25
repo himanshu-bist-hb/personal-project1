@@ -61,6 +61,7 @@ import zipfile
 from io import BytesIO
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.pagebreak import Break, ColBreak, RowBreak
 
 
@@ -252,12 +253,17 @@ def _handle_rule_301c(ws, dest_filename):
         fit_single_page(ws)
         return
 
-    # Single print area covers the full AC width so Excel uses one consistent
-    # scale (fit 29 columns to landscape width) for all pages.  Set 1 pages
-    # (rows 1-361, data only in A-G) and Set 2 pages (rows 362+, data in A-AC)
-    # are both at this scale; Set 2 fills the width, Set 1 occupies the left
-    # portion — both are now large and readable instead of the microscopic
-    # appearance caused by the old multi-area split.
+    # Factor columns (D onwards) default to ~12 char-units wide (0.94" each).
+    # With 26 such columns, Set 2 is ~28" wide — forcing fit_width_only to
+    # scale down to ~33%.  At 33%, Set 1 (7 cols) fills only ~26% of the page.
+    # Narrowing factor columns to 5 units (minimum safe for 5-char numbers)
+    # reduces Set 2 to ~15", raising the scale to ~65%.  At 65%:
+    #   • Set 2 still fills full landscape width
+    #   • 45 rows fill ~86% of page height (vs 44% before)
+    #   • Set 1 fills ~38% of landscape width (vs 26% before)
+    for col_idx in range(4, ws.max_column + 1):
+        ws.column_dimensions[get_column_letter(col_idx)].width = 5
+
     ws.col_breaks = ColBreak()
     ws.row_breaks = RowBreak()
     ws.page_setup.orientation = "landscape"

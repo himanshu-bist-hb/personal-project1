@@ -159,7 +159,7 @@ def _handle_rule_240(ws, dest_filename):
     fit_single_page(ws)
     ws.print_options.verticalCentered = True
     ws.print_title_rows = "1:3"
-    ws.print_area = f"A1:M{ws.max_row}"
+    ws.print_area = f"A1:G{ws.max_row}"
     ws.page_margins.top = 1.00
 
 

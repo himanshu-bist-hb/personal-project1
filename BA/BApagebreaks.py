@@ -245,6 +245,28 @@ def _handle_rule_301ab(ws, dest_filename):
     ws.page_margins.top = 1.00
 
 
+def _handle_rule_301c(ws, dest_filename):
+    if ws["B4"].value in _VA_VEHICLE_TYPES:
+        if "FL" not in dest_filename:
+            ws.page_margins.top = 1.00
+        fit_single_page(ws)
+        return
+
+    # Two-section layout:
+    #   Section 1 (rows 1-361):  narrow tables, G-wide, portrait-friendly pages
+    #   Section 2 (rows 362+):   wide tables,  AC-wide, landscape pages
+    ws.col_breaks = ColBreak()
+    ws.row_breaks = RowBreak()
+    ws.page_setup.orientation = "landscape"
+    ws.print_area = f"A1:G361,A362:AC{ws.max_row}"
+    fit_width_only(ws)
+
+    for row in [46, 91, 136, 181, 226, 271, 316, 361]:
+        add_break_after(ws, row)
+    for row in [406, 451, 496, 541, 586, 631, 676, 720]:
+        add_break_after(ws, row)
+
+
 def _handle_rule_301cd(ws, dest_filename):
     if ws["B4"].value not in _VA_VEHICLE_TYPES:
         return
@@ -310,7 +332,7 @@ SHEET_RULES = [
     ("Rule 297",     _handle_rule_297),
     ("Rule 298",     _handle_rule_298),
 
-    ("Rule 301.C",   _handle_rule_301cd),
+    ("Rule 301.C",   _handle_rule_301c),
     ("Rule 301.D",   _handle_rule_301cd),
     ("Rule 301.A",   _handle_rule_301ab),
     ("Rule 301.B",   _handle_rule_301ab),

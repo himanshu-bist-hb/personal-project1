@@ -256,13 +256,13 @@ def _handle_rule_301c(ws, dest_filename):
     # Factor columns (D onwards) default to ~12 char-units wide (0.94" each).
     # With 26 such columns, Set 2 is ~28" wide — forcing fit_width_only to
     # scale down to ~33%.  At 33%, Set 1 (7 cols) fills only ~26% of the page.
-    # Narrowing factor columns to 5 units (minimum safe for 5-char numbers)
-    # reduces Set 2 to ~15", raising the scale to ~65%.  At 65%:
-    #   • Set 2 still fills full landscape width
-    #   • 45 rows fill ~86% of page height (vs 44% before)
-    #   • Set 1 fills ~38% of landscape width (vs 26% before)
+    # Width 6 reduces Set 2 to ~16.6", giving a ~57% scale.  At 57% scale,
+    # the automatic page break falls at row ~46, coinciding with the manual
+    # break — no spurious dashed lines appear within any section.  Width 5
+    # gave 65% scale but that put the auto break at row ~41 (before the
+    # manual break at 46), creating unwanted intermediate pages.
     for col_idx in range(4, ws.max_column + 1):
-        ws.column_dimensions[get_column_letter(col_idx)].width = 5
+        ws.column_dimensions[get_column_letter(col_idx)].width = 6
 
     ws.col_breaks = ColBreak()
     ws.row_breaks = RowBreak()

@@ -252,13 +252,18 @@ def _handle_rule_301c(ws, dest_filename):
         fit_single_page(ws)
         return
 
-    # Two-section layout:
-    #   Section 1 (rows 1-361):  narrow tables, G-wide, portrait-friendly pages
-    #   Section 2 (rows 362+):   wide tables,  AC-wide, landscape pages
+    # Single print area covers the full AC width so Excel uses one consistent
+    # scale (fit 29 columns to landscape width) for all pages.  Set 1 pages
+    # (rows 1-361, data only in A-G) and Set 2 pages (rows 362+, data in A-AC)
+    # are both at this scale; Set 2 fills the width, Set 1 occupies the left
+    # portion — both are now large and readable instead of the microscopic
+    # appearance caused by the old multi-area split.
     ws.col_breaks = ColBreak()
     ws.row_breaks = RowBreak()
     ws.page_setup.orientation = "landscape"
-    ws.print_area = f"A1:G361,A362:AC{ws.max_row}"
+    ws.print_area = f"A1:AC{ws.max_row}"
+    ws.print_options.horizontalCentered = False
+    ws.print_options.verticalCentered = False
     fit_width_only(ws)
 
     for row in [46, 91, 136, 181, 226, 271, 316, 361]:

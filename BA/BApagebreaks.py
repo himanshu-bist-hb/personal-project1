@@ -212,18 +212,12 @@ def _handle_rule_297(ws, dest_filename):
 
 
 def _handle_rule_298(ws, dest_filename):
-    ws.print_area = f"A1:K{ws.max_row}"
+    ws.print_area = f"A1:G{ws.max_row}"
     disable_fit_to_page(ws)
-    occurrence_count = 0
-    for row in range(1, ws.max_row + 1):
-        cell_value = str(ws.cell(row=row, column=1).value)
-        if cell_value.startswith("298"):
-            occurrence_count += 1
-        if occurrence_count == 4:
-            occurrence_count += 1
-            ws.row_breaks.append(Break(id=row - 1))
-        if occurrence_count == 8:
-            break
+    ws.col_breaks.append(Break(id=7))
+    add_break_after(ws, 33)
+    add_break_after(ws, 57)
+    add_break_after(ws, 88)
 
 
 _VA_VEHICLE_TYPES = {

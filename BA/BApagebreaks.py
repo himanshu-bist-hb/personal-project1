@@ -199,8 +199,10 @@ def _handle_rule_289(ws, dest_filename):
 
 
 def _handle_rule_297(ws, dest_filename):
-    ws.print_area = f"A1:P{ws.max_row}"
-    disable_fit_to_page(ws)
+    ws.print_area = f"A1:G{ws.max_row}"
+    ws.col_breaks = ColBreak()
+    ws.row_breaks = RowBreak()
+    fit_width_only(ws)
     occurrence_count = 0
     for row in range(1, ws.max_row + 1):
         cell_value = str(ws.cell(row=row, column=1).value)
@@ -208,7 +210,7 @@ def _handle_rule_297(ws, dest_filename):
             occurrence_count += 1
         if (occurrence_count % 3 == 0) and (occurrence_count != 0):
             occurrence_count += 1
-            ws.row_breaks.append(Break(id=row - 1))
+            add_break_after(ws, row - 1)
 
 
 def _handle_rule_298(ws, dest_filename):

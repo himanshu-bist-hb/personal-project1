@@ -213,10 +213,9 @@ def _handle_rule_297(ws, dest_filename):
 
 def _handle_rule_298(ws, dest_filename):
     ws.print_area = f"A1:G{ws.max_row}"
-    disable_fit_to_page(ws)
     ws.col_breaks = ColBreak()
     ws.row_breaks = RowBreak()
-    ws.col_breaks.append(Break(id=7))
+    fit_width_only(ws)
     add_break_after(ws, 33)
     add_break_after(ws, 57)
     add_break_after(ws, 88)

@@ -1448,7 +1448,8 @@ elif active_lob == "Farm Auto":
                 for f in uploaded:
                     name_up = f.name.upper()
                     matched = next((k for k in DETECT_ORDER if k in name_up), None)
-                    grouped.setdefault(matched or "__unknown__", []).append(f)
+                    # FA default: files with no recognisable company code → NWAG
+                    grouped.setdefault(matched or "NWAG", []).append(f)
                 for key in ALL_KEYS:
                     files = grouped.get(key, [])
                     if len(files) == 1:

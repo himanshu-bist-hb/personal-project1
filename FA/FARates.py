@@ -328,6 +328,34 @@ class Auto(_BABase):
             "Utility Task Vehicles": factors,
         })
 
+    def buildFARule222D(self, company):
+        # FA Rule 222.D — UnlicensedFarmTruckFactor_Ext
+        # Ratebook: CoverageGroup | Factor
+        # Blank CoverageGroup → "All other"; display order matches the manual.
+        raw = self.rateTables[company].get("UnlicensedFarmTruckFactor_Ext")
+        if raw is None:
+            return pd.DataFrame(columns=["Coverage", "Factor"])
+
+        df = pd.DataFrame(raw[1:], columns=raw[0])
+        df = df.dropna(how="all").reset_index(drop=True)
+
+        df["CoverageGroup"] = (
+            df["CoverageGroup"].fillna("All other").astype(str).str.strip()
+            .replace("", "All other")
+        )
+        df["Factor"] = pd.to_numeric(df["Factor"], errors="coerce").map(
+            lambda x: f"{x:.2f}" if pd.notna(x) else ""
+        )
+        df = df.rename(columns={"CoverageGroup": "Coverage"})
+
+        _order = ["Liability", "Medical", "PIP", "UM/UIM",
+                  "Collision", "Other Than Collision", "All other"]
+        df["_sort"] = df["Coverage"].apply(
+            lambda v: _order.index(v) if v in _order else 999
+        )
+        df = df.sort_values("_sort").drop(columns=["_sort"]).reset_index(drop=True)
+        return df[["Coverage", "Factor"]]
+
     def buildFARule231cFarm(self, company):
         # FA Rule 231c supplement — PrivatePassengerClassFactorFarm_Ext (Liability rows only).
         # Pivots Use Class (rows) × Body Style (columns) with Factor to 2 decimal places; NA if missing.
@@ -981,6 +1009,71 @@ class Auto(_BABase):
             top.font      = Font(bold=True, name="Arial", size=8)
             top.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
+    def _page_rule_fa_222d(self, RatePages):
+        # FA-only — Rule 222.D Unlicensed/Limited Use Farm or Ranch Trucks.
+        # Only applicable in MD, PA, NY, VA, WV.
+        if self.StateAbb not in {"MD", "PA", "NY", "VA", "WV"}:
+            return
+
+        self.compareCompanies("UnlicensedFarmTruckFactor_Ext")
+        for CompanyTest in self.CompanyListDif:
+            comp_name = self.extract_company_name(CompanyTest)
+            self.title_company_name = CompanyTest
+            if len(self.CompanyListDif) == 1:
+                self.title_company_name = ""
+            ws_name = "Rule 222 D " + self.title_company_name
+            RatePages.generateWorksheet(
+                ws_name,
+                "RULE 222. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION " + self.title_company_name,
+                "222.D. Unlicensed/Limited Use Farm or Ranch Trucks",
+                self.buildFARule222D(comp_name),
+                False,  # useIndex
+                True,   # useHeader
+            )
+            self.overideFooter(RatePages.getWB()[ws_name], CompanyTest)
+
+        _wb = RatePages.getWB()
+        for _sn in _wb.sheetnames:
+            if _sn.startswith("Rule 222 D"):
+                self.formatRule222DFA(_wb[_sn])
+
+    def formatRule222DFA(self, ws):
+        from openpyxl.styles import Font, Alignment, Border, Side
+
+        ws.column_dimensions["A"].width = 22
+        ws.column_dimensions["B"].width = 14
+
+        border = Border(
+            left=Side(border_style="thin", color="C1C1C1"),
+            right=Side(border_style="thin", color="C1C1C1"),
+            top=Side(border_style="thin", color="C1C1C1"),
+            bottom=Side(border_style="thin", color="C1C1C1"),
+        )
+        _header_vals = {"Coverage", "Factor"}
+
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.value is None:
+                    continue
+                val = str(cell.value)
+                if val == "":
+                    continue
+                if cell.row == 1:
+                    cell.font = Font(bold=True, name="Arial", size=10)
+                elif val.startswith("222.D"):
+                    cell.font = Font(italic=True, name="Arial", size=10)
+                elif val in _header_vals:
+                    cell.font      = Font(bold=True, name="Arial", size=10)
+                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+                    cell.border    = border
+                else:
+                    cell.font   = Font(name="Arial", size=10)
+                    cell.border = border
+                    if cell.column == 1:
+                        cell.alignment = Alignment(horizontal="left", vertical="center")
+                    else:
+                        cell.alignment = Alignment(horizontal="center", vertical="center")
+
     def _page_rule_fa_420(self, RatePages):
         # FA-only — Rule 420 Segmentation Rating Plan.
         # Exception states (CA, MT, NY, UT, WA): Implementation Factor is a cross-product
@@ -1430,6 +1523,7 @@ class Auto(_BABase):
         self._page_rule_222_ttt_base_rates(RatePages, state_sheet_exceptions)
         self._page_rule_222b(RatePages)
         self._page_rule_222c(RatePages)
+        self._page_rule_fa_222d(RatePages)   # FA-only: 222.D Unlicensed/Limited Use Farm or Ranch Trucks (MD, PA, NY, VA, WV only)
         self._page_rule_222e(RatePages)
         self._page_rule_223b5(RatePages)
         self._page_rule_223c(RatePages)

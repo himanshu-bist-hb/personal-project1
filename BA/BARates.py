@@ -10436,7 +10436,7 @@ class Auto:
 
     def _page_rule_293(self, RatePages, shared):
         #Rule 293 (Varies by state)
-        ratebook_names = ['NGIC', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
+        ratebook_names = ['NGIC', 'NWAG', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
 
         available_companies = []
         for company in ratebook_names:

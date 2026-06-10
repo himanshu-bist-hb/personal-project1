@@ -1024,7 +1024,7 @@ class Auto(_BABase):
             ws_name = "Rule 222 D " + self.title_company_name
             RatePages.generateWorksheet(
                 ws_name,
-                "RULE 222. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION " + self.title_company_name,
+                "RULE 222.D. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION " + self.title_company_name,
                 "222.D. Unlicensed/Limited Use Farm or Ranch Trucks",
                 self.buildFARule222D(comp_name),
                 False,  # useIndex
@@ -1526,7 +1526,6 @@ class Auto(_BABase):
         self._page_rule_fa_222d(RatePages)   # FA-only: 222.D Unlicensed/Limited Use Farm or Ranch Trucks (MD, PA, NY, VA, WV only)
         self._page_rule_222e(RatePages)
         self._page_rule_223b5(RatePages)
-        self._page_rule_223c(RatePages)
         self._page_rule_fa_223c2(RatePages)   # FA-only: 223.C.2 Secondary Classification Factors
         self._page_rule_225c2(RatePages)
         self._page_rule_225c3(RatePages)
@@ -1595,7 +1594,7 @@ class Auto(_BABase):
         self._page_rule_427(RatePages)
         self._page_rule_fa_440(RatePages)
         self._page_rule_450(RatePages)
-        self._page_rule_451(RatePages, shared)
+        # self._page_rule_451(RatePages, shared)
         self._page_rule_452(RatePages)
         self._page_rule_453(RatePages)
         self._page_rule_454(RatePages)

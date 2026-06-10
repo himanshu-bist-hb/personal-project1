@@ -899,7 +899,7 @@ elif active_lob == "Business Auto":
                 for f in uploaded:
                     name_up = f.name.upper()
                     matched = next((k for k in DETECT_ORDER if k in name_up), None)
-                    grouped.setdefault(matched or "__unknown__", []).append(f)
+                    grouped.setdefault(matched or "NGIC", []).append(f)
                 for key in ALL_KEYS:
                     files = grouped.get(key, [])
                     if len(files) == 1:

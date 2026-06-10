@@ -836,6 +836,17 @@ elif active_lob == "Business Auto":
 
     DETECT_ORDER = ["HICNJ", "CCMIC", "NICOF", "NWAG", "NACO", "NAFF", "NGIC", "MM", "CW"]
 
+    # MM is only 2 chars so a plain substring check causes false positives
+    # (e.g. "commercial" contains "mm").  Require a delimiter on both sides:
+    #   before MM : space | hyphen | underscore | plus
+    #   after  MM : space | hyphen | underscore | plus | dot  (dot catches ".xlsx")
+    _MM_RE = re.compile(r'(?:^|[ +\-_])MM(?:[ +\-_.]|$)')
+
+    def _company_match(key, name_up):
+        if key == "MM":
+            return bool(_MM_RE.search(name_up))
+        return key in name_up
+
     def scan_states(src_path):
         states = []
         try:
@@ -845,7 +856,7 @@ elif active_lob == "Business Auto":
                     for f in item.iterdir():
                         if f.is_file() and f.suffix.lower() in ('.xlsx', '.xlsm', '.xls'):
                             name_up = f.name.upper()
-                            matched = next((k for k in DETECT_ORDER if k in name_up), None)
+                            matched = next((k for k in DETECT_ORDER if _company_match(k, name_up)), None)
                             if matched:
                                 books.setdefault(matched, []).append(f)
                     has_ngic  = "NGIC" in books and len(books["NGIC"]) == 1
@@ -898,7 +909,7 @@ elif active_lob == "Business Auto":
                 grouped = {}
                 for f in uploaded:
                     name_up = f.name.upper()
-                    matched = next((k for k in DETECT_ORDER if k in name_up), None)
+                    matched = next((k for k in DETECT_ORDER if _company_match(k, name_up)), None)
                     grouped.setdefault(matched or "NGIC", []).append(f)
                 for key in ALL_KEYS:
                     files = grouped.get(key, [])

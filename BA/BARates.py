@@ -866,90 +866,113 @@ class Auto:
 
         return table
 
-    # Builds the TTT PhysDam Fleet Size Factors table
-    # Returns a dataframe
     @log_exceptions
     def buildPrimaryFactors(self, company):
-        TTTPrimaryFactorsLocal = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0]).query(f'TruckRadiusClass == "Local"')
-        #TTTPrimaryFactorsLocal = self.buildDataFrame("TrucksTractorsAndTrailersPrimaryFactors_Ext").query(f'TruckRadiusClass == "Local"')
-        TTTPrimaryFactorsLocal['ClassCode'] = TTTPrimaryFactorsLocal['TruckSizeClass'] + "-" + TTTPrimaryFactorsLocal['TruckBusinessUseClass']
-        TTTPrimaryFactorsLocal = TTTPrimaryFactorsLocal.astype(object)
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Light Truck-Service", 'Class (Non-Fleet, Fleet)'] = '011, 014'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Light Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '021, 024'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Light Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '031, 034'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Medium Truck-Service", 'Class (Non-Fleet, Fleet)'] = '211, 214'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Medium Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '221, 224'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Medium Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '231, 234'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Heavy Truck-Service", 'Class (Non-Fleet, Fleet)'] = '311, 314'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Heavy Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '321, 324'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Heavy Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '331, 334'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Extra-Heavy Truck-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '401, 404'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Heavy Truck-Tractor-Service", 'Class (Non-Fleet, Fleet)'] = '341, 344'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Heavy Truck-Tractor-Retail", 'Class (Non-Fleet, Fleet)'] = '351, 354'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Heavy Truck-Tractor-Commercial", 'Class (Non-Fleet, Fleet)'] = '361, 364'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Extra Heavy Truck-Tractor-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '501, 504'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Semitrailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '671, 674'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Trailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '681, 684'
-        TTTPrimaryFactorsLocal.loc[TTTPrimaryFactorsLocal['ClassCode'] == "Service or Utility Trailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '691, 694'
-        TTTPrimaryFactorsLocal = TTTPrimaryFactorsLocal.pivot(index=['TruckSizeClass', 'TruckBusinessUseClass', 'Class (Non-Fleet, Fleet)'], columns='Coverage', values='Factor').reset_index(['TruckSizeClass', 'TruckBusinessUseClass', 'Class (Non-Fleet, Fleet)']). \
-            rename(columns={'TruckSizeClass' : 'Size Class', 'TruckBusinessUseClass' : 'Business Use Class', 'Collision' : 'Collision Factor', 'Comprehensive And Specified Causes Of Loss' : 'OTC Factor', 'Liability' : 'Liability Factor'}).sort_values('Class (Non-Fleet, Fleet)')
-        TTTPrimaryFactorsLocal = TTTPrimaryFactorsLocal[['Size Class', 'Business Use Class', 'Class (Non-Fleet, Fleet)', 'Liability Factor', 'OTC Factor', 'Collision Factor']]
+        # Maps (TruckSizeClass, TruckBusinessUseClass) → 2-digit base code.
+        # Class codes follow the formula: base + radius_suffix (1/4 Local, 2/5 Int, 3/6 Long).
+        BASE_CODES = {
+            ("Light Truck",                 "Service"):        "01",
+            ("Light Truck",                 "Retail"):         "02",
+            ("Light Truck",                 "Commercial"):     "03",
+            ("Medium Truck",                "Service"):        "21",
+            ("Medium Truck",                "Retail"):         "22",
+            ("Medium Truck",                "Commercial"):     "23",
+            ("Heavy Truck",                 "Service"):        "31",
+            ("Heavy Truck",                 "Retail"):         "32",
+            ("Heavy Truck",                 "Commercial"):     "33",
+            ("Heavy Truck-Tractor",         "Service"):        "34",
+            ("Heavy Truck-Tractor",         "Retail"):         "35",
+            ("Heavy Truck-Tractor",         "Commercial"):     "36",
+            ("Extra-Heavy Truck",           "Not Applicable"): "40",
+            ("Extra Heavy Truck-Tractor",   "Not Applicable"): "50",
+            ("Semitrailer",                 "Not Applicable"): "67",
+            ("Trailer",                     "Not Applicable"): "68",
+            ("Service or Utility Trailer",  "Not Applicable"): "69",
+        }
+        RADIUS_SUFFIX = {
+            "Local":         ("1", "4"),
+            "Intermediate":  ("2", "5"),
+            "Long Distance": ("3", "6"),
+        }
+        SIZE_CLASS_ORDER = [
+            "Light Truck", "Medium Truck", "Heavy Truck", "Extra-Heavy Truck",
+            "Heavy Truck-Tractor", "Extra Heavy Truck-Tractor",
+            "Semitrailer", "Trailer", "Service or Utility Trailer",
+        ]
+        BUC_ORDER = ["Service", "Retail", "Commercial", "Not Applicable"]
 
-        TTTPrimaryFactorsInt = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0]).query(f'TruckRadiusClass == "Intermediate"')
-        #TTTPrimaryFactorsInt = self.buildDataFrame("TrucksTractorsAndTrailersPrimaryFactors_Ext").query(f'TruckRadiusClass == "Intermediate"')
-        TTTPrimaryFactorsInt['ClassCode'] = TTTPrimaryFactorsInt['TruckSizeClass'] + "-" + TTTPrimaryFactorsInt['TruckBusinessUseClass']
-        TTTPrimaryFactorsInt = TTTPrimaryFactorsInt.astype(object)
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Light Truck-Service", 'Class (Non-Fleet, Fleet)'] = '012, 015'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Light Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '022, 025'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Light Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '032, 035'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Medium Truck-Service", 'Class (Non-Fleet, Fleet)'] = '212, 215'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Medium Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '222, 225'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Medium Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '232, 235'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Heavy Truck-Service", 'Class (Non-Fleet, Fleet)'] = '312, 315'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Heavy Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '322, 325'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Heavy Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '332, 335'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Extra-Heavy Truck-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '402, 405'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Heavy Truck-Tractor-Service", 'Class (Non-Fleet, Fleet)'] = '342, 345'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Heavy Truck-Tractor-Retail", 'Class (Non-Fleet, Fleet)'] = '352, 355'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Heavy Truck-Tractor-Commercial", 'Class (Non-Fleet, Fleet)'] = '362, 365'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Extra Heavy Truck-Tractor-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '502, 505'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Semitrailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '672, 675'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Trailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '682, 685'
-        TTTPrimaryFactorsInt.loc[TTTPrimaryFactorsInt['ClassCode'] == "Service or Utility Trailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '692, 695'
-        TTTPrimaryFactorsInt = TTTPrimaryFactorsInt.pivot(index=['TruckSizeClass', 'TruckBusinessUseClass', 'Class (Non-Fleet, Fleet)'], columns='Coverage', values='Factor').reset_index(['TruckSizeClass', 'TruckBusinessUseClass', 'Class (Non-Fleet, Fleet)']). \
-            rename(columns={'TruckSizeClass' : 'Size Class', 'TruckBusinessUseClass' : 'Business Use Class', 'Collision' : 'Collision Factor', 'Comprehensive And Specified Causes Of Loss' : 'OTC Factor', 'Liability' : 'Liability Factor'}).sort_values('Class (Non-Fleet, Fleet)')
-        TTTPrimaryFactorsInt = TTTPrimaryFactorsInt[['Size Class', 'Business Use Class', 'Class (Non-Fleet, Fleet)', 'Liability Factor', 'OTC Factor', 'Collision Factor']]
-        TTTPrimaryFactorsLong = pd.DataFrame(self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:], index=None, columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0]).query(f'TruckRadiusClass == "Long Distance"')
-        #TTTPrimaryFactorsLong = self.buildDataFrame("TrucksTractorsAndTrailersPrimaryFactors_Ext").query(f'TruckRadiusClass == "Long Distance"')
-        TTTPrimaryFactorsLong['ClassCode'] = TTTPrimaryFactorsLong['TruckSizeClass'] + "-" + TTTPrimaryFactorsLong['TruckBusinessUseClass']
-        TTTPrimaryFactorsLong = TTTPrimaryFactorsLong.astype(object)
-        TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Service", 'Class (Non-Fleet, Fleet)'] = '013, 016'
-        TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '023, 026'
-        TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Light Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '033, 036'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Medium Truck-Service", 'Class (Non-Fleet, Fleet)'] = '213, 216'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Medium Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '223, 226'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Medium Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '233, 236'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Heavy Truck-Service", 'Class (Non-Fleet, Fleet)'] = '313, 316'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Heavy Truck-Retail", 'Class (Non-Fleet, Fleet)'] = '323, 326'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Heavy Truck-Commercial", 'Class (Non-Fleet, Fleet)'] = '333, 336'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Extra-Heavy Truck-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '403, 406'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Heavy Truck-Tractor-Service", 'Class (Non-Fleet, Fleet)'] = '343, 346'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Heavy Truck-Tractor-Retail", 'Class (Non-Fleet, Fleet)'] = '353, 356'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Heavy Truck-Tractor-Commercial", 'Class (Non-Fleet, Fleet)'] = '363, 366'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Extra Heavy Truck-Tractor-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '503, 506'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Semitrailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '673, 676'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Trailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '683, 686'
-        # TTTPrimaryFactorsLong.loc[TTTPrimaryFactorsLong['ClassCode'] == "Service or Utility Trailer-Not Applicable", 'Class (Non-Fleet, Fleet)'] = '693, 696'
+        raw = pd.DataFrame(
+            self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][1:],
+            index=None,
+            columns=self.rateTables[company]['TrucksTractorsAndTrailersPrimaryFactors_Ext'][0],
+        ).astype(object)
 
-        TTTPrimaryFactorsLong = TTTPrimaryFactorsLong[TTTPrimaryFactorsLong['ClassCode'].str.startswith("Light Truck")]
-        TTTPrimaryFactorsLong = TTTPrimaryFactorsLong.pivot(index=['TruckSizeClass', 'TruckBusinessUseClass', 'Class (Non-Fleet, Fleet)'], columns='Coverage', values='Factor').reset_index(['TruckSizeClass', 'TruckBusinessUseClass', 'Class (Non-Fleet, Fleet)']). \
-            rename(columns={'TruckSizeClass' : 'Size Class', 'TruckBusinessUseClass' : 'Business Use Class', 'Collision' : 'Collision Factor', 'Comprehensive And Specified Causes Of Loss' : 'OTC Factor', 'Liability' : 'Liability Factor'}).sort_values('Class (Non-Fleet, Fleet)')
-        TTTPrimaryFactorsLong = TTTPrimaryFactorsLong[['Size Class', 'Business Use Class', 'Class (Non-Fleet, Fleet)', 'Liability Factor', 'OTC Factor', 'Collision Factor']]
+        raw["_base"] = [BASE_CODES.get((s, u), "??")
+                        for s, u in zip(raw["TruckSizeClass"], raw["TruckBusinessUseClass"])]
+        raw["_suf"]  = raw["TruckRadiusClass"].map(lambda r: RADIUS_SUFFIX.get(r, ("?", "?")))
+        raw["Class (Non-Fleet, Fleet)"] = raw.apply(
+            lambda row: f"{row['_base']}{row['_suf'][0]}, {row['_base']}{row['_suf'][1]}", axis=1
+        )
 
-        TTTPrimaryFactors = pd.merge(TTTPrimaryFactorsLocal, TTTPrimaryFactorsInt, on=['Size Class', 'Business Use Class'], how='left')
-        TTTPrimaryFactors = pd.merge(TTTPrimaryFactors, TTTPrimaryFactorsLong, on=['Size Class', 'Business Use Class'], how='left')
+        # Detect zone-rated: Long Distance rows where Liability coverage is absent from the ratebook.
+        long_df = raw[raw["TruckRadiusClass"] == "Long Distance"]
+        long_with_liab = set(
+            long_df[long_df["Coverage"] == "Liability"][["TruckSizeClass", "TruckBusinessUseClass"]]
+            .apply(tuple, axis=1)
+        )
+        all_long_keys = set(long_df[["TruckSizeClass", "TruckBusinessUseClass"]].apply(tuple, axis=1))
+        zone_rated_keys = all_long_keys - long_with_liab
 
-        return TTTPrimaryFactors
+        def _build_section(radius_label):
+            section = raw[raw["TruckRadiusClass"] == radius_label].copy()
+            pivot = section.pivot_table(
+                index=["TruckSizeClass", "TruckBusinessUseClass", "Class (Non-Fleet, Fleet)"],
+                columns="Coverage",
+                values="Factor",
+                aggfunc="first",
+            ).reset_index()
+            pivot.columns.name = None
+            pivot = pivot.rename(columns={
+                "TruckSizeClass":                            "Size Class",
+                "TruckBusinessUseClass":                     "Business Use Class",
+                "Collision":                                 "Collision Factor",
+                "Comprehensive And Specified Causes Of Loss": "OTC Factor",
+                "Liability":                                 "Liability Factor",
+            })
+            if radius_label == "Long Distance":
+                for col in ("Liability Factor", "OTC Factor"):
+                    if col not in pivot.columns:
+                        pivot[col] = "ZONE RATED"
+                    else:
+                        mask = pivot[["Size Class", "Business Use Class"]].apply(
+                            lambda row: (row["Size Class"], row["Business Use Class"]) in zone_rated_keys,
+                            axis=1,
+                        )
+                        pivot.loc[mask, col] = "ZONE RATED"
+            return pivot[["Size Class", "Business Use Class", "Class (Non-Fleet, Fleet)",
+                           "Liability Factor", "OTC Factor", "Collision Factor"]]
+
+        local     = _build_section("Local")
+        inter     = _build_section("Intermediate")
+        long_dist = _build_section("Long Distance")
+
+        result = pd.merge(local, inter, on=["Size Class", "Business Use Class"],
+                          how="left", suffixes=(" (Local)", " (Int)"))
+        result = pd.merge(result, long_dist, on=["Size Class", "Business Use Class"], how="left")
+        result = result.rename(columns={
+            "Class (Non-Fleet, Fleet)": "Class (Non-Fleet, Fleet) (Long)",
+            "Liability Factor":          "Liability Factor (Long)",
+            "OTC Factor":                "OTC Factor (Long)",
+            "Collision Factor":          "Collision Factor (Long)",
+        })
+
+        result["_sc_ord"]  = pd.Categorical(result["Size Class"],          categories=SIZE_CLASS_ORDER, ordered=True)
+        result["_buc_ord"] = pd.Categorical(result["Business Use Class"],  categories=BUC_ORDER,        ordered=True)
+        result = (result.sort_values(["_sc_ord", "_buc_ord"])
+                        .drop(columns=["_sc_ord", "_buc_ord"])
+                        .reset_index(drop=True))
+
+        return result
 
     # Builds the TTT PhysDam Fleet Size Factors table
     # Returns a dataframe
@@ -6654,110 +6677,26 @@ class Auto:
 
         ws.delete_rows(3)
 
-    #Format School Bus Operations Rate Table
     def format23B(self, ws):
-        """Formats 223.B.5, has important note at bottom."""
+        """Formats Rule 223.B.5 primary classification factors table."""
+        _bold   = Font(bold=True, name='Arial', size=10)
+        _normal = Font(name='Arial', size=10)
+        _center = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        _border = Border(
+            left=Side(border_style='thin', color='C1C1C1'),
+            right=Side(border_style='thin', color='C1C1C1'),
+            top=Side(border_style='thin', color='C1C1C1'),
+            bottom=Side(border_style='thin', color='C1C1C1'),
+        )
 
-        ws.column_dimensions['A'].width = self.pixelsToInches(150)
-        ws.column_dimensions['B'].width = self.pixelsToInches(125)
+        # Insert 3 rows at position 4 so that:
+        #   rows 1-3  stay as title / subtitle / blank
+        #   rows 4-6  become blank header rows we write into below
+        #   row  7    becomes the old df column-name row (overwritten below)
+        #   rows 8-24 become the 17 data rows
+        ws.insert_rows(4, amount=3)
 
-        for cell in ws['8:8']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'),
-                                 right=Side(border_style='thin', color='C1C1C1'),
-                                 top=Side(border_style='thin', color='C1C1C1'),
-                                 bottom=Side(border_style='thin', color='C1C1C1'))
-
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-
-        ws['K9'] = ws['A24'].value
-        ws['L9'] = ws['B24'].value
-        ws['M9'] = ws['C24'].value
-        ws['N9'] = ws['D24'].value
-
-        ws['K10'] = ws['A25'].value
-        ws['L10'] = ws['B25'].value
-        ws['M10'] = ws['C25'].value
-        ws['N10'] = ws['D25'].value
-
-        ws['K11'] = ws['A26'].value
-        ws['L11'] = ws['B26'].value
-        ws['M11'] = ws['C26'].value
-        ws['N11'] = ws['D26'].value
-
-        ws['K12'] = ws['A27'].value
-        ws['L12'] = ws['B27'].value
-        ws['M12'] = ws['C27'].value
-        ws['N12'] = ws['D27'].value
-
-        ws['K13'] = ws['A28'].value
-        ws['L13'] = ws['B28'].value
-        ws['M13'] = ws['C28'].value
-        ws['N13'] = ws['D28'].value
-
-        ws['K14'] = ws['A29'].value
-        ws['L14'] = ws['B29'].value
-        ws['M14'] = ws['C29'].value
-        ws['N14'] = ws['D29'].value
-
-        ws['K15'] = ws['A30'].value
-        ws['L15'] = ws['B30'].value
-        ws['M15'] = ws['C30'].value
-        ws['N15'] = ws['D30'].value
-
-        ws['K16'] = ws['A31'].value
-        ws['L16'] = ws['B31'].value
-        ws['M16'] = ws['C31'].value
-        ws['N16'] = ws['D31'].value
-
-        ws['K17'] = ws['A32'].value
-        ws['L17'] = ws['B32'].value
-        ws['M17'] = ws['C32'].value
-        ws['N17'] = ws['D32'].value
-
-        ws['K18'] = ws['A33'].value
-        ws['L18'] = ws['B33'].value
-        ws['M18'] = ws['C33'].value
-        ws['N18'] = ws['D33'].value
-
-        ws['K19'] = ws['A34'].value
-        ws['L19'] = ws['B34'].value
-        ws['M19'] = ws['C34'].value
-        ws['N19'] = ws['D34'].value
-
-        ws['K20'] = ws['A35'].value
-        ws['L20'] = ws['B35'].value
-        ws['M20'] = ws['C35'].value
-        ws['N20'] = ws['D35'].value
-
-        ws['K21'] = ws['A36'].value
-        ws['L21'] = ws['B36'].value
-        ws['M21'] = ws['C36'].value
-        ws['N21'] = ws['D36'].value
-
-        ws['K22'] = ws['A37'].value
-        ws['L22'] = ws['B37'].value
-        ws['M22'] = ws['C37'].value
-        ws['N22'] = ws['D37'].value
-
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-        ws.delete_rows(23)
-
-        ws.insert_rows(3)
-        ws.insert_rows(3)
-        ws.insert_rows(3)
+        # ── Multi-level column header (rows 4-7) ──────────────────────────────
         ws['A4'] = 'Size Class'
         ws['B4'] = 'Business Use Class'
         ws['C4'] = 'Radius Class'
@@ -6782,69 +6721,45 @@ class Auto:
         ws['H7'] = 'Liability Factor'
         ws['I7'] = 'OTC Factor'
         ws['J7'] = 'Collision Factor'
-
-        ws.merge_cells('K11:N11')
-        ws.merge_cells('A11:J11')
+        ws['K7'] = 'Class (Non-Fleet, Fleet)'
+        ws['L7'] = 'Liability Factor'
+        ws['M7'] = 'OTC Factor'
+        ws['N7'] = 'Collision Factor'
         ws.merge_cells('A4:A7')
         ws.merge_cells('B4:B7')
 
-        for cell in ws['4:4']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'),
-                                 right=Side(border_style='thin', color='C1C1C1'),
-                                 top=Side(border_style='thin', color='C1C1C1'),
-                                 bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            cell.font = Font(bold=True)
+        # ── Format header rows 4-7 ────────────────────────────────────────────
+        for row_num in range(4, 8):
+            for cell in ws[row_num]:
+                cell.font      = _bold
+                cell.alignment = _center
+                cell.border    = _border
 
-        for cell in ws['5:5']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'),
-                                 right=Side(border_style='thin', color='C1C1C1'),
-                                 top=Side(border_style='thin', color='C1C1C1'),
-                                 bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            cell.font = Font(bold=True)
-
-        for cell in ws['6:6']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'),
-                                 right=Side(border_style='thin', color='C1C1C1'),
-                                 top=Side(border_style='thin', color='C1C1C1'),
-                                 bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            cell.font = Font(bold=True)
-
-        for cell in ws['7:7']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'),
-                                 right=Side(border_style='thin', color='C1C1C1'),
-                                 top=Side(border_style='thin', color='C1C1C1'),
-                                 bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            cell.font = Font(bold=True)
-
-        """The following is a deletion of part of the table. Since ISO Updates moved the zone rated portion to another sheet,
-            it is easier to delete it from this position than to edit the code earlier."""
-
-        start_cell = "K11"
-        end_cell = "N25"
-        # Unmerge cells in the specified range
-        merged_ranges_to_unmerge = []
-        for merged_range in ws.merged_cells.ranges:
-            if start_cell in merged_range:
-                merged_ranges_to_unmerge.append(merged_range)
-
-        for merged_range in merged_ranges_to_unmerge:
-            ws.unmerge_cells(str(merged_range))
-
-        # Clear content and formatting
-        for row in ws[start_cell:end_cell]:
+        # ── Format data rows 8+ ───────────────────────────────────────────────
+        DATA_START = 8
+        for row in ws.iter_rows(min_row=DATA_START, max_row=ws.max_row):
             for cell in row:
-                cell.value = None  # Clear content
-                cell.font = Font()  # Reset font
-                cell.border = Border()  # Reset border
-                cell.alignment = Alignment()  # Reset alignment
+                cell.font      = _normal
+                cell.alignment = _center
+                cell.border    = _border
 
-        ws.insert_rows(21)
-        ws.insert_rows(18)
-        ws.insert_rows(15)
+        # ── Merge Size Class cells (col A) per contiguous group ───────────────
+        current_sc  = None
+        group_start = None
+        for row_num in range(DATA_START, ws.max_row + 1):
+            sc = ws.cell(row=row_num, column=1).value
+            if sc != current_sc:
+                if current_sc is not None and row_num - 1 > group_start:
+                    ws.merge_cells(start_row=group_start, start_column=1,
+                                   end_row=row_num - 1, end_column=1)
+                current_sc  = sc
+                group_start = row_num
+        if current_sc is not None and ws.max_row > group_start:
+            ws.merge_cells(start_row=group_start, start_column=1,
+                           end_row=ws.max_row, end_column=1)
+
+        ws.column_dimensions['A'].width = self.pixelsToInches(150)
+        ws.column_dimensions['B'].width = self.pixelsToInches(125)
 
     #Format Towing and Labor Rate Table
     def format23C(self, ws):
@@ -9375,7 +9290,7 @@ class Auto:
             if len(self.CompanyListDif) == 1:
                 self.title_company_name = ""  # Every Company, no point in putting in sheet name.
 
-            RatePages.generateWorksheet23B('Rule 223 B.5 '+ self.title_company_name, 'RULE 223. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION ' + self.title_company_name, '223.B.5. Primary Classification Factors and Statistical Codes - Truck, Tractors, and Trailers', self.buildPrimaryFactors(comp_name), self.buildZonePrimaryFactors(comp_name), False, True)
+            RatePages.generateWorksheet('Rule 223 B.5 '+ self.title_company_name, 'RULE 223. TRUCKS, TRACTORS, TRAILERS CLASSIFICATION ' + self.title_company_name, '223.B.5. Primary Classification Factors and Statistical Codes - Truck, Tractors, and Trailers', self.buildPrimaryFactors(comp_name), False, True)
             self.overideFooter(RatePages.getWB()['Rule 223 B.5 '+ self.title_company_name],CompanyTest)
 
         _wb = RatePages.getWB()

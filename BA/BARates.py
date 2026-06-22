@@ -1008,6 +1008,7 @@ class Auto:
                 rename(columns={'TruckSizeClass' : 'Size Class', 'TruckBusinessUseClass' : 'Business Use Class', 'Collision' : 'Collision Factor', 'Comprehensive And Specified Causes Of Loss' : 'OTC Factor', 'Liability' : 'Liability Factor'}).sort_values('Class (Non-Fleet, Fleet)')
 
             ZonePrimaryFactors = TTTPrimaryFactorsLong[['Class (Non-Fleet, Fleet)', 'Liability Factor', 'OTC Factor', 'Collision Factor']]
+            ZonePrimaryFactors = ZonePrimaryFactors.dropna(subset=['Class (Non-Fleet, Fleet)'])
 
         except Exception:
             # traceback.print_exc()
@@ -1083,6 +1084,7 @@ class Auto:
             ZonePrimaryFactors = pd.merge(TTTPrimaryFactorsLiab, TTTPrimaryFactorsOTC, on='Class (Non-Fleet, Fleet)',
                                           how='left')
             ZonePrimaryFactors = ZonePrimaryFactors[['Class (Non-Fleet, Fleet)', 'Liability Factor', 'OTC Factor', 'Collision Factor']]
+            ZonePrimaryFactors = ZonePrimaryFactors.dropna(subset=['Class (Non-Fleet, Fleet)'])
 
         finally:
             return ZonePrimaryFactors

@@ -6554,10 +6554,90 @@ class Auto:
         if self.StateAbb in ["KY"]:
             ws['B2'].value = CSL_RULE_LOOKUP[rule]
             ws.merge_cells('B2:D2')
+            ws['B2'].alignment = center_center_wrap
+
+        # --- Michigan intrastate/interstate formatting -------------------------
+        data_start_row = 4
+        thin_border = Border(
+            left=Side(border_style='thin', color='C1C1C1'),
+            right=Side(border_style='thin', color='C1C1C1'),
+            top=Side(border_style='thin', color='C1C1C1'),
+            bottom=Side(border_style='thin', color='C1C1C1'),
+        )
+        bold_font = Font(name='Arial', size=10, bold=True)
+
+        if self.StateAbb == "MI":
+            intra_x_col = inter_x_col = intra_y_col = inter_y_col = None
+            for col_idx in range(1, ws.max_column + 1):
+                cell_val = str(ws.cell(row=3, column=col_idx).value or "")
+                if cell_val == "Intrastate_x":
+                    intra_x_col = col_idx
+                elif cell_val == "Interstate_x":
+                    inter_x_col = col_idx
+                elif cell_val == "Intrastate_y":
+                    intra_y_col = col_idx
+                elif cell_val == "Interstate_y":
+                    inter_y_col = col_idx
+
+            if intra_x_col and inter_x_col and intra_y_col and inter_y_col:
+                pip_start = inter_x_col + 1
+                pip_end = intra_y_col - 1
+
+                ws.insert_rows(3)
+                data_start_row = 5
+
+                ws.merge_cells(start_row=2, start_column=intra_x_col,
+                               end_row=2, end_column=inter_x_col)
+                liab_cell = ws.cell(row=2, column=intra_x_col)
+                liab_cell.value = "Liability\n(222.C.2.a)"
+                liab_cell.alignment = center_center_wrap
+                liab_cell.font = bold_font
+
+                ws.merge_cells(start_row=2, start_column=intra_y_col,
+                               end_row=2, end_column=inter_y_col)
+                pp_cell = ws.cell(row=2, column=intra_y_col)
+                pp_cell.value = "Property Protection"
+                pp_cell.alignment = center_center_wrap
+                pp_cell.font = bold_font
+
+                if pip_end > pip_start:
+                    ws.merge_cells(start_row=3, start_column=pip_start,
+                                   end_row=3, end_column=pip_end - 1)
+                    intra_pip = ws.cell(row=3, column=pip_start)
+                    intra_pip.value = "Intrastate"
+                    intra_pip.alignment = center_center_wrap
+                    intra_pip.font = bold_font
+
+                    inter_pip = ws.cell(row=3, column=pip_end)
+                    inter_pip.value = "Interstate"
+                    inter_pip.alignment = center_center_wrap
+                    inter_pip.font = bold_font
+                elif pip_end == pip_start:
+                    ws.cell(row=3, column=pip_start).value = "Intrastate"
+                    ws.cell(row=3, column=pip_start).alignment = center_center_wrap
+                    ws.cell(row=3, column=pip_start).font = bold_font
+
+                ws.cell(row=4, column=intra_x_col).value = "Intrastate"
+                ws.cell(row=4, column=inter_x_col).value = "Interstate"
+                ws.cell(row=4, column=intra_y_col).value = "Intrastate"
+                ws.cell(row=4, column=inter_y_col).value = "Interstate"
+
+                for r in range(2, 5):
+                    for c in range(1, ws.max_column + 1):
+                        cell = ws.cell(row=r, column=c)
+                        cell.border = thin_border
+                        if r <= 3:
+                            cell.font = bold_font
+                            cell.alignment = center_center_wrap
+
+        if data_start_row == 4:
+            for r in range(2, 4):
+                for c in range(1, ws.max_column + 1):
+                    cell = ws.cell(row=r, column=c)
+                    cell.border = thin_border
 
         # --- Number formatting for inner table values ---------------------------
-        # Single pass over all cells from row 4 to max, columns A..max
-        for row in range(4, ws.max_row + 1):
+        for row in range(data_start_row, ws.max_row + 1):
             for col in range(1, ws.max_column + 1):
                 ws.cell(row=row, column=col).number_format = '#,##0.00'
 

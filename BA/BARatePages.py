@@ -138,6 +138,7 @@ def load_ratebook(ratebook_path: Optional[str]) -> Union[pd.ExcelFile, str]:
 def get_rate_book_info(
     ngic_loaded: Union[pd.ExcelFile, str],
     mm_loaded:   Union[pd.ExcelFile, str],
+    sm_loaded:   Union[pd.ExcelFile, str] = "Not found",
 ) -> RateBookInfo:
     """
     Read the 'Rate Book Details' sheet from the appropriate ratebook and
@@ -159,8 +160,12 @@ def get_rate_book_info(
         the raw path string here because we only need this one sheet and
         pd.read_excel(path, sheet_name=...) is slightly simpler.
     """
-    use_ngic   = (ngic_loaded != "Not found") and (mm_loaded == "Not found")
-    loaded_ef  = ngic_loaded if use_ngic else mm_loaded
+    if sm_loaded != "Not found":
+        loaded_ef = sm_loaded
+    elif (ngic_loaded != "Not found") and (mm_loaded == "Not found"):
+        loaded_ef = ngic_loaded
+    else:
+        loaded_ef = mm_loaded
 
     # Use the raw bytes stored by load_ratebook to create a fresh BytesIO.
     # The original UploadedFile stream is already exhausted at this point.
@@ -367,7 +372,9 @@ def run(
     NWAGRatebook:    Optional[str],
     folder_selected: str,
     SchedRatingMod:  Optional[int],
-    CWRatebook:      Optional[str],
+    CWRatebook:      Optional[str]   = None,
+    SMRatebook:      Optional[str]   = None,
+    ATARatebook:     Optional[str]   = None,
     progress_callback: Optional[Callable[[str], None]] = None,
     skip_pdf:        bool = False,
 ) -> Tuple[str, str]:
@@ -398,15 +405,18 @@ def run(
         "HICNJRatebook": load_ratebook(HICNJRatebook),
         "CCMICRatebook": load_ratebook(CCMICRatebook),
         "NWAGRatebook":  load_ratebook(NWAGRatebook),
+        "SMRatebook":    load_ratebook(SMRatebook),
+        "ATARatebook":   load_ratebook(ATARatebook),
     }
 
-    if ratebooks["NGICRatebook"] == "Not found":
-        raise ValueError("NGIC ratebook is required.")
+    if ratebooks["NGICRatebook"] == "Not found" and ratebooks["SMRatebook"] == "Not found":
+        raise ValueError("NGIC or SM ratebook is required.")
 
     # ── 2. Extract state / date metadata ──────────────────────────────────────
     info = get_rate_book_info(
         ngic_loaded=ratebooks["NGICRatebook"],
         mm_loaded=ratebooks["MMRatebook"],
+        sm_loaded=ratebooks["SMRatebook"],
     )
 
     # ── 3. Resolve CW ratebook ────────────────────────────────────────────────
@@ -430,6 +440,8 @@ def run(
         "HICNJ": ratebooks["HICNJRatebook"],
         "CCMIC": ratebooks["CCMICRatebook"],
         "NWAG":  ratebooks["NWAGRatebook"],
+        "SM":    ratebooks["SMRatebook"],
+        "ATA":   ratebooks["ATARatebook"],
     }
     rate_tables = load_all_ratebooks(rate_books, progress_callback)
 

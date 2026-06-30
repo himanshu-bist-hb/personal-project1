@@ -15,7 +15,7 @@ import re
 import time
 import copy
 
-from config.constants import BA_INPUT_FILE
+from config.constants import BA_INPUT_FILE, SM_COMPANIES, MM_COMPANIES
 
 # Define custom warning classes. Makes custom warnings when key functions fail more user friendly.
 # Search up the warning names to see use cases if interested.
@@ -121,7 +121,12 @@ class Auto:
         ]
         self.no_med_states = pd.read_excel(BA_INPUT_FILE, sheet_name="No MedPay")
         self.pip_states = pd.read_excel(BA_INPUT_FILE, sheet_name="PIP States")
-        self.createMM()
+
+        if self.rateTables.get("SM") is not None:
+            self._STATE_LEVEL_COMPANY = "ATA"
+            self.createSM()
+        else:
+            self.createMM()
 
     def createMM(self):
         # List of company codes
@@ -156,6 +161,24 @@ class Auto:
         else:
             for company_code in company_codes:
                 self.rateTables[company_code] = None
+
+    def createSM(self):
+        if self.rateTables.get("SM") is not None:
+            for company_code in SM_COMPANIES:
+                company_table = copy.deepcopy(self.rateTables["SM"])
+
+                company_dev = pd.DataFrame(company_table["CompanyDeviationFactor_Ext"][1:], index=None,
+                                           columns=company_table["CompanyDeviationFactor_Ext"][0])
+
+                company_specific_dev = company_dev[company_dev['UnderwritingCompanyCode'] == f'{company_code.lower()}_ext']
+
+                if not company_specific_dev.empty:
+                    company_table["CompanyDeviationFactor_Ext"] = [company_table["CompanyDeviationFactor_Ext"][
+                                                                       0]] + company_specific_dev.values.tolist()
+                    self.rateTables[company_code] = company_table
+                else:
+                    self.rateTables[company_code] = None
+                    warnings.warn(f"Deviation factor for {company_code} not found in SM ratebook. Skipping")
 
     def process_ratebook(self, name, rateTables):
         # Nesting protocol. Assign books to levels. If a lower level doesn't have a sheet, take it from the higher level.
@@ -258,7 +281,7 @@ class Auto:
 
             LCM Protocol: Goes through list of sheets that are flagged as LCM/Company Dev applicable. Then apply the multipliers.
         """
-        ratebook_names = ['NAFF', 'NACO', 'NICOF', 'CCMIC', 'HICNJ', 'NICOA', 'AICOA', 'NPCIC', 'NMIC', 'NWAG', 'NGIC'] # Level 2 company needs to be last.
+        ratebook_names = ['NAFF', 'NACO', 'NICOF', 'CCMIC', 'HICNJ', 'NICOA', 'AICOA', 'NPCIC', 'NMIC', 'NWAG', 'NGIC', 'ATA'] # Level 2 company needs to be last.
 
         available_names = []
         for name in ratebook_names:
@@ -270,9 +293,12 @@ class Auto:
             name, LEVEL1 = self.process_ratebook(name, self.rateTables)
             self.rateTables[name] = LEVEL1
 
-        # When MM runs we don't want to create the state-level company's pages.
-        # For BA: suppresses NGIC.  For FA: suppresses NWAG (same logic, different company).
-        if (self.rateTables["NMIC"] is not None) or (self.rateTables["CCMIC"] is not None):
+        # Suppress the state-level company after nesting so no pages are created for it.
+        # SM mode: suppress ATA ("Applies to All") — it served as Level 2, not a real company.
+        # MM mode: suppress NGIC when MM-derived companies exist.
+        if self._STATE_LEVEL_COMPANY == "ATA":
+            self.rateTables["ATA"] = None
+        elif self.rateTables.get("NMIC") is not None or self.rateTables.get("CCMIC") is not None:
             self.rateTables[self._STATE_LEVEL_COMPANY] = None
 
     def compareCompanies(self, tableCode):
@@ -341,6 +367,8 @@ class Auto:
                 self.default_company = ["NMIC"]
             elif "CCMIC" in self.existing_companies:
                 self.default_company = ["CCMIC"]
+            elif "NGIC" in self.existing_companies:
+                self.default_company = ["NGIC"]
             elif "NWAG" in self.existing_companies:
                 self.default_company = ["NWAG"]
 
@@ -11536,7 +11564,7 @@ class Auto:
         """
         import BA.ExcelSettingsBA as ExcelSettingsBA
 
-        companies = [c for c in self.rateTables.keys() if c not in ('CW', 'MM')]
+        companies = [c for c in self.rateTables.keys() if c not in ('CW', 'MM', 'SM', 'ATA')]
         RatePages = ExcelSettingsBA.Excel(
             StateAbb=self.StateAbb,
             State=self.State,

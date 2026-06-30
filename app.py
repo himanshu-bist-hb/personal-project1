@@ -78,6 +78,19 @@ st.session_state.setdefault("fa_multi_sched_map", {})
 st.session_state.setdefault("fa_multi_sched_mode", "upload")
 st.session_state.setdefault("fa_multi_sched_excel",{})
 
+# ─── Small Market session state ────────────────────────────────────────────
+st.session_state.setdefault("file_SM",          None)
+st.session_state.setdefault("file_ATA",         None)
+st.session_state.setdefault("sm_save_dir",      "")
+st.session_state.setdefault("sm_sched_mod",     0)
+st.session_state.setdefault("sm_run_status",    "idle")
+st.session_state.setdefault("sm_run_msg",       "")
+st.session_state.setdefault("sm_xlsx_path",     "")
+st.session_state.setdefault("sm_pdf_path",      "")
+st.session_state.setdefault("sm_pdf_status",    "idle")
+st.session_state.setdefault("sm_confirm_step",  "idle")
+st.session_state.setdefault("sm_upload_reset",  0)
+
 st.session_state.setdefault("active_tool",             "rate_pages")
 st.session_state.setdefault("cmp_comp_data",           None)
 st.session_state.setdefault("cmp_file_ids",            (None, None))
@@ -870,7 +883,7 @@ elif active_lob == "Business Auto":
 
     # ── Mode toggle ────────────────────────────────────────────────────────────
     mode = st.session_state.mode
-    tc1, tc2, _ = st.columns([2, 2, 8])
+    tc1, tc2, tc3, _ = st.columns([2, 2, 2, 6])
     with tc1:
         if st.button("Individual State", key="btn_ind", use_container_width=True,
                      type="primary" if mode == "individual" else "secondary"):
@@ -884,6 +897,13 @@ elif active_lob == "Business Auto":
             if mode != "multiple":
                 st.session_state.mode = "multiple"
                 st.session_state.multi_step = "idle"
+                st.rerun()
+    with tc3:
+        if st.button("Small Market", key="btn_sm", use_container_width=True,
+                     type="primary" if mode == "small_market" else "secondary"):
+            if mode != "small_market":
+                st.session_state.mode = "small_market"
+                st.session_state.sm_confirm_step = "idle"
                 st.rerun()
 
     spacer(16)
@@ -1083,7 +1103,7 @@ elif active_lob == "Business Auto":
     # ══════════════════════════════════════════════════════════════════════════
     # MULTIPLE STATES MODE
     # ══════════════════════════════════════════════════════════════════════════
-    else:
+    elif mode == "multiple":
         L, R = st.columns([13, 7], gap="large")
 
         with L:
@@ -1386,6 +1406,196 @@ elif active_lob == "Business Auto":
                 spacer(8)
                 if st.button("Start Over", key="multi_reset_btn", type="secondary"):
                     st.session_state.multi_step = "idle"; st.session_state.multi_results = []; st.rerun()
+
+            spacer(24)
+            st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # SMALL MARKET MODE
+    # ══════════════════════════════════════════════════════════════════════════
+    elif mode == "small_market":
+        L, R = st.columns([13, 7], gap="large")
+
+        with L:
+            st.markdown('<div class="sec-label">&#128194; &nbsp;Small Market Ratebooks</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Upload the <b>Small Market</b> ratebook and the <b>Applies to All</b> ratebook. Individual company ratebooks are created from the SM Company Deviation sheet. The Applies to All ratebook acts as the state-level fallback.</p>', unsafe_allow_html=True)
+            spacer(4)
+
+            uploaded_sm = st.file_uploader(
+                "Select the Small Market ratebook file",
+                type=["xlsx", "xlsm", "xls"],
+                accept_multiple_files=False,
+                key=f"sm_upload_{st.session_state.sm_upload_reset}",
+            )
+            if uploaded_sm:
+                st.session_state["file_SM"] = {"name": uploaded_sm.name, "bytes": uploaded_sm.read()}
+
+            spacer(4)
+            uploaded_ata = st.file_uploader(
+                "Select the Applies to All ratebook file",
+                type=["xlsx", "xlsm", "xls"],
+                accept_multiple_files=False,
+                key=f"ata_upload_{st.session_state.sm_upload_reset}",
+            )
+            if uploaded_ata:
+                st.session_state["file_ATA"] = {"name": uploaded_ata.name, "bytes": uploaded_ata.read()}
+
+            sm_val  = st.session_state.get("file_SM")
+            ata_val = st.session_state.get("file_ATA")
+            n_ok_sm = sum(1 for v in [sm_val, ata_val] if v and "error" not in v)
+
+            def _sm_row(label, val, required=True):
+                badge = '<span class="ab-req">Required</span>' if required else ''
+                if val and "error" not in val:
+                    return f'<div class="arow arow-ok"><span class="aco">{label} {badge}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+                return f'<div class="arow arow-empty"><span class="aco">{label} {badge}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
+
+            st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{n_ok_sm} assigned</span></div>'
+                + _sm_row("SM", sm_val) + _sm_row("Applies to All", ata_val)
+                + '</div>', unsafe_allow_html=True)
+
+            if sm_val or ata_val:
+                spacer(8)
+                _, clr = st.columns([5, 1])
+                with clr:
+                    if st.button("Clear all", type="secondary", key="sm_clear"):
+                        st.session_state["file_SM"] = None
+                        st.session_state["file_ATA"] = None
+                        st.session_state.sm_upload_reset += 1
+                        st.session_state.sm_run_status = "idle"
+                        st.rerun()
+
+        with R:
+            st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
+            typed_sm = st.text_input("sm_save_path", value=st.session_state.sm_save_dir, placeholder="Paste path or click Browse", label_visibility="collapsed")
+            if typed_sm != st.session_state.sm_save_dir: st.session_state.sm_save_dir = typed_sm
+            if st.button("Browse", key="sm_browse_btn"):
+                folder = browse_folder()
+                if folder: st.session_state.sm_save_dir = folder; st.rerun()
+            if st.session_state.sm_save_dir:
+                p = st.session_state.sm_save_dir
+                st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
+            else:
+                st.markdown('<p class="f-hint">Browse your device or paste the full folder path</p>', unsafe_allow_html=True)
+
+            spacer(6)
+            st.markdown('<p class="f-label">&#128202; &nbsp;Schedule Rating Mod</p>', unsafe_allow_html=True)
+            nc, pc = st.columns([3, 1])
+            with nc:
+                sm_tm = st.number_input("sm_mod_num", min_value=0, max_value=100, value=st.session_state.sm_sched_mod, step=1, label_visibility="collapsed")
+                if sm_tm != st.session_state.sm_sched_mod: st.session_state.sm_sched_mod = int(sm_tm)
+            with pc:
+                st.markdown(f'<div style="display:flex;align-items:center;height:42px;padding-left:4px;"><span style="font-size:22px;font-weight:700;color:#1A5DAB;line-height:1;">{st.session_state.sm_sched_mod}<span style="font-size:13px;font-weight:400;color:#6B7A9E;">%</span></span></div>', unsafe_allow_html=True)
+            spacer(6)
+            sm_sv = st.slider("sm_mod_slider", 0, 100, value=st.session_state.sm_sched_mod, step=1, format="%d%%", label_visibility="collapsed")
+            if sm_sv != st.session_state.sm_sched_mod: st.session_state.sm_sched_mod = sm_sv; st.rerun()
+            st.markdown('<p class="f-hint">Rule 417 &middot; State Schedule Rating Maximum Modification Threshold</p>', unsafe_allow_html=True)
+
+            spacer(6)
+            st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
+            sm_file_ok  = st.session_state.get("file_SM") is not None
+            ata_file_ok = st.session_state.get("file_ATA") is not None
+            sm_save_ok  = bool(st.session_state.sm_save_dir)
+            sm_ready    = sm_file_ok and ata_file_ok and sm_save_ok
+
+            def rdy(ok, title, sub):
+                d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
+                return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
+
+            sm_sdv = st.session_state.sm_save_dir
+            st.markdown('<div class="rdy-card">'
+                + rdy(sm_file_ok, 'SM Ratebook <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', "Uploaded" if sm_file_ok else "Required — please upload SM ratebook")
+                + rdy(ata_file_ok, 'Applies to All <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', "Uploaded" if ata_file_ok else "Required — please upload Applies to All ratebook")
+                + rdy(sm_save_ok, "Save location", (("…"+sm_sdv[-36:]) if len(sm_sdv)>38 else sm_sdv) if sm_save_ok else "Not yet selected")
+                + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{st.session_state.sm_sched_mod}%</span>', "Rule 417 threshold")
+                + '</div>', unsafe_allow_html=True)
+
+            if st.session_state.sm_confirm_step == "idle":
+                if sm_ready:
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button("&#129413;  Create Rate Pages", key="sm_run_btn", use_container_width=True):
+                        st.session_state.sm_confirm_step = "confirm"; st.session_state.sm_run_status = "idle"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    missing = (["SM ratebook"] if not sm_file_ok else []) + (["Applies to All ratebook"] if not ata_file_ok else []) + (["save location"] if not sm_save_ok else [])
+                    st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                    st.button(f"Waiting — {', '.join(missing)}", key="sm_run_dis", use_container_width=True, disabled=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            elif st.session_state.sm_confirm_step == "confirm":
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                st.button("&#129413;  Create Rate Pages", key="sm_run_cfm", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
+                spacer(8)
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("Cancel", key="sm_cancel_btn", use_container_width=True, type="secondary"):
+                        st.session_state.sm_confirm_step = "idle"; st.rerun()
+                with bc2:
+                    if st.button("Proceed", key="sm_proceed_btn", use_container_width=True, type="primary"):
+                        st.session_state.sm_confirm_step = "processing"; st.rerun()
+
+            elif st.session_state.sm_confirm_step == "processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Processing Excel...", key="sm_run_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph = st.empty()
+                def update_progress(msg):
+                    loader_ph.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Creating Excel rate pages…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                update_progress("Please wait while the workbooks are processed.")
+                from BA.BARatePages import run as run_rate_pages
+                try:
+                    f = st.session_state.get("file_SM")
+                    sm_bytes = io.BytesIO(f["bytes"]) if f and "error" not in f else None
+                    a = st.session_state.get("file_ATA")
+                    ata_bytes = io.BytesIO(a["bytes"]) if a and "error" not in a else None
+                    xlsx_out, pdf_out = run_rate_pages(
+                        NGICRatebook=None, MMRatebook=None, NACORatebook=None,
+                        NAFFRatebook=None, NICOFRatebook=None, HICNJRatebook=None,
+                        CCMICRatebook=None, NWAGRatebook=None, CWRatebook=None,
+                        SMRatebook=sm_bytes, ATARatebook=ata_bytes,
+                        folder_selected=st.session_state.sm_save_dir,
+                        SchedRatingMod=int(st.session_state.sm_sched_mod) or None,
+                        progress_callback=update_progress, skip_pdf=True)
+                    st.session_state.sm_xlsx_path = xlsx_out; st.session_state.sm_pdf_path = pdf_out
+                    st.session_state.sm_run_status = "success"; st.session_state.sm_pdf_status = "idle"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.sm_run_status = "error"; st.session_state.sm_run_msg = str(e)
+                st.session_state.sm_confirm_step = "idle"; st.rerun()
+
+            elif st.session_state.sm_confirm_step == "pdf_processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Generating PDF...", key="sm_pdf_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph2 = st.empty()
+                def update_pdf_progress(msg):
+                    loader_ph2.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting to PDF…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                from BA.BARatePages import generate_pdf_only
+                try:
+                    generate_pdf_only(st.session_state.sm_xlsx_path, st.session_state.sm_pdf_path, progress_callback=update_pdf_progress)
+                    st.session_state.sm_pdf_status = "success"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.sm_pdf_status = "error"; st.session_state.sm_run_msg = str(e)
+                st.session_state.sm_confirm_step = "idle"; st.rerun()
+
+            if st.session_state.sm_run_status == "success":
+                spacer(10)
+                st.success(f"&#10003;  Excel created: {Path(st.session_state.sm_xlsx_path).name}")
+                if st.session_state.sm_pdf_status != "success":
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button("Generate PDF Document", key="sm_gen_pdf_btn", use_container_width=True):
+                        st.session_state.sm_confirm_step = "pdf_processing"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    if st.session_state.sm_pdf_status == "error":
+                        st.error(f"PDF Error: {st.session_state.sm_run_msg}")
+                else:
+                    st.success(f"&#10003;  PDF created: {Path(st.session_state.sm_pdf_path).name}")
+            elif st.session_state.sm_run_status == "error":
+                spacer(10); st.error(st.session_state.sm_run_msg)
 
             spacer(24)
             st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)

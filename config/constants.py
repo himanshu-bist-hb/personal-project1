@@ -81,6 +81,12 @@ COMPANY_NAMES: dict[str, str] = {
     "NWAG":  "Nationwide Agribusiness Insurance Company",
 }
 
+# Companies that belong to the Middle Market ratebook.
+MM_COMPANIES: list[str] = ["AICOA", "NMIC", "NICOA", "NPCIC"]
+
+# Companies that belong to the Small Market ratebook.
+SM_COMPANIES: list[str] = ["NGIC", "NACO", "NAFF", "NICOF", "HICNJ", "CCMIC"]
+
 # Short numeric codes used when tab names exceed Excel's 31-char limit.
 COMPANY_NUMBERS: dict[str, str] = {
     "NAFF":  "21",

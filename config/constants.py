@@ -27,7 +27,7 @@ from pathlib import Path
 # The BA Input File is NOT optional.  It drives LCM mappings, state
 # exceptions, base-rate sheet names, and more.  Must be in CWD or a
 # full path must be given.
-BA_INPUT_FILE: str = "BA Input File.xlsx"
+BA_INPUT_FILE: str = "BA/BA Input File.xlsx"
 
 # Farm Auto uses the SAME input file as BA.
 # If FA ever gets its own input file, change this constant only.
@@ -149,3 +149,34 @@ PRINT_TITLE_ROWS  = "1:3"
 # The fixed left-header text that appears on every printed page.
 # Change here if the manual section ever changes.
 HEADER_LEFT_TEXT  = "Commercial Lines Manual: Division One - Automobile"
+
+
+# ===========================================================================
+#  BOP (BUSINESS OWNERS POLICY)
+#  Structural constants only. Everything a non-technical person might need
+#  to edit (fonts/margins, header/footer text, per-table column widths and
+#  sub-header labels, page-break rules, peril/building-code lookup tables)
+#  lives in BOP_INPUT_FILE below instead — see BOP/bop_config.py.
+# ===========================================================================
+
+# The BOP Input File is the non-technical config surface for the BOP LOB.
+# Mirrors BA_INPUT_FILE's "one file, many tabs" convention.
+BOP_INPUT_FILE: str = "BOP/BOP Input File.xlsx"
+
+# Ratebook company codes BOP accepts, in DETECT_ORDER (most-specific-first,
+# same convention as Business Auto/Farm Auto's DETECT_ORDER in app.py).
+# Files that match nothing default into the "NGIC" bucket.
+BOP_DETECT_ORDER: list[str] = ["HICNJ", "NICOF", "NACO", "NAFF", "NGIC", "MM", "CW"]
+
+# Territory Definitions workbook (network drive) — required for the All
+# Programs page. Read once per run, sheet name = state abbreviation.
+BOP_TERRITORY_DEFS_PATH = Path(
+    r"\\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\BOP\Territory Defs"
+    r"\4 Territory Defs (By Peril Grid)\AllStatesDefinitionswLatLon.xlsx"
+)
+
+# Default CW (countrywide) ratebook — used automatically when the user
+# doesn't upload their own CW file, same pattern as BA's CW_RATEBOOK_DEFAULT.
+# PLACEHOLDER: this is a generic path, not the real network location — update
+# it to the actual BOP countrywide ratebook path.
+BOP_CW_RATEBOOK_DEFAULT = Path(r"M:\Actshare\Com\BOP\CW Ratebook\BOP CW Ratebook.xlsx")

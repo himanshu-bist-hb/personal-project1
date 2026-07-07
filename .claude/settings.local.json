@@ -24,7 +24,15 @@
       "PowerShell(cd \"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\"; $env:PYTHONIOENCODING=\"utf-8\"; python fix_slide_position.py)",
       "PowerShell(cd \"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\"; $env:PYTHONIOENCODING=\"utf-8\"; python fix_ppt_order.py)",
       "Bash(git status *)",
-      "Bash(awk 'NR==2956{print NR\": \"$0} NR==3174{print NR\": \"$0}' app.py)"
+      "Bash(awk 'NR==2956{print NR\": \"$0} NR==3174{print NR\": \"$0}' app.py)",
+      "PowerShell(.\\\\venv\\\\Scripts\\\\python.exe -m py_compile BA\\\\BARatePages.py BOP\\\\AllProgramsPage.py BOP\\\\AllProgramsPageCurrent.py BOP\\\\BOPRatePages.py BOP\\\\BOPpagebreaks.py; if \\($?\\) { \"COMPILE OK\" })",
+      "PowerShell(.\\\\venv\\\\Scripts\\\\python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\128866db-1c61-43f4-94fc-cc8f28e2db9d\\\\scratchpad\\\\test_parallel_load.py\")",
+      "PowerShell(.\\\\venv\\\\Scripts\\\\python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\128866db-1c61-43f4-94fc-cc8f28e2db9d\\\\scratchpad\\\\check_specs.py\")",
+      "PowerShell(.\\\\venv\\\\Scripts\\\\python.exe -c \"import BOP.BOPRatePages, BOP.AllProgramsPage, BOP.AllProgramsPageCurrent, BOP.BOPpagebreaks; import inspect; sig = inspect.signature\\(BOP.AllProgramsPage.AllPrograms.buildAllProgramsPage\\); print\\('imports OK, buildAllProgramsPage', sig\\)\")",
+      "PowerShell(git checkout *)",
+      "PowerShell(.\\\\venv\\\\Scripts\\\\python.exe -m py_compile BOP\\\\ratebook_loader.py BOP\\\\BOPRatePages.py; .\\\\venv\\\\Scripts\\\\python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\128866db-1c61-43f4-94fc-cc8f28e2db9d\\\\scratchpad\\\\test_parallel_load.py\"; git diff --name-only HEAD -- BA/)",
+      "PowerShell(git status --short; .\\\\venv\\\\Scripts\\\\python.exe -c \"import BOP.BOPRatePages, BA.BARatePages; print\\('imports OK'\\); print\\('BOP loader:', BOP.BOPRatePages.load_all_ratebooks.__module__\\); print\\('BA loader :', BA.BARatePages.load_all_ratebooks.__module__\\)\")",
+      "PowerShell(Remove-Item *)"
     ]
   }
 }

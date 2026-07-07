@@ -74,6 +74,8 @@ def run(
     pd.options.display.width = None
 
     # ── 1. Open every ratebook ─────────────────────────────────────────────
+    t_stage = time.perf_counter()
+    if progress_callback: progress_callback("Opening uploaded ratebooks...")
     ratebooks = {
         "NGIC":  load_ratebook(NGICRatebook),
         "MM":    load_ratebook(MMRatebook),
@@ -87,10 +89,13 @@ def run(
 
     # CW is optional — fall back to the static network copy when the user
     # doesn't upload their own, same pattern as Business Auto's CW handling.
+    if not CWRatebook and progress_callback:
+        progress_callback("Fetching default CW ratebook (network drive)...")
     cw_source = CWRatebook if CWRatebook else str(BOP_CW_RATEBOOK_DEFAULT)
     cw_file = load_ratebook(cw_source)
     if cw_file == "Not found":
         raise ValueError(f"CW ratebook could not be loaded: {BOP_CW_RATEBOOK_DEFAULT}")
+    print(f"Stage 1: Ratebooks opened in {time.perf_counter() - t_stage:0.1f}s")
 
     # ── 2. Extract state / date metadata (same 'Rate Book Details' layout BA uses) ──
     info = get_rate_book_info(ngic_loaded=ratebooks["NGIC"], mm_loaded=ratebooks["MM"])
@@ -120,7 +125,10 @@ def run(
         "HICNJ": ratebooks["HICNJ"],
         "MM":    ratebooks["MM"],
     }
+    t_stage = time.perf_counter()
+    if progress_callback: progress_callback("Extracting rate tables from ratebooks...")
     rate_tables_raw = load_all_ratebooks(rate_books, progress_callback)
+    print(f"Stage 2: Rate tables extracted in {time.perf_counter() - t_stage:0.1f}s")
     # Drop companies that were not provided so AllPrograms.buildDataFrame's
     # "'NACO' in self.rateTables.keys()" optional-company checks behave
     # correctly (a present-but-None entry would otherwise crash on
@@ -128,6 +136,7 @@ def run(
     rate_tables = {k: v for k, v in rate_tables_raw.items() if v is not None}
 
     # ── 6. Build the Excel output ───────────────────────────────────────────
+    t_stage = time.perf_counter()
     if progress_callback: progress_callback("Building Excel rate pages...")
     if version == "2.0":
         rate_pages_obj = AllProgramsPage.AllPrograms(
@@ -143,9 +152,11 @@ def run(
             cfg.building_codes_by_state,
             info.n_effective, info.r_effective,
         )
-    bop_workbook = rate_pages_obj.buildAllProgramsPage()
+    bop_workbook = rate_pages_obj.buildAllProgramsPage(progress_callback=progress_callback)
+    print(f"Stage 3: Rate pages built in {time.perf_counter() - t_stage:0.1f}s")
 
     # ── 7. Determine file names and save ────────────────────────────────────
+    t_stage = time.perf_counter()
     if progress_callback: progress_callback("Saving Excel file...")
     out_dir     = Path(folder_selected)
     version_tag = "" if version == "2.0" else " (Pre 2.0)"
@@ -155,11 +166,13 @@ def run(
 
     bop_workbook.active = bop_workbook["Index"]
     bop_workbook.save(filename=xlsx_out)
-    print("Stage 2: Excel file saved.")
+    print(f"Stage 4: Excel file saved in {time.perf_counter() - t_stage:0.1f}s")
 
     # ── 8. Apply page breaks / print settings ───────────────────────────────
+    t_stage = time.perf_counter()
     if progress_callback: progress_callback("Applying page breaks...")
-    process_pagebreaks(xlsx_out, pdf_out)
+    process_pagebreaks(xlsx_out, pdf_out, progress_callback=progress_callback)
+    print(f"Stage 5: Page breaks applied in {time.perf_counter() - t_stage:0.1f}s")
 
     elapsed = time.perf_counter() - t_start
     if progress_callback: progress_callback(f"Successfully completed in {elapsed:0.1f} seconds! 🎉")

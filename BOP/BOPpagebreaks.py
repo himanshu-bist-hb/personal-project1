@@ -71,7 +71,7 @@ def _apply_matching_rule(sheet_name, ws, dest_filename, page_break_rules):
     return False
 
 
-def process_pagebreaks(dest_filename1, dest_filename2=None):
+def process_pagebreaks(dest_filename1, dest_filename2=None, progress_callback=None):
     """
     Apply page breaks / print settings to dest_filename1.
 
@@ -83,8 +83,10 @@ def process_pagebreaks(dest_filename1, dest_filename2=None):
 
     page_break_rules = load_bop_config().page_break_rules
 
+    if progress_callback: progress_callback("Page breaks — re-opening saved workbook...")
     workbook = openpyxl.load_workbook(dest_filename1)
 
+    if progress_callback: progress_callback("Page breaks — applying print settings...")
     for original_name in list(workbook.sheetnames):
         if len(original_name) > 31:
             workbook[original_name].title = original_name[:31]
@@ -101,6 +103,7 @@ def process_pagebreaks(dest_filename1, dest_filename2=None):
             workbook._sheets.insert(0, ws_index)
         workbook.active = 0
 
+    if progress_callback: progress_callback("Page breaks — saving workbook...")
     workbook.save(dest_filename1)
     workbook.close()
 

@@ -382,8 +382,9 @@ class AllPrograms:
         return ', '.join(self.buildingCodes[self.state][buildingCode])
 
     # Sets up the All Programs Excel file and creates a separate worksheet for each of the given dataframes
+    # progress_callback (optional) is called with a short message before each sheet is built
     # Returns the Excel workbook
-    def buildAllProgramsPage(self):
+    def buildAllProgramsPage(self, progress_callback=None):
         companies = [c for c in self.rateTables.keys() if c != 'CW'] # country-wide is not a company, so ignoring it
 
         AllPrograms = ExcelSettingsBOP.Excel(state=self.state, programName='All Programs', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
@@ -394,43 +395,58 @@ class AllPrograms:
         # tab of BOP Input File.xlsx.
         bcegLayoutKey = 'BCEG_MULTI' if self.state in self.buildingCodes else 'BCEG_SINGLE'
 
-        AllPrograms.generateWorksheet('SPR', 'AS, FS, H, O, R, S, W Table 3.C.2.a. Sprinkler Factor', self.buildSprinklerFactor(), False, True)
-        AllPrograms.generateWorksheet('PCBG', 'AS, FS, H, O, R, S, W Table 3.C.2.b. Protection Class Factor - Building', self.buildProtectionClass('Building'), False, True)
-        AllPrograms.generateWorksheet('PCPP', 'AS, FS, H, O, R, S, W Table 3.C.2.b. Protection Class Factor - BPP', self.buildProtectionClass('BPP'), False, True)
-        AllPrograms.generateWorksheet('PCBI', 'FS Table 3.C.2.b. Protection Class Factor - Bus Inc', self.buildProtectionClassFS('Business Income'), False, True)
-        AllPrograms.generateWorksheet('MVBG', 'AS, FS, H, O, R, S, W Table 3.C.2.c.1. Masonry Veneer Factor - Building', self.buildMasonryVeneer('Building'), False, True)
-        AllPrograms.generateWorksheet('MVPP', 'AS, FS, H, O, R, S, W Table 3.C.2.c.1. Masonry Veneer Factor - BPP', self.buildMasonryVeneer('BPP'), False, True)
-        AllPrograms.generateWorksheet('BV', 'AS, FS, H, O, R, S, W Table 3.C.2.d. Building Valuation Options Factor', self.buildValuationBasis(), False, True)
-        AllPrograms.generateWorksheet('AIBI', 'AS, FS, H, O, R, S, W Table 3.C.2.e. Automatic Increase In Building Insurance (A.I.I.) Factor', self.buildAnnualIncrease(), True, True)
-        AllPrograms.generateWorksheet('PD', 'AS, FS, O, R, S, W Table 3.C.2.f. Property Deductible Factor', self.buildPropertyDeductible(), False, True)
-        AllPrograms.generateWorksheet('PDH', 'H Table 3.C.2.f. Property Deductible Factor', self.buildPropertyDeductibleH(), False, True)
-        AllPrograms.generateWorksheet('WHOBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', self.buildWHDeductibleFactor('Building'), False, True)
-        AllPrograms.generateWorksheet('WHOBGH', 'H Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', self.buildWHDeductibleFactorH('Building'), False, True)
-        AllPrograms.generateWorksheet('WHOPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', self.buildWHDeductibleFactor('BPP'), False, True)
-        AllPrograms.generateWorksheet('WHOPPH', 'H Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', self.buildWHDeductibleFactorH('BPP'), False, True)
-        AllPrograms.generateWorksheet('WHBBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', self.buildWHDeductiblePerBuilding('Building'), False, True)
-        AllPrograms.generateWorksheet('WHBBGH', 'H Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', self.buildWHDeductiblePerBuildingH('Building'), False, True)
-        AllPrograms.generateWorksheet('WHBPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', self.buildWHDeductiblePerBuilding('BPP'), False, True)
-        AllPrograms.generateWorksheet('WHBPPH', 'H Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', self.buildWHDeductiblePerBuildingH('BPP'), False, True)
-        AllPrograms.generateWorksheet('WHPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - Building', self.buildWHDeductiblePercentage('Building'), False, True)
-        AllPrograms.generateWorksheet('WHPBGH', 'H Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - Building', self.buildWHDeductiblePercentageH('Building'), False, True)
-        AllPrograms.generateWorksheet('WHPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', self.buildWHDeductiblePercentage('BPP'), False, True)
-        AllPrograms.generateWorksheet('WHPPPH', 'H Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', self.buildWHDeductiblePercentageH('BPP'), False, True)
-        AllPrograms.generateWorksheet('BA', 'AS, FS, H, O, R, S, W Table 3.C.2.h. Burglar Alarm Modifier', self.buildBurglarAlarmFactor(), False, True)
-        AllPrograms.generateWorksheet('CSFA', 'AS, FS, H, O, R, S, W Table 3.C.2.i. Central Station Fire Alarm Modifier', self.buildFireAlarmFactor(), True, True)
-        AllPrograms.generateWorksheet('BABG', 'AS, FS, H, O, R, S, W Table 3.C.2.j. Building Age Modifier - Building', self.buildBuildingAgeModifier('Building'), False, True)
-        AllPrograms.generateWorksheet('BAPP', 'AS, FS, H, O, R, S, W Table 3.C.2.j. Building Age Modifier - BPP', self.buildBuildingAgeModifier('BPP'), False, True)
-        AllPrograms.generateWorksheet('BABI', 'FS Table 3.C.2.j. Building Age Modifier - Bus Inc', self.buildBuildingAgeModifier('Business Income'), False, True) # Business Income is only applicable in the food program
-        AllPrograms.generateWorksheet('AIBG', 'AS, FS, H, O, R, S, W Table 3.C.2.l.(1). AOI (Amount of Insurance) Relativity Factor - Building', self.buildBuildingAOI(), False, True)
-        AllPrograms.generateWorksheet('AIPP', 'AS, FS, H, O, R, S, W Table 3.C.2.l.(1). AOI (Amount of Insurance) Relativity Factor - BPP', self.buildBPPAOI(), False, True)
-        AllPrograms.generateWorksheet('BKT', 'H Table 3.C.2.m., AS, FS, O, R, S, W Table 3.C.2.n. Blanket Insurance Factor', self.buildBlanketInsuranceFactor(), False, True)
-        AllPrograms.generateWorksheet('BCEG', 'H Table 3.C.2.n., AS, FS, O, R, S, W Table 3.C.2.o. Building Code Effectiveness Grading', self.buildBCEG(), False, True, layout_key=bcegLayoutKey)
-        AllPrograms.generateWorksheet('TIB', 'H Table 3.C.2.p., AS, FS, O, R, S, W Table 3.C.2.q. Tenants Improvements and Betterments Factor', self.buildTenantsImprovements(), False, True)
-        AllPrograms.generateWorksheet('EBL', 'AS, FS, H, O, R, S, W Table 3.C.3.c. Equipment Breakdown Limits Relativity Modifier', self.buildEBLimitRelativity(), False, True)
-        AllPrograms.generateWorksheet('EBD', 'AS, FS, H, O, R, S, W Table 3.C.3.d. Equipment Breakdown Deductible Factor', self.buildEBDeductibleFactor(), False, True)
-        AllPrograms.generateWorksheet('MD', 'FS, O, S, W Table 3.C.4.c., R Table 3.C.4.d., AS, H Table 3.C.4.e. Medical Payments Factor', self.buildMedicalPaymentsFactor(), False, True)
-        AllPrograms.generateWorksheet('TR', 'AS, FS, H, O, R, S, W Table 3.C.1.a. State Territory Multiplier - All Programs', self.buildTerritoryMultiplier(), False, True)
-        AllPrograms.generateTerrWorksheet('TRDEF', 'AS, FS, H, O, R, S, W Table 3.C.1 Territory Definitions - All Programs', self.buildTerritoryDefinitions(), False, True)
+        # (tab name, page title, builder callable, useIndex, useHeader, layout_key)
+        # Builders are callables (not pre-built DataFrames) so progress can be
+        # reported before each table is computed, not after all of them.
+        sheetSpecs = [
+            ('SPR', 'AS, FS, H, O, R, S, W Table 3.C.2.a. Sprinkler Factor', self.buildSprinklerFactor, False, True, None),
+            ('PCBG', 'AS, FS, H, O, R, S, W Table 3.C.2.b. Protection Class Factor - Building', lambda: self.buildProtectionClass('Building'), False, True, None),
+            ('PCPP', 'AS, FS, H, O, R, S, W Table 3.C.2.b. Protection Class Factor - BPP', lambda: self.buildProtectionClass('BPP'), False, True, None),
+            ('PCBI', 'FS Table 3.C.2.b. Protection Class Factor - Bus Inc', lambda: self.buildProtectionClassFS('Business Income'), False, True, None),
+            ('MVBG', 'AS, FS, H, O, R, S, W Table 3.C.2.c.1. Masonry Veneer Factor - Building', lambda: self.buildMasonryVeneer('Building'), False, True, None),
+            ('MVPP', 'AS, FS, H, O, R, S, W Table 3.C.2.c.1. Masonry Veneer Factor - BPP', lambda: self.buildMasonryVeneer('BPP'), False, True, None),
+            ('BV', 'AS, FS, H, O, R, S, W Table 3.C.2.d. Building Valuation Options Factor', self.buildValuationBasis, False, True, None),
+            ('AIBI', 'AS, FS, H, O, R, S, W Table 3.C.2.e. Automatic Increase In Building Insurance (A.I.I.) Factor', self.buildAnnualIncrease, True, True, None),
+            ('PD', 'AS, FS, O, R, S, W Table 3.C.2.f. Property Deductible Factor', self.buildPropertyDeductible, False, True, None),
+            ('PDH', 'H Table 3.C.2.f. Property Deductible Factor', self.buildPropertyDeductibleH, False, True, None),
+            ('WHOBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactor('Building'), False, True, None),
+            ('WHOBGH', 'H Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactorH('Building'), False, True, None),
+            ('WHOPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildWHDeductibleFactor('BPP'), False, True, None),
+            ('WHOPPH', 'H Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildWHDeductibleFactorH('BPP'), False, True, None),
+            ('WHBBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', lambda: self.buildWHDeductiblePerBuilding('Building'), False, True, None),
+            ('WHBBGH', 'H Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', lambda: self.buildWHDeductiblePerBuildingH('Building'), False, True, None),
+            ('WHBPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', lambda: self.buildWHDeductiblePerBuilding('BPP'), False, True, None),
+            ('WHBPPH', 'H Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', lambda: self.buildWHDeductiblePerBuildingH('BPP'), False, True, None),
+            ('WHPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - Building', lambda: self.buildWHDeductiblePercentage('Building'), False, True, None),
+            ('WHPBGH', 'H Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - Building', lambda: self.buildWHDeductiblePercentageH('Building'), False, True, None),
+            ('WHPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', lambda: self.buildWHDeductiblePercentage('BPP'), False, True, None),
+            ('WHPPPH', 'H Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', lambda: self.buildWHDeductiblePercentageH('BPP'), False, True, None),
+            ('BA', 'AS, FS, H, O, R, S, W Table 3.C.2.h. Burglar Alarm Modifier', self.buildBurglarAlarmFactor, False, True, None),
+            ('CSFA', 'AS, FS, H, O, R, S, W Table 3.C.2.i. Central Station Fire Alarm Modifier', self.buildFireAlarmFactor, True, True, None),
+            ('BABG', 'AS, FS, H, O, R, S, W Table 3.C.2.j. Building Age Modifier - Building', lambda: self.buildBuildingAgeModifier('Building'), False, True, None),
+            ('BAPP', 'AS, FS, H, O, R, S, W Table 3.C.2.j. Building Age Modifier - BPP', lambda: self.buildBuildingAgeModifier('BPP'), False, True, None),
+            ('BABI', 'FS Table 3.C.2.j. Building Age Modifier - Bus Inc', lambda: self.buildBuildingAgeModifier('Business Income'), False, True, None), # Business Income is only applicable in the food program
+            ('AIBG', 'AS, FS, H, O, R, S, W Table 3.C.2.l.(1). AOI (Amount of Insurance) Relativity Factor - Building', self.buildBuildingAOI, False, True, None),
+            ('AIPP', 'AS, FS, H, O, R, S, W Table 3.C.2.l.(1). AOI (Amount of Insurance) Relativity Factor - BPP', self.buildBPPAOI, False, True, None),
+            ('BKT', 'H Table 3.C.2.m., AS, FS, O, R, S, W Table 3.C.2.n. Blanket Insurance Factor', self.buildBlanketInsuranceFactor, False, True, None),
+            ('BCEG', 'H Table 3.C.2.n., AS, FS, O, R, S, W Table 3.C.2.o. Building Code Effectiveness Grading', self.buildBCEG, False, True, bcegLayoutKey),
+            ('TIB', 'H Table 3.C.2.p., AS, FS, O, R, S, W Table 3.C.2.q. Tenants Improvements and Betterments Factor', self.buildTenantsImprovements, False, True, None),
+            ('EBL', 'AS, FS, H, O, R, S, W Table 3.C.3.c. Equipment Breakdown Limits Relativity Modifier', self.buildEBLimitRelativity, False, True, None),
+            ('EBD', 'AS, FS, H, O, R, S, W Table 3.C.3.d. Equipment Breakdown Deductible Factor', self.buildEBDeductibleFactor, False, True, None),
+            ('MD', 'FS, O, S, W Table 3.C.4.c., R Table 3.C.4.d., AS, H Table 3.C.4.e. Medical Payments Factor', self.buildMedicalPaymentsFactor, False, True, None),
+            ('TR', 'AS, FS, H, O, R, S, W Table 3.C.1.a. State Territory Multiplier - All Programs', self.buildTerritoryMultiplier, False, True, None),
+            ('TRDEF', 'AS, FS, H, O, R, S, W Table 3.C.1 Territory Definitions - All Programs', self.buildTerritoryDefinitions, False, True, None),
+        ]
 
+        total = len(sheetSpecs)
+        for i, (tableCode, title, build, useIndex, useHeader, layoutKey) in enumerate(sheetSpecs, start=1):
+            if progress_callback:
+                progress_callback(f"Building sheet {i}/{total}: {tableCode}...")
+            print(f"  [{i}/{total}] Building sheet: {tableCode}")
+            AllPrograms.generateWorksheet(tableCode, title, build(), useIndex, useHeader, layout_key=layoutKey)
+
+        if progress_callback:
+            progress_callback("Building Index sheet...")
+        print(f"  [{total}/{total}] Building sheet: Index")
         AllPrograms.createIndex()
         return AllPrograms.getWB()

@@ -60,3 +60,11 @@
 2026-07-06 16:31:39,347 - BA.BARatePages - INFO - Company 'MM': skipped
 2026-07-06 16:49:24,620 - BA.BARatePages - WARNING - Could not load ratebook: [Errno 2] No such file or directory: 'some_fake_path.xlsx'
 2026-07-06 16:49:34,965 - BA.BARatePages - WARNING - Could not load ratebook: [Errno 2] No such file or directory: 'M:\\Actshare\\Com\\BOP\\CW Ratebook\\BOP CW Ratebook.xlsx'
+2026-07-06 21:10:52,327 - BA.BARatePages - INFO - Skipping 'NACO' — ratebook not provided.
+2026-07-06 21:10:53,391 - BA.BARatePages - INFO - Company 'CW': 4 tables
+2026-07-06 21:10:53,404 - BA.BARatePages - INFO - Company 'NGIC': 4 tables
+2026-07-06 21:10:53,456 - BA.BARatePages - INFO - Company 'MM': 4 tables
+2026-07-07 16:09:36,398 - BOP.ratebook_loader - INFO - Skipping 'NACO' — ratebook not provided.
+2026-07-07 16:09:37,930 - BOP.ratebook_loader - INFO - Company 'CW': 4 tables
+2026-07-07 16:09:37,931 - BOP.ratebook_loader - INFO - Company 'NGIC': 4 tables
+2026-07-07 16:09:37,984 - BOP.ratebook_loader - INFO - Company 'MM': 4 tables

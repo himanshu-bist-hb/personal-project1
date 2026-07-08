@@ -20,6 +20,8 @@ consistent across every page: every sheet reads the exact same
 Formatting Defaults values instead of each format method picking its own.
 """
 
+from copy import copy
+
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 from openpyxl.styles.borders import Border, Side
@@ -77,6 +79,10 @@ class Excel:
         self.font = Font(name=self.fontName, size=self.fontSize)
         self.fontBold = Font(name=self.fontName, size=self.fontSize, bold=True)
         self.fontItalic = Font(name=self.fontName, size=self.fontSize, italic=True)
+        # Shared style objects — constructing a new Alignment per cell makes
+        # openpyxl re-hash the style for every cell, which turns large sheets
+        # (TRDEF has tens of thousands of rows) into a multi-minute format pass.
+        self._centerAlign = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
         self.headerFont = f"{self.headerFontName},Bold"
         self.footerFont = f"{self.footerFontName},Bold"
 
@@ -202,7 +208,7 @@ class Excel:
             cell = ws.cell(row=row_idx, column=col)
             cell.border = self._thinBorder
             cell.font = self.fontBold
-            cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+            cell.alignment = self._centerAlign
 
         if sh["print_title_rows"]:
             ws.print_title_rows = sh["print_title_rows"]
@@ -244,44 +250,100 @@ class Excel:
         sub_header_row = self._apply_sub_header(ws, table_code)
         header_row = (sub_header_row + 1) if sub_header_row else 3
 
-        for row in range(1, ws.max_row + 1):
-            for col in range(1, ws.max_column + 1):
-                char = get_column_letter(col)
-                cell = ws.cell(row=row, column=col)
-                ws.column_dimensions[char].bestFit = True
+        max_row, max_col = ws.max_row, ws.max_column
 
-                if row > header_row and cell.value is not None:
-                    cell.border = self._thinBorder
+        # bestFit is a column-level property — set it once per column, not once
+        # per cell (per-cell it dominated the build time of large sheets).
+        for col in range(1, max_col + 1):
+            ws.column_dimensions[get_column_letter(col)].bestFit = True
 
-                if row == 1:
-                    cell.font = self.fontBold
-                elif row == 2:
-                    cell.font = self.fontItalic
-                elif row == header_row:
-                    cell.font = self.fontBold
-                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
-                elif row > header_row:
-                    cell.font = self.font
-                    cell.alignment = Alignment(horizontal="center", vertical="bottom", wrap_text=True)
+        # Title, spacer and column-header rows: a handful of cells, style
+        # directly. (A sub-header row, if any, was styled by _apply_sub_header.)
+        for col in range(1, max_col + 1):
+            ws.cell(row=1, column=col).font = self.fontBold
+            ws.cell(row=2, column=col).font = self.fontItalic
+            header_cell = ws.cell(row=header_row, column=col)
+            header_cell.font = self.fontBold
+            header_cell.alignment = self._centerAlign
+
+        self._format_data_rows(ws, table_code, header_row + 1, max_row, max_col)
 
         for col_start, col_end, width_px in self._cfg.table_layout.get(table_code, []):
             end = ws.max_column if col_end == "REST" else col_end
             for col in range(col_start, end + 1):
                 ws.column_dimensions[get_column_letter(col)].width = width_px / 7.0
 
-        for col_start, col_end, row_start, fmt_name in self._cfg.number_formats.get(table_code, []):
-            end = ws.max_column if col_end == "REST" else col_end
-            excel_fmt = self._formatMap.get(fmt_name, fmt_name)
-            for col in range(col_start, end + 1):
-                for row in range(row_start, ws.max_row + 1):
-                    ws.cell(row=row, column=col).number_format = excel_fmt
-
         for cell_ref, text in self._cfg.footnotes.get(table_code, []):
             c = ws[cell_ref]
+            if c._style is not None:
+                # Data cells share StyleArrays (see _format_data_rows); give
+                # this cell a private copy before restyling it.
+                c._style = copy(c._style)
             c.value = text
             c.font = self.font
             c.alignment = Alignment(horizontal="left", vertical="bottom", wrap_text=False)
             c.border = Border()
+
+    def _format_data_rows(self, ws, table_code: str, first_row: int, max_row: int, max_col: int) -> None:
+        """
+        Font / alignment / border / number-format for the data region.
+
+        openpyxl rebuilds and re-hashes a cell's style on every .font /
+        .alignment / .border / .number_format assignment, which made
+        grid-level sheets (TRDEF: tens of thousands of rows) take minutes.
+        Instead, build the handful of distinct styles once — through a scratch
+        cell, so the ids land in the same workbook style registries openpyxl
+        would use — then stamp the shared StyleArray straight onto each cell.
+
+        The stamped arrays are SHARED between cells, so restyling a data cell
+        afterwards through the normal descriptors would corrupt every cell
+        sharing its array — replace cell._style with a copy first (as the
+        footnote loop in format_table does).
+        """
+        if first_row > max_row:
+            return
+
+        # Per-column number format from config; for overlapping ranges the
+        # last config row wins, matching the sequential application this
+        # replaces.
+        col_fmt = {}
+        for col_start, col_end, row_start, fmt_name in self._cfg.number_formats.get(table_code, []):
+            end = max_col if col_end == "REST" else col_end
+            excel_fmt = self._formatMap.get(fmt_name, fmt_name)
+            for col in range(col_start, min(end, max_col) + 1):
+                col_fmt[col] = (row_start, excel_fmt)
+
+        # Distinct styles, each as a (no-border, with-border) pair. The
+        # scratch cell is inside the data region, so the stamping loop below
+        # overwrites its style like any other cell — no cleanup needed.
+        scratch = ws.cell(row=first_row, column=1)
+        scratch.font = self.font
+        scratch.alignment = self._centerAlign
+        border_id = self.wb._borders.add(self._thinBorder)
+
+        def _pair(style_array):
+            plain = copy(style_array)
+            bordered = copy(style_array)
+            bordered.borderId = border_id
+            return plain, bordered
+
+        base_pair = _pair(scratch._style)
+        fmt_pairs = {}
+        for _, excel_fmt in col_fmt.values():
+            if excel_fmt not in fmt_pairs:
+                scratch.number_format = excel_fmt
+                fmt_pairs[excel_fmt] = _pair(scratch._style)
+
+        col_styles = []
+        for col in range(1, max_col + 1):
+            row_start, excel_fmt = col_fmt.get(col, (None, None))
+            col_styles.append((row_start, fmt_pairs.get(excel_fmt), base_pair))
+
+        for row_cells in ws.iter_rows(min_row=first_row, max_row=max_row, max_col=max_col):
+            row = row_cells[0].row
+            for cell, (row_start, fmt_pair, base) in zip(row_cells, col_styles):
+                plain, bordered = fmt_pair if (row_start is not None and row >= row_start) else base
+                cell._style = bordered if cell.value is not None else plain
 
     # ==========================================================================
     #  INDEX + GETTERS

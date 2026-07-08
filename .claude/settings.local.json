@@ -32,7 +32,15 @@
       "PowerShell(git checkout *)",
       "PowerShell(.\\\\venv\\\\Scripts\\\\python.exe -m py_compile BOP\\\\ratebook_loader.py BOP\\\\BOPRatePages.py; .\\\\venv\\\\Scripts\\\\python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\128866db-1c61-43f4-94fc-cc8f28e2db9d\\\\scratchpad\\\\test_parallel_load.py\"; git diff --name-only HEAD -- BA/)",
       "PowerShell(git status --short; .\\\\venv\\\\Scripts\\\\python.exe -c \"import BOP.BOPRatePages, BA.BARatePages; print\\('imports OK'\\); print\\('BOP loader:', BOP.BOPRatePages.load_all_ratebooks.__module__\\); print\\('BA loader :', BA.BARatePages.load_all_ratebooks.__module__\\)\")",
-      "PowerShell(Remove-Item *)"
+      "PowerShell(Remove-Item *)",
+      "Bash(./venv/Scripts/python.exe -c 'import pandas; print\\('\\\\''pandas'\\\\'', pandas.__version__\\) *)",
+      "Bash(./venv/Scripts/python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\07ae887b-abee-4816-8df3-649884ffac55\\\\scratchpad\\\\verify_bop_fast.py\")",
+      "Bash(./venv/Scripts/python.exe -c \"import BOP.BOPRatePages as m; print\\('import OK'\\); print\\('has apply:', hasattr\\(__import__\\('BOP.BOPpagebreaks', fromlist=['x']\\), 'apply_pagebreaks_to_workbook'\\)\\); print\\('has process \\(compat\\):', hasattr\\(__import__\\('BOP.BOPpagebreaks', fromlist=['x']\\), 'process_pagebreaks'\\)\\)\")",
+      "Bash(git checkout *)",
+      "Bash(./venv/Scripts/python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\07ae887b-abee-4816-8df3-649884ffac55\\\\scratchpad\\\\verify_trdef_only.py\")",
+      "Bash(./venv/Scripts/python.exe -c \"import BOP.BOPRatePages; print\\('pipeline import OK'\\)\")",
+      "Bash(./venv/Scripts/python.exe -c ' *)",
+      "Bash(./venv/Scripts/python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\07ae887b-abee-4816-8df3-649884ffac55\\\\scratchpad\\\\verify_equivalence.py\")"
     ]
   }
 }

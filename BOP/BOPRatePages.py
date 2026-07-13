@@ -13,12 +13,14 @@ of the Farm Auto block.
 import time
 import warnings
 from pathlib import Path
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import pandas as pd
 
 from BA.BARatePages import load_ratebook, get_rate_book_info, load_all_ratebooks
 from config.constants import BOP_TERRITORY_DEFS_PATH, BOP_CW_RATEBOOK_DEFAULT
+from . import AllPerilPage
+from . import AllPerilPageCurrent
 from . import AllProgramsPage
 from . import AllProgramsPageCurrent
 from .bop_config import load_bop_config
@@ -28,6 +30,11 @@ from .BOPpagebreaks import process_pagebreaks, export_to_pdf
 # "pre2.0" -> AllProgramsPageCurrent.AllPrograms (no Territory Defs at all —
 #   that program and its build/format methods predate the territory tables)
 VALID_VERSIONS = ("2.0", "pre2.0")
+
+# "All Programs" -> AllProgramsPage / AllProgramsPageCurrent (by-peril tables)
+# "All Peril"    -> AllPerilPage / AllPerilPageCurrent (by-program tables,
+#   "allperil" peril only; never needs the Territory Definitions workbook)
+VALID_PROGRAMS = ("All Programs", "All Peril")
 
 
 def load_territory_defs(state_abb: str) -> pd.DataFrame:
@@ -51,23 +58,36 @@ def run(
     progress_callback: Optional[Callable[[str], None]] = None,
     skip_pdf: bool = True,
     version: str = "2.0",
-) -> Tuple[str, str]:
+    program: Union[str, Sequence[str]] = "All Programs",
+) -> Tuple[Union[str, List[str]], Union[str, List[str]]]:
     """
-    Orchestrate the BOP All Programs rate-page generation pipeline.
+    Orchestrate the BOP rate-page generation pipeline.
 
     Args:
         version: "2.0" (default) or "pre2.0" — selects which generation of
-            the All Programs rating logic and page layout to build.
+            the rating logic and page layout to build.
+        program: which BOP program(s) to build — a single name ("All
+            Programs" or "All Peril") or a list of names. The ratebooks are
+            opened and extracted ONCE and every requested program is built
+            from the same tables, each saved as its own file.
 
     Returns:
-        (xlsx_out, pdf_out) paths.
+        (xlsx_out, pdf_out) paths when program is a single name;
+        ([xlsx_outs], [pdf_outs]) in the same order when it is a list.
     """
+    single = isinstance(program, str)
+    programs = [program] if single else list(program)
     if version not in VALID_VERSIONS:
         raise ValueError(f"version must be one of {VALID_VERSIONS}, got {version!r}")
+    if not programs:
+        raise ValueError("program list is empty — select at least one program")
+    for prog in programs:
+        if prog not in VALID_PROGRAMS:
+            raise ValueError(f"program must be one of {VALID_PROGRAMS}, got {prog!r}")
 
     t_start = time.perf_counter()
     if progress_callback: progress_callback("Initializing...")
-    print(f"Creating BOP All Programs Rate Pages ({version})")
+    print(f"Creating BOP {', '.join(programs)} Rate Pages ({version})")
 
     warnings.simplefilter("ignore")
     pd.set_option("display.max_columns", None)
@@ -100,9 +120,10 @@ def run(
     # ── 2. Extract state / date metadata (same 'Rate Book Details' layout BA uses) ──
     info = get_rate_book_info(ngic_loaded=ratebooks["NGIC"], mm_loaded=ratebooks["MM"])
 
-    # ── 3. Load Territory Definitions (2.0 only — pre2.0 never used them) ──
+    # ── 3. Load Territory Definitions (2.0 All Programs only — pre2.0 and
+    #       All Peril never use them) ──
     territory_defs_by_st = None
-    if version == "2.0":
+    if version == "2.0" and "All Programs" in programs:
         if progress_callback: progress_callback("Loading Territory Definitions...")
         territory_defs_by_st = load_territory_defs(info.state_abb)
 
@@ -135,50 +156,71 @@ def run(
     # None.keys()).
     rate_tables = {k: v for k, v in rate_tables_raw.items() if v is not None}
 
-    # ── 6. Build the Excel output ───────────────────────────────────────────
-    t_stage = time.perf_counter()
-    if progress_callback: progress_callback("Building Excel rate pages...")
-    if version == "2.0":
-        rate_pages_obj = AllProgramsPage.AllPrograms(
-            info.state_abb, rate_tables, perils,
-            cfg.peril_conversions, cfg.protection_class_conversions,
-            cfg.building_codes_by_state,
-            info.n_effective, info.r_effective, territory_defs_by_st,
-        )
-    else:
-        rate_pages_obj = AllProgramsPageCurrent.AllPrograms(
-            info.state_abb, rate_tables, perils,
-            cfg.peril_conversions, cfg.protection_class_conversions,
-            cfg.building_codes_by_state,
-            info.n_effective, info.r_effective,
-        )
-    bop_workbook = rate_pages_obj.buildAllProgramsPage(progress_callback=progress_callback)
-    print(f"Stage 3: Rate pages built in {time.perf_counter() - t_stage:0.1f}s")
-
-    # ── 7. Determine file names and save ────────────────────────────────────
-    t_stage = time.perf_counter()
-    if progress_callback: progress_callback("Saving Excel file...")
+    # ── 6-8. Build, save and page-break each requested program ──────────────
+    # The expensive part (opening + extracting the ratebooks above) is shared;
+    # each program only costs its own workbook build and save.
     out_dir     = Path(folder_selected)
     version_tag = "" if version == "2.0" else " (Pre 2.0)"
-    file_stem   = f"{info.state_abb} {info.n_effective} BOP All Programs Rate Pages{version_tag}"
-    xlsx_out  = str(out_dir / f"{file_stem}.xlsx")
-    pdf_out   = str(out_dir / f"{file_stem}.pdf")
+    xlsx_outs: List[str] = []
+    pdf_outs:  List[str] = []
 
-    bop_workbook.active = bop_workbook["Index"]
-    bop_workbook.save(filename=xlsx_out)
-    print(f"Stage 4: Excel file saved in {time.perf_counter() - t_stage:0.1f}s")
+    for prog in programs:
+        prefix = f"[{prog}] " if len(programs) > 1 else ""
+        cb = (lambda msg, _p=prefix: progress_callback(f"{_p}{msg}")) if progress_callback else None
 
-    # ── 8. Apply page breaks / print settings ───────────────────────────────
-    t_stage = time.perf_counter()
-    if progress_callback: progress_callback("Applying page breaks...")
-    process_pagebreaks(xlsx_out, pdf_out, progress_callback=progress_callback)
-    print(f"Stage 5: Page breaks applied in {time.perf_counter() - t_stage:0.1f}s")
+        t_stage = time.perf_counter()
+        if cb: cb("Building Excel rate pages...")
+        if prog == "All Peril":
+            peril_cls = AllPerilPage.AllPeril if version == "2.0" else AllPerilPageCurrent.AllPeril
+            rate_pages_obj = peril_cls(
+                info.state_abb, rate_tables, cfg.class_codes,
+                cfg.protection_class_conversions, cfg.building_codes_by_state,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildAllPerilPage(progress_callback=cb)
+        elif version == "2.0":
+            rate_pages_obj = AllProgramsPage.AllPrograms(
+                info.state_abb, rate_tables, perils,
+                cfg.peril_conversions, cfg.protection_class_conversions,
+                cfg.building_codes_by_state,
+                info.n_effective, info.r_effective, territory_defs_by_st,
+            )
+            bop_workbook = rate_pages_obj.buildAllProgramsPage(progress_callback=cb)
+        else:
+            rate_pages_obj = AllProgramsPageCurrent.AllPrograms(
+                info.state_abb, rate_tables, perils,
+                cfg.peril_conversions, cfg.protection_class_conversions,
+                cfg.building_codes_by_state,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildAllProgramsPage(progress_callback=cb)
+        print(f"Stage 3: {prog} rate pages built in {time.perf_counter() - t_stage:0.1f}s")
+
+        t_stage = time.perf_counter()
+        if cb: cb("Saving Excel file...")
+        file_stem = f"{info.state_abb} {info.n_effective} BOP {prog} Rate Pages{version_tag}"
+        xlsx_out  = str(out_dir / f"{file_stem}.xlsx")
+        pdf_out   = str(out_dir / f"{file_stem}.pdf")
+
+        bop_workbook.active = bop_workbook["Index"]
+        bop_workbook.save(filename=xlsx_out)
+        print(f"Stage 4: {prog} Excel file saved in {time.perf_counter() - t_stage:0.1f}s")
+
+        t_stage = time.perf_counter()
+        if cb: cb("Applying page breaks...")
+        process_pagebreaks(xlsx_out, pdf_out, progress_callback=cb)
+        print(f"Stage 5: {prog} page breaks applied in {time.perf_counter() - t_stage:0.1f}s")
+
+        xlsx_outs.append(xlsx_out)
+        pdf_outs.append(pdf_out)
 
     elapsed = time.perf_counter() - t_start
     if progress_callback: progress_callback(f"Successfully completed in {elapsed:0.1f} seconds! 🎉")
     print(f"This program ran in {elapsed:0.4f} seconds")
 
-    return xlsx_out, pdf_out
+    if single:
+        return xlsx_outs[0], pdf_outs[0]
+    return xlsx_outs, pdf_outs
 
 
 def generate_pdf_only(xlsx_path: str, pdf_path: str, progress_callback: Optional[Callable[[str], None]] = None) -> str:

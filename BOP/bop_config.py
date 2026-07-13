@@ -34,6 +34,16 @@ class BOPConfig:
     peril_conversions: Dict[str, str] = field(default_factory=dict)
     protection_class_conversions: Dict[str, str] = field(default_factory=dict)
     building_codes_by_state: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
+    class_codes: Dict[int, str] = field(default_factory=dict)
+
+
+# Class_Code_Min -> program display name, used by the All Peril page.
+# Also the fallback when an older "BOP Input File.xlsx" (created before the
+# "Class Codes" tab existed) is loaded.
+DEFAULT_CLASS_CODES = {
+    10000: "Hab", 20000: "Auto", 40000: "Food", 50000: "Retail",
+    60000: "Office", 70000: "Service", 80000: "Wholesale",
+}
 
 
 def _rows(ws):
@@ -101,6 +111,12 @@ def load_bop_config(path: str = None) -> BOPConfig:
     for state, group, codes_csv in _rows(wb["Building Codes By State"]):
         codes = [c.strip() for c in str(codes_csv).split(",") if c.strip()]
         cfg.building_codes_by_state.setdefault(state, {})[group] = codes
+
+    if "Class Codes" in wb.sheetnames:
+        for class_code_min, program in _rows(wb["Class Codes"]):
+            cfg.class_codes[int(class_code_min)] = str(program)
+    else:
+        cfg.class_codes = dict(DEFAULT_CLASS_CODES)
 
     wb.close()
     return cfg

@@ -138,6 +138,31 @@ def build():
         ["WHOPP_CURRENT", 1, 3, 74], ["WHOPP_CURRENT", 4, 4, 105], ["WHOPP_CURRENT", 5, "REST", 62],
         ["WHPBG_CURRENT", 1, 1, 159], ["WHPBG_CURRENT", 2, "REST", 70],
         ["WHPPP_CURRENT", 1, 1, 159], ["WHPPP_CURRENT", 2, "REST", 70],
+        # All Peril (*_AP) profiles — transcribed from the root-level
+        # AllPerilPage.py format*() methods where they differ from the All
+        # Programs profile of the same sheet code. Sheets without an _AP row
+        # (SPR, BA, WHOBG, WHOPP) matched All Programs exactly and reuse it.
+        ["TR_AP", 1, 1, 150], ["TR_AP", 2, 5, 80],
+        ["PCBG_AP", 1, 1, 131], ["PCBG_AP", 2, "REST", 80],
+        ["PCPP_AP", 1, 1, 131], ["PCPP_AP", 2, "REST", 80],
+        ["MVBG_AP", 1, 1, 215], ["MVBG_AP", 2, 2, 100],
+        ["MVPP_AP", 1, 1, 215], ["MVPP_AP", 2, 2, 100],
+        ["PD_AP", 1, 3, 74], ["PD_AP", 4, 4, 105], ["PD_AP", 5, "REST", 80],
+        ["WHBBG_AP", 1, 1, 222], ["WHBBG_AP", 2, 2, 150], ["WHBBG_AP", 3, "REST", 80],
+        ["WHBPP_AP", 1, 1, 222], ["WHBPP_AP", 2, 2, 150], ["WHBPP_AP", 3, "REST", 80],
+        ["WHPBG_AP", 1, 1, 159], ["WHPBG_AP", 2, 2, 105], ["WHPBG_AP", 3, "REST", 80],
+        ["WHPPP_AP", 1, 1, 159], ["WHPPP_AP", 2, 2, 105], ["WHPPP_AP", 3, "REST", 80],
+        ["CSFA_AP", 1, "REST", 100],
+        ["BABG_AP", 1, 1, 145], ["BABG_AP", 2, "REST", 80],
+        ["BAPP_AP", 1, 1, 145], ["BAPP_AP", 2, "REST", 80],
+        ["BABI_AP", 1, 1, 145], ["BABI_AP", 2, "REST", 80],
+        ["AIBG_AP", 1, 2, 82], ["AIBG_AP", 3, "REST", 80],
+        ["AIPP_AP", 1, 2, 82], ["AIPP_AP", 3, "REST", 80],
+        ["BCEG_AP_SINGLE", 1, 1, 82], ["BCEG_AP_SINGLE", 2, 2, 100],
+        ["TIB_AP", 1, 1, 100], ["TIB_AP", 2, 2, 68],
+        # Pre-2.0 All Peril: WH percentage sheets have one index column.
+        ["WHPBG_AP_CURRENT", 1, 1, 159], ["WHPBG_AP_CURRENT", 2, "REST", 80],
+        ["WHPPP_AP_CURRENT", 1, 1, 159], ["WHPPP_AP_CURRENT", 2, "REST", 80],
     ])
 
     # =======================================================================
@@ -166,6 +191,17 @@ def build():
         ["MD", 1, 1, 4, "NoDecimal"],
         ["WHOBG_CURRENT", 1, 4, 5, "Currency"],
         ["WHOPP_CURRENT", 1, 4, 5, "Currency"],
+        # All Peril (*_AP) — see the Table Layout note.
+        ["PD_AP", 1, 4, 5, "Currency"],
+        ["WHBBG_AP", 1, 2, 4, "Currency"],
+        ["WHBPP_AP", 1, 2, 4, "Currency"],
+        ["WHPBG_AP", 2, 2, 4, "Currency"],
+        ["WHPPP_AP", 2, 2, 4, "Currency"],
+        ["BABG_AP", 1, 1, 4, "NoDecimal"],
+        ["BAPP_AP", 1, 1, 4, "NoDecimal"],
+        ["BABI_AP", 1, 1, 4, "NoDecimal"],
+        ["AIBG_AP", 1, 2, 5, "NoDecimal"],
+        ["AIPP_AP", 1, 2, 5, "NoDecimal"],
     ])
 
     # =======================================================================
@@ -187,6 +223,11 @@ def build():
         ["EBL", 3, "1:4", "A:B", "Total Property Limit", "", ""],
         ["WHOBG_CURRENT", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Wind-Hail Deductible"],
         ["WHOPP_CURRENT", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Wind-Hail Deductible"],
+        # All Peril (*_AP) — see the Table Layout note.
+        ["PD_AP", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", ""],
+        ["AIBG_AP", 3, "1:4", "A:B", "Building Limit", "C:REST", ""],
+        ["AIPP_AP", 3, "1:4", "A:B", "Building Limit", "C:REST", ""],
+        ["BCEG_AP_SINGLE", 3, "1:4", "B:REST", "Entire State", "", ""],
     ])
 
     # =======================================================================
@@ -276,6 +317,15 @@ def build():
         ["TX", "A", "004,005,006,007,008,009,015,016"], ["TX", "B", "010,011,012,013,014"],
         ["VA", "A", "001,005,006,007,008,009,012,013"], ["VA", "B", "010,011"],
         ["WY", "A", "702"], ["WY", "B", "703"],
+    ])
+
+    # =======================================================================
+    # Class Codes — Class_Code_Min -> program display name (All Peril page).
+    # =======================================================================
+    ws = wb.create_sheet("Class Codes")
+    _write_table(ws, ["ClassCodeMin", "Program"], [
+        [10000, "Hab"], [20000, "Auto"], [40000, "Food"], [50000, "Retail"],
+        [60000, "Office"], [70000, "Service"], [80000, "Wholesale"],
     ])
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)

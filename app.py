@@ -90,12 +90,21 @@ for k in BOP_ALL_KEYS:
 st.session_state.setdefault("bop_save_dir",     "")
 st.session_state.setdefault("bop_run_status",   "idle")
 st.session_state.setdefault("bop_run_msg",      "")
-st.session_state.setdefault("bop_xlsx_path",    "")
-st.session_state.setdefault("bop_pdf_path",     "")
+st.session_state.setdefault("bop_xlsx_paths",   [])
+st.session_state.setdefault("bop_pdf_paths",    [])
 st.session_state.setdefault("bop_pdf_status",   "idle")
 st.session_state.setdefault("bop_confirm_step", "idle")
 st.session_state.setdefault("bop_upload_reset", 0)
 st.session_state.setdefault("bop_version", "2.0")
+# Program selection — All Programs pre-checked to match the old default.
+# The *_store keys are plain session values that mirror the checkbox widgets:
+# widget state is dropped by Streamlit whenever a rerun happens before the
+# checkboxes render (e.g. clicking the Version toggle above them), so the
+# checkboxes are re-seeded from these mirrors every run.
+BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril"]
+st.session_state.setdefault("bop_sel_all_store",   False)
+st.session_state.setdefault("bop_programs_store",  ["All Programs"])
+st.session_state.setdefault("bop_programs",        ["All Programs"])
 
 # ─── Small Market session state ────────────────────────────────────────────
 st.session_state.setdefault("file_SM",          None)
@@ -2197,13 +2206,40 @@ elif active_lob == "Business Owners Policy":
                      type="primary" if st.session_state.bop_version == "pre2.0" else "secondary"):
             if st.session_state.bop_version != "pre2.0":
                 st.session_state.bop_version = "pre2.0"; st.rerun()
+    spacer(10)
+
+    # ── Program selection ────────────────────────────────────────────────────
+    # Check one or more programs; "Select all" overrides the individual boxes.
+    # Every checked program is built in ONE run (the ratebooks are opened and
+    # extracted once), each saved as its own xlsx.
+    st.markdown('<div class="sec-label">&#128218; &nbsp;Programs to Build</div>', unsafe_allow_html=True)
+    sel_cols = st.columns([2, 2, 2, 6])
+    with sel_cols[0]:
+        sel_all = st.checkbox("Select all", key="bop_prog_select_all",
+                              value=st.session_state.bop_sel_all_store,
+                              help="Build every available program in one run")
+    st.session_state.bop_sel_all_store = sel_all
+
+    individually_checked = []
+    for i, prog_name in enumerate(BOP_AVAILABLE_PROGRAMS):
+        with sel_cols[i + 1]:
+            chk = st.checkbox(prog_name, key=f"bop_prog_chk_{prog_name.replace(' ', '_')}",
+                              value=(prog_name in st.session_state.bop_programs_store),
+                              disabled=sel_all)
+        if chk:
+            individually_checked.append(prog_name)
+    # Individual picks survive toggling "Select all" off again.
+    st.session_state.bop_programs_store = individually_checked
+    st.session_state.bop_programs = list(BOP_AVAILABLE_PROGRAMS) if sel_all else individually_checked
+    if not st.session_state.bop_programs:
+        st.markdown('<p class="f-hint">&#9888; Select at least one program to build.</p>', unsafe_allow_html=True)
     spacer(16)
 
     L, R = st.columns([13, 7], gap="large")
 
     with L:
         st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
-        st.markdown('<p class="f-hint">Only the <b>All Programs</b> page is available today &mdash; the other 6 BOP programs are coming soon.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint"><b>All Programs</b> and <b>All Peril</b> pages are available today &mdash; the other BOP programs are coming soon.</p>', unsafe_allow_html=True)
         spacer(4)
 
         uploaded = st.file_uploader(
@@ -2257,27 +2293,30 @@ elif active_lob == "Business Owners Policy":
                     st.rerun()
 
         # ── Programs ─────────────────────────────────────────────────────────
-        # All 7 BOP programs from the old desktop tool, shown for visibility.
-        # Only All Programs has a working backend — it always runs; the rest
-        # are read-only status rows until they're built out.
+        # The BOP programs from the old desktop tool, shown for visibility.
+        # Available ones are driven by the checkboxes above; the rest are
+        # read-only status rows until they're built out. (The old tool's
+        # "Individual Programs" option is superseded by "Select all".)
         spacer(14)
         BOP_PROGRAMS = [
-            ("All Programs",         True,  "Builds automatically"),
-            ("All Peril",            False, "Coming soon"),
+            ("All Programs",         True,  "Available"),
+            ("All Peril",            True,  "Available"),
             ("Class",                False, "Coming soon"),
             ("Rating Plans",         False, "Coming soon"),
             ("Common Rules",         False, "Coming soon"),
             ("Additional Rules",     False, "Coming soon"),
             ("Optional Coverages",   False, "Coming soon"),
-            ("Individual Programs",  False, "Coming soon — builds all 7 programs as separate files"),
         ]
         prog_rows = ""
         for name, active, note in BOP_PROGRAMS:
-            if active:
-                prog_rows += f'<div class="arow arow-ok"><span class="aco">{name}</span><span class="afile afile-assigned">{note}</span><span class="astat astat-ok">&#10003;</span></div>'
+            if active and name in st.session_state.bop_programs:
+                prog_rows += f'<div class="arow arow-ok"><span class="aco">{name}</span><span class="afile afile-assigned">Selected — will be built</span><span class="astat astat-ok">&#10003;</span></div>'
+            elif active:
+                prog_rows += f'<div class="arow arow-ok"><span class="aco">{name}</span><span class="afile afile-assigned">Available — tick its checkbox above</span><span class="astat astat-ok">&#10003;</span></div>'
             else:
                 prog_rows += f'<div class="arow arow-empty"><span class="aco">{name}</span><span class="afile">{note}</span><span class="astat astat-empty">—</span></div>'
-        st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>Programs</span><span>1 of {len(BOP_PROGRAMS)} available</span></div>{prog_rows}</div>', unsafe_allow_html=True)
+        n_avail = sum(1 for _, a, _ in BOP_PROGRAMS if a)
+        st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>Programs</span><span>{n_avail} of {len(BOP_PROGRAMS)} available</span></div>{prog_rows}</div>', unsafe_allow_html=True)
 
     with R:
         st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
@@ -2319,7 +2358,7 @@ elif active_lob == "Business Owners Policy":
             + rdy(save_ok, "Save location", save_sub)
             + '</div>', unsafe_allow_html=True)
 
-        ready = all_bop_req() and save_ok
+        ready = all_bop_req() and save_ok and bool(st.session_state.bop_programs)
 
         if st.session_state.bop_confirm_step == "idle":
             if ready:
@@ -2328,7 +2367,9 @@ elif active_lob == "Business Owners Policy":
                     st.session_state.bop_confirm_step = "confirm"; st.session_state.bop_run_status = "idle"; st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                missing = (["NGIC ratebook"] if not _bop_valid("NGIC") else []) + (["save location"] if not save_ok else [])
+                missing = (["NGIC ratebook"] if not _bop_valid("NGIC") else []) \
+                        + (["save location"] if not save_ok else []) \
+                        + (["program selection"] if not st.session_state.bop_programs else [])
                 st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
                 st.button(f"Waiting — {', '.join(missing)}", key="bop_run_btn_dis", use_container_width=True, disabled=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -2360,14 +2401,15 @@ elif active_lob == "Business Owners Policy":
                 def _rb(k):
                     f = st.session_state.get(f"bop_file_{k}")
                     return io.BytesIO(f["bytes"]) if f and "error" not in f else None
-                xlsx_out, pdf_out = run_bop_rate_pages(
+                xlsx_outs, pdf_outs = run_bop_rate_pages(
                     NGICRatebook=_rb("NGIC"), CWRatebook=_rb("CW"), MMRatebook=_rb("MM"),
                     NACORatebook=_rb("NACO"), NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"),
                     HICNJRatebook=_rb("HICNJ"),
                     folder_selected=st.session_state.bop_save_dir,
                     progress_callback=update_progress, skip_pdf=True,
-                    version=st.session_state.bop_version)
-                st.session_state.bop_xlsx_path = xlsx_out; st.session_state.bop_pdf_path = pdf_out
+                    version=st.session_state.bop_version,
+                    program=list(st.session_state.bop_programs))
+                st.session_state.bop_xlsx_paths = xlsx_outs; st.session_state.bop_pdf_paths = pdf_outs
                 st.session_state.bop_run_status = "success"; st.session_state.bop_pdf_status = "idle"
             except Exception as e:
                 import traceback; traceback.print_exc()
@@ -2383,7 +2425,11 @@ elif active_lob == "Business Owners Policy":
                 loader_ph2.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting to PDF…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
             from BOP.BOPRatePages import generate_pdf_only
             try:
-                generate_pdf_only(st.session_state.bop_xlsx_path, st.session_state.bop_pdf_path, progress_callback=update_pdf_progress)
+                n_pdf = len(st.session_state.bop_xlsx_paths)
+                for i, (xp, pp) in enumerate(zip(st.session_state.bop_xlsx_paths, st.session_state.bop_pdf_paths), start=1):
+                    def _cb(msg, _i=i, _n=n_pdf):
+                        update_pdf_progress(f"[{_i}/{_n}] {msg}" if _n > 1 else msg)
+                    generate_pdf_only(xp, pp, progress_callback=_cb)
                 st.session_state.bop_pdf_status = "success"
             except Exception as e:
                 import traceback; traceback.print_exc()
@@ -2392,16 +2438,20 @@ elif active_lob == "Business Owners Policy":
 
         if st.session_state.bop_run_status == "success":
             spacer(10)
-            st.success(f"&#10003;  Excel created: {Path(st.session_state.bop_xlsx_path).name}")
+            for xp in st.session_state.bop_xlsx_paths:
+                st.success(f"&#10003;  Excel created: {Path(xp).name}")
             if st.session_state.bop_pdf_status != "success":
+                n_files = len(st.session_state.bop_xlsx_paths)
+                pdf_label = "Generate PDF Documents" if n_files > 1 else "Generate PDF Document"
                 st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                if st.button("Generate PDF Document", key="bop_gen_pdf_btn", use_container_width=True):
+                if st.button(pdf_label, key="bop_gen_pdf_btn", use_container_width=True):
                     st.session_state.bop_confirm_step = "pdf_processing"; st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
                 if st.session_state.bop_pdf_status == "error":
                     st.error(f"PDF Error: {st.session_state.bop_run_msg}")
             else:
-                st.success(f"&#10003;  PDF created: {Path(st.session_state.bop_pdf_path).name}")
+                for pp in st.session_state.bop_pdf_paths:
+                    st.success(f"&#10003;  PDF created: {Path(pp).name}")
         elif st.session_state.bop_run_status == "error":
             spacer(10); st.error(st.session_state.bop_run_msg)
 

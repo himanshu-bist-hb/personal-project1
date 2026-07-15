@@ -493,7 +493,7 @@ def generate_pdf_only(xlsx_path: str, pdf_path: str, progress_callback: Optional
     import os, time
     if progress_callback: progress_callback("Launching Excel...")
     t0 = time.perf_counter()
-    out = export_to_pdf(xlsx_path, pdf_path)
+    out = export_to_pdf(xlsx_path, pdf_path, progress_callback=progress_callback)
     if not (os.path.exists(out) and os.path.getsize(out) > 0):
         raise RuntimeError(f"PDF was not created at {out}")
     elapsed = time.perf_counter() - t0

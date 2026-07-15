@@ -543,7 +543,243 @@ def _kill_excel_instances():
         pass
 
 
-def export_to_pdf(xlsx_path, pdf_path):
+# ============================================================================
+#  PARALLEL PDF EXPORT
+#
+#  Excel's PDF renderer is single-threaded at ~8k cells/second, so a sheet
+#  like BOP's TRDEF (82k rows x 21 cols = 1.7M cells) dominates the export.
+#  When a workbook contains a sheet that big, several Excel instances each
+#  export a different slice of the workbook — a huge sheet is sliced by ROW
+#  RANGE via an in-memory print area, so the .xlsx keeps its single tab and
+#  the printed footer/tab name is unchanged. Page numbers stay continuous:
+#  every worker first counts its own pages (phase 1), then the cumulative
+#  start is stamped via FirstPageNumber before exporting (phase 2).
+#  Measured on TRDEF-scale data: 224s single-instance -> 86s with 4 workers.
+#
+#  Any failure falls back to the normal single-instance export.
+# ============================================================================
+
+_HUGE_SHEET_ROWS  = 10_000   # a sheet taller than this triggers the parallel path
+_PARALLEL_WORKERS = 4
+
+
+def _plan_parallel_export(xlsx_path):
+    """
+    Return a list of worker groups, or None when a plain single-instance
+    export is the right choice. Each group is a list of
+    (sheet_name, first_row, last_row, max_col) units in workbook order;
+    first_row/last_row are None for "whole sheet".
+    """
+    try:
+        import pikepdf  # required to merge the per-worker PDFs
+    except ImportError:
+        return None
+
+    wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    try:
+        sheets = []
+        for ws in wb.worksheets:
+            if ws.title == "Index" or ws.sheet_state != "visible":
+                continue
+            sheets.append((ws.title, ws.max_row or 1, ws.max_column or 1))
+    finally:
+        wb.close()
+
+    if not any(rows > _HUGE_SHEET_ROWS for _, rows, _ in sheets):
+        return None
+
+    # Units: whole small sheets; huge sheets sliced into row ranges of
+    # roughly equal weight so the groups balance.
+    total_weight = sum(rows * cols for _, rows, cols in sheets)
+    target = total_weight / _PARALLEL_WORKERS
+    units = []
+    for name, rows, cols in sheets:
+        weight = rows * cols
+        if rows <= _HUGE_SHEET_ROWS:
+            units.append((name, None, None, cols, weight))
+            continue
+        n_slices = max(2, min(_PARALLEL_WORKERS * 2, round(weight / target) or 2))
+        step = -(-rows // n_slices)  # ceil
+        r = 1
+        while r <= rows:
+            r2 = min(r + step - 1, rows)
+            units.append((name, r, r2, cols, (r2 - r + 1) * cols))
+            r = r2 + 1
+
+    # Contiguous partition into up to _PARALLEL_WORKERS groups, coalescing
+    # adjacent slices of the same sheet that land in the same group (a
+    # worker can only print one area per sheet).
+    groups, cur, cur_weight = [], [], 0
+    for unit in units:
+        name, r1, r2, cols, weight = unit
+        if cur and cur_weight >= target and len(groups) < _PARALLEL_WORKERS - 1:
+            groups.append(cur)
+            cur, cur_weight = [], 0
+        if cur and cur[-1][0] == name and cur[-1][2] is not None and r1 is not None:
+            prev = cur[-1]
+            cur[-1] = (name, prev[1], r2, cols)
+        else:
+            cur.append((name, r1, r2, cols))
+        cur_weight += weight
+    if cur:
+        groups.append(cur)
+
+    return groups if len(groups) >= 2 else None
+
+
+def _parallel_worker(xlsx_path, group, out_pdf, idx, counts, counted,
+                     starts, go, errors):
+    """Phase 1: isolate this group's slice and count its pages. Phase 2 (after
+    the coordinator computes cumulative starts): stamp FirstPageNumber and
+    export. Runs in its own thread with its own Excel instance."""
+    import win32com.client
+    import pythoncom
+
+    pythoncom.CoInitialize()
+    excel = None
+    workbook = None
+    try:
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        excel.ScreenUpdating = False
+        excel.EnableEvents = False
+
+        workbook = excel.Workbooks.Open(xlsx_path, ReadOnly=True, UpdateLinks=0)
+
+        by_name = {u[0]: u for u in group}
+        first_sheet = None
+        n_pages = 0
+        for sheet in workbook.Sheets:
+            unit = by_name.get(sheet.Name)
+            if unit is None:
+                sheet.Visible = 0  # xlSheetHidden — in-memory only (ReadOnly)
+                continue
+            _, r1, r2, cols = unit
+            if r1 is not None:
+                area = f"A{r1}:{get_column_letter(cols)}{r2}"
+                sheet.PageSetup.PrintArea = area
+            if first_sheet is None:
+                first_sheet = sheet
+            n_pages += sheet.PageSetup.Pages.Count
+
+        counts[idx] = n_pages
+        counted[idx].set()
+
+        go.wait()
+        if errors:          # another worker failed during phase 1 — abort
+            return
+        first_sheet.PageSetup.FirstPageNumber = starts[idx]
+        first_sheet.Activate()
+        workbook.ExportAsFixedFormat(
+            Type=_XL_TYPE_PDF,
+            Filename=out_pdf,
+            Quality=_XL_QUALITY_STD,
+            IncludeDocProperties=False,
+            IgnorePrintAreas=False,
+            OpenAfterPublish=False,
+        )
+    except Exception as exc:
+        errors.append(exc)
+        counted[idx].set()
+    finally:
+        try:
+            if workbook is not None:
+                workbook.Close(SaveChanges=False)
+        except Exception:
+            pass
+        try:
+            if excel is not None:
+                excel.Quit()
+        except Exception:
+            pass
+        pythoncom.CoUninitialize()
+
+
+def _export_pdf_parallel(xlsx_path, groups, pdf_path, progress):
+    """Run the worker pool, then merge + strip + compress into pdf_path.
+    Raises on any failure (caller falls back to the sequential export)."""
+    import tempfile
+    import threading
+    import pikepdf
+
+    k = len(groups)
+    part_pdfs = [
+        os.path.join(tempfile.gettempdir(),
+                     f"~rate_pages_part{i}_{os.getpid()}.pdf")
+        for i in range(k)
+    ]
+    counts  = [None] * k
+    counted = [threading.Event() for _ in range(k)]
+    starts  = [1] * k
+    go      = threading.Event()
+    errors  = []
+
+    progress(f"PDF — rendering with {k} Excel instances in parallel...")
+    threads = [
+        threading.Thread(
+            target=_parallel_worker,
+            args=(xlsx_path, groups[i], part_pdfs[i], i,
+                  counts, counted, starts, go, errors),
+            daemon=True,
+        )
+        for i in range(k)
+    ]
+    try:
+        for t in threads:
+            t.start()
+        for evt in counted:
+            evt.wait()
+        if errors:
+            raise errors[0]
+        for i in range(1, k):
+            starts[i] = starts[i - 1] + counts[i - 1]
+        go.set()
+        for t in threads:
+            t.join()
+        if errors:
+            raise errors[0]
+    finally:
+        go.set()  # never leave workers blocked
+
+    for p in part_pdfs:
+        if not (os.path.exists(p) and os.path.getsize(p) > 0):
+            raise RuntimeError(f"parallel export part missing: {p}")
+
+    progress("PDF — merging and compressing...")
+    try:
+        merged = pikepdf.new()
+        parts = [pikepdf.open(p) for p in part_pdfs]
+        try:
+            for part in parts:
+                merged.pages.extend(part.pages)
+            root = merged.Root
+            for key in ("/StructTreeRoot", "/MarkInfo", "/Metadata",
+                        "/PieceInfo", "/Lang"):
+                if key in root:
+                    del root[key]
+            for page in merged.pages:
+                for key in ("/StructParents", "/Tabs", "/PieceInfo"):
+                    if key in page:
+                        del page[key]
+            merged.remove_unreferenced_resources()
+            merged.save(pdf_path,
+                        compress_streams=True,
+                        recompress_flate=True,
+                        object_stream_mode=pikepdf.ObjectStreamMode.generate)
+        finally:
+            for part in parts:
+                part.close()
+        raw_mb = sum(os.path.getsize(p) for p in part_pdfs) / 1e6
+        print(f"[pagebreaks] PDF compressed {raw_mb:.1f} MB -> "
+              f"{os.path.getsize(pdf_path)/1e6:.1f} MB")
+    finally:
+        for p in part_pdfs:
+            try: os.remove(p)
+            except OSError: pass
+
+
+def export_to_pdf(xlsx_path, pdf_path, progress_callback=None):
     """
     Convert an .xlsx file to PDF using Excel via COM.
 
@@ -552,6 +788,12 @@ def export_to_pdf(xlsx_path, pdf_path):
     """
     import win32com.client
     import pythoncom
+    import tempfile
+
+    def _progress(msg):
+        print(f"[pagebreaks] {msg}")
+        if progress_callback:
+            progress_callback(msg)
 
     xlsx_path = os.path.normpath(os.path.abspath(xlsx_path))
     pdf_path  = os.path.normpath(os.path.abspath(pdf_path))
@@ -568,7 +810,6 @@ def export_to_pdf(xlsx_path, pdf_path):
     # Excel writes the raw (tagged, ~5x larger) PDF to the local temp dir so
     # the oversized intermediate never lands in a OneDrive-synced folder;
     # only the compressed copy is written to pdf_path.
-    import tempfile
     raw_pdf = os.path.join(
         tempfile.gettempdir(),
         f"~rate_pages_export_{os.getpid()}.pdf",
@@ -577,17 +818,63 @@ def export_to_pdf(xlsx_path, pdf_path):
         try: os.remove(raw_pdf)
         except OSError: pass
 
+    # Opening the workbook from a OneDrive-synced folder stalls on hydration
+    # and sync locks; give Excel a local temp copy to read instead.
+    src_for_excel = xlsx_path
+    local_xlsx = None
+    onedrive = os.environ.get("OneDrive", "")
+    if onedrive and xlsx_path.lower().startswith(os.path.normpath(onedrive).lower()):
+        local_xlsx = os.path.join(
+            tempfile.gettempdir(),
+            f"~rate_pages_src_{os.getpid()}.xlsx",
+        )
+        t0 = time.perf_counter()
+        shutil.copy2(xlsx_path, local_xlsx)
+        src_for_excel = local_xlsx
+        print(f"[pagebreaks] copied source out of OneDrive in {time.perf_counter()-t0:0.1f}s")
+
     _kill_excel_instances()
+
+    # Workbooks with a huge sheet (e.g. BOP's 82k-row TRDEF) render ~2.6x
+    # faster split across several Excel instances; anything going wrong here
+    # falls through to the normal single-instance export below.
+    try:
+        plan = _plan_parallel_export(src_for_excel)
+    except Exception as exc:
+        print(f"[pagebreaks] parallel planning skipped ({exc})")
+        plan = None
+    if plan:
+        t_export = time.perf_counter()
+        try:
+            _export_pdf_parallel(src_for_excel, plan, pdf_path, _progress)
+            print(f"[pagebreaks] parallel export took "
+                  f"{time.perf_counter()-t_export:0.1f}s")
+            if local_xlsx is not None:
+                try: os.remove(local_xlsx)
+                except OSError: pass
+            if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+                return pdf_path
+            raise RuntimeError("merged PDF missing or empty")
+        except Exception as exc:
+            print(f"[pagebreaks] parallel export failed ({exc}) — "
+                  f"falling back to single-instance export")
+            try: os.remove(pdf_path)
+            except OSError: pass
+
     pythoncom.CoInitialize()
     excel = None
     workbook = None
+    t_export = time.perf_counter()
     try:
+        _progress("PDF — launching Excel...")
         excel = win32com.client.DispatchEx("Excel.Application")
         excel.Visible = False
         excel.DisplayAlerts = False
         excel.ScreenUpdating = False
+        excel.EnableEvents = False
 
-        workbook = excel.Workbooks.Open(xlsx_path, ReadOnly=True, UpdateLinks=0)
+        _progress("PDF — opening workbook...")
+        workbook = excel.Workbooks.Open(src_for_excel, ReadOnly=True, UpdateLinks=0)
 
         # Hide Index from the PDF without touching the source file.
         for sheet in workbook.Sheets:
@@ -600,6 +887,7 @@ def export_to_pdf(xlsx_path, pdf_path):
                 except Exception: pass
                 break
 
+        _progress("PDF — Excel is rendering pages (the long step)...")
         workbook.ExportAsFixedFormat(
             Type=_XL_TYPE_PDF,
             Filename=raw_pdf,
@@ -621,6 +909,10 @@ def export_to_pdf(xlsx_path, pdf_path):
             pass
         del workbook, excel
         pythoncom.CoUninitialize()
+        if local_xlsx is not None:
+            try: os.remove(local_xlsx)
+            except OSError: pass
+    print(f"[pagebreaks] Excel export took {time.perf_counter()-t_export:0.1f}s")
 
     # Verify Excel produced the raw PDF, then shrink it into pdf_path.
     for _ in range(10):
@@ -630,7 +922,10 @@ def export_to_pdf(xlsx_path, pdf_path):
     else:
         raise RuntimeError(f"PDF was not created: {raw_pdf}")
 
+    _progress("PDF — compressing...")
+    t_comp = time.perf_counter()
     _compress_pdf(raw_pdf, pdf_path)
+    print(f"[pagebreaks] compression took {time.perf_counter()-t_comp:0.1f}s")
 
     if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
         return pdf_path

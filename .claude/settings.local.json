@@ -54,7 +54,17 @@
       "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" bench_pdf.py all)",
       "Bash('/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe' -u -c ' *)",
       "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_pdf.py compress)",
-      "Bash(./venv/Scripts/python.exe -u -c ' *)"
+      "Bash(./venv/Scripts/python.exe -u -c ' *)",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_parallel.py)",
+      "PowerShell(Get-Printer *)",
+      "PowerShell(Remove-PrintJob *)",
+      "PowerShell(Get-PrintJob *)",
+      "Bash(cp \"/c/Users/HIMANS~1/AppData/Local/Temp/claude/C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages/53a4fc92-a608-44f8-ad73-8df67ba8606b/scratchpad/bench2.xlsx\" \"/c/Users/Himanshu Bist/OneDrive/Desktop/~bench_e2e.xlsx\")",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_trdef.py)",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_trdef.py zoom10 split)",
+      "PowerShell(Get-PSDrive C | Select-Object @{n='FreeGB';e={[math]::Round\\($_.Free/1GB,1\\)}}, @{n='UsedGB';e={[math]::Round\\($_.Used/1GB,1\\)}})",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_trdef.py split)",
+      "PowerShell(git *)"
     ]
   }
 }

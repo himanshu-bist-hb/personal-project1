@@ -486,6 +486,52 @@ _XL_TYPE_PDF        = 0   # xlTypePDF
 _XL_QUALITY_STD     = 0   # xlQualityStandard
 
 
+def _compress_pdf(src_path, dest_path):
+    """
+    Write a compressed copy of src_path to dest_path.
+
+    Excel's ExportAsFixedFormat produces a "tagged" PDF: every table cell
+    gets an accessibility structure element, which for rate pages (hundreds
+    of pages of dense tables) is most of the file — a 10 MB workbook can
+    export as a 170 MB PDF. The DOI filing copy doesn't need the tag tree,
+    so drop it and recompress every stream (measured ~5x smaller).
+
+    Best-effort: if pikepdf is not installed or anything fails, the raw
+    PDF is moved to dest_path unchanged so export never breaks.
+    """
+    try:
+        import pikepdf
+    except ImportError:
+        print("[pagebreaks] pikepdf not installed — PDF left uncompressed "
+              "(pip install pikepdf to shrink output ~5x)")
+        shutil.move(src_path, dest_path)
+        return
+
+    try:
+        with pikepdf.open(src_path) as pdf:
+            root = pdf.Root
+            for key in ("/StructTreeRoot", "/MarkInfo", "/Metadata",
+                        "/PieceInfo", "/Lang"):
+                if key in root:
+                    del root[key]
+            for page in pdf.pages:
+                for key in ("/StructParents", "/Tabs", "/PieceInfo"):
+                    if key in page:
+                        del page[key]
+            pdf.remove_unreferenced_resources()
+            pdf.save(dest_path,
+                     compress_streams=True,
+                     recompress_flate=True,
+                     object_stream_mode=pikepdf.ObjectStreamMode.generate)
+        raw_mb  = os.path.getsize(src_path) / 1e6
+        out_mb  = os.path.getsize(dest_path) / 1e6
+        print(f"[pagebreaks] PDF compressed {raw_mb:.1f} MB -> {out_mb:.1f} MB")
+        os.remove(src_path)
+    except Exception as exc:
+        print(f"[pagebreaks] PDF compression failed ({exc}) — keeping raw PDF")
+        shutil.move(src_path, dest_path)
+
+
 def _kill_excel_instances():
     """Best-effort: terminate any orphan EXCEL.EXE so COM gets a clean slate."""
     try:
@@ -519,6 +565,18 @@ def export_to_pdf(xlsx_path, pdf_path):
         except PermissionError:
             raise RuntimeError(f"PDF is open in another program: {pdf_path}")
 
+    # Excel writes the raw (tagged, ~5x larger) PDF to the local temp dir so
+    # the oversized intermediate never lands in a OneDrive-synced folder;
+    # only the compressed copy is written to pdf_path.
+    import tempfile
+    raw_pdf = os.path.join(
+        tempfile.gettempdir(),
+        f"~rate_pages_export_{os.getpid()}.pdf",
+    )
+    if os.path.exists(raw_pdf):
+        try: os.remove(raw_pdf)
+        except OSError: pass
+
     _kill_excel_instances()
     pythoncom.CoInitialize()
     excel = None
@@ -544,7 +602,7 @@ def export_to_pdf(xlsx_path, pdf_path):
 
         workbook.ExportAsFixedFormat(
             Type=_XL_TYPE_PDF,
-            Filename=pdf_path,
+            Filename=raw_pdf,
             Quality=_XL_QUALITY_STD,
             IncludeDocProperties=False,
             IgnorePrintAreas=False,
@@ -564,11 +622,18 @@ def export_to_pdf(xlsx_path, pdf_path):
         del workbook, excel
         pythoncom.CoUninitialize()
 
-    # Verify
+    # Verify Excel produced the raw PDF, then shrink it into pdf_path.
     for _ in range(10):
-        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
-            return pdf_path
+        if os.path.exists(raw_pdf) and os.path.getsize(raw_pdf) > 0:
+            break
         time.sleep(0.2)
+    else:
+        raise RuntimeError(f"PDF was not created: {raw_pdf}")
+
+    _compress_pdf(raw_pdf, pdf_path)
+
+    if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+        return pdf_path
     raise RuntimeError(f"PDF was not created: {pdf_path}")
 
 

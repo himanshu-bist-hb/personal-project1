@@ -44,7 +44,17 @@
       "Bash(./venv/Scripts/python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\07ae887b-abee-4816-8df3-649884ffac55\\\\scratchpad\\\\patch_input_file.py\")",
       "Bash(./venv/Scripts/python.exe \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\07ae887b-abee-4816-8df3-649884ffac55\\\\scratchpad\\\\verify_allperil.py\")",
       "Bash(\"C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\\\\venv\\\\Scripts\\\\python.exe\" verify_multiprog.py)",
-      "Bash('C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\\\\venv\\\\Scripts\\\\python.exe' -c ' *)"
+      "Bash('C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages\\\\venv\\\\Scripts\\\\python.exe' -c ' *)",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" --version)",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -m pip install pikepdf)",
+      "Bash(/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe *)",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -m pip install PyMuPDF)",
+      "Bash(tasklist //fi \"imagename eq excel.exe\")",
+      "Read(//c/Users/HIMANS~1/AppData/Local/Temp/claude/C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages/53a4fc92-a608-44f8-ad73-8df67ba8606b/scratchpad/**)",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" bench_pdf.py all)",
+      "Bash('/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe' -u -c ' *)",
+      "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_pdf.py compress)",
+      "Bash(./venv/Scripts/python.exe -u -c ' *)"
     ]
   }
 }

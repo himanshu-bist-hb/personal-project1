@@ -64,7 +64,17 @@
       "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_trdef.py zoom10 split)",
       "PowerShell(Get-PSDrive C | Select-Object @{n='FreeGB';e={[math]::Round\\($_.Free/1GB,1\\)}}, @{n='UsedGB';e={[math]::Round\\($_.Used/1GB,1\\)}})",
       "Bash(\"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/venv/Scripts/python.exe\" -u bench_trdef.py split)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "PowerShell(pip install *)",
+      "PowerShell(python \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\\\\inspect_wb.py\" \"C:\\\\Users\\\\Himanshu Bist\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\53a4fc92-a608-44f8-ad73-8df67ba8606b\\\\scratchpad\\\\trdef_split.xlsx\")",
+      "PowerShell(python \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\\\\dump_cfg.py\")",
+      "PowerShell(python \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\\\\dump_cfg2.py\")",
+      "PowerShell(python \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\\\\analyze_ref.py\")",
+      "PowerShell($sp = \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\"; python \"$sp\\\\make_ref_wb.py\" \"$sp\\\\ref_bop.xlsx\")",
+      "PowerShell($sp = \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\"; python -c \"import sys, time; sys.path.insert\\(0, r'C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages'\\); from BA.BApagebreaks import export_to_pdf; t0=time.perf_counter\\(\\); export_to_pdf\\(sys.argv[1], sys.argv[2]\\); print\\(f'TOTAL {time.perf_counter\\(\\)-t0:0.1f}s'\\)\" \"$sp\\\\ref_bop.xlsx\" \"$sp\\\\ref_bop_excel.pdf\")",
+      "PowerShell($sp = \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\"; python \"$sp\\\\measure_ref.py\" \"$sp\\\\ref_bop_excel.pdf\" 12)",
+      "PowerShell(python \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\\\\measure_ref2.py\")",
+      "Bash(tasklist //FI \"IMAGENAME eq EXCEL.EXE\")"
     ]
   }
 }

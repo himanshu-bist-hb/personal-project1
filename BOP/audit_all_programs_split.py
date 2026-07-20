@@ -24,9 +24,10 @@ factor patterns actually exist across Class_Code_Min for EVERY raw table
 that feeds "All Programs" — so we can confirm or refute that assumption
 per table, instead of trusting a single sampled class code. It reuses the
 exact same sheet parsing BA.BARatePages.process_ratebook uses (B6 = table
-name, data starts row 12) and the exact same NACO > NAFF > NICOF > NGIC >
-CW nesting waterfall AllProgramsPage.AllPrograms.buildDataFrame uses, so
-results line up with what the generated rate pages would actually show.
+name, data starts row 12) and a lower-level-company > NGIC > CW nesting
+waterfall — same idea as AllProgramsPage.AllPrograms.buildDataFrame, with
+one deliberate difference: see LOWER_LEVEL_COMPANIES below for why HICNJ is
+included here even though production's buildDataFrame currently skips it.
 
 USAGE
 -----
@@ -37,7 +38,7 @@ USAGE
 Only --ngic is required (matches BOPRatePages.run()). Provide whichever
 other company files this state's rate pages would actually nest, to match
 production exactly — a table only found in a lower-level company file
-(NACO/NAFF/NICOF) won't be checked unless that file is passed in.
+(HICNJ/NICOF/NACO/NAFF) won't be checked unless that file is passed in.
 
 OUTPUT
 ------
@@ -72,6 +73,28 @@ import pandas as pd
 
 from BA.BARatePages import load_ratebook, process_ratebook
 from BOP.bop_config import load_bop_config
+from config.constants import BOP_DETECT_ORDER
+
+# Lower-level (company-specific) ratebooks that sit above NGIC (state
+# default) / CW (country-wide fallback) in the nesting waterfall — same
+# idea as Business Auto's LEVEL1 (company) -> LEVEL2 (NGIC) -> LEVEL3 (CW).
+#
+# IMPORTANT: these are PEERS, not a ranked hierarchy. In Business Auto each
+# company builds its OWN separate output — LEVEL1 is always "this one
+# company", checked against NGIC/CW; NACO is never checked against NAFF or
+# NICOF because they're unrelated entities, not competitors. The same is
+# true here: for any one state's BOP filing, exactly one of these companies
+# is expected to be the one actually writing that business (a state files
+# through HICNJ, or NICOF, or NACO, or NAFF — not several at once), so there
+# is nothing to rank between them. build_nested_table() below treats them
+# as a set, not an ordered list, and flags it rather than silently picking
+# a winner if a table somehow turns up in more than one of them at once.
+#
+# The set of valid company codes still comes from BOP_DETECT_ORDER (the
+# codebase's single list of BOP company codes) so this can't drift out of
+# sync with it — only the ORDER from that list is deliberately not used
+# here, since order would imply a ranking that doesn't exist.
+LOWER_LEVEL_COMPANIES: List[str] = [c for c in BOP_DETECT_ORDER if c not in ("NGIC", "MM", "CW")]
 
 
 # Every buildDataFrame(...) call inside AllProgramsPage.py's sheetSpecs list
@@ -140,25 +163,48 @@ def _is_value_column(col: str) -> bool:
     return any(m in lc for m in VALUE_COL_MARKERS)
 
 
-def build_nested_table(rate_tables: Dict[str, Optional[Dict]], table_code: str) -> Optional[pd.DataFrame]:
-    """Same NACO > NAFF > NICOF > NGIC > CW waterfall as
-    AllProgramsPage.AllPrograms.buildDataFrame, applied to the raw
-    {table_code: [[header row], [data row], ...]} dicts process_ratebook
-    returns per company."""
-    for company in ("NACO", "NAFF", "NICOF"):
-        tbl = rate_tables.get(company)
-        if tbl and table_code in tbl:
-            rows = tbl[table_code]
-            return pd.DataFrame(rows[1:], columns=rows[0])
+def build_nested_table(
+    rate_tables: Dict[str, Optional[Dict]], table_code: str
+) -> Tuple[Optional[pd.DataFrame], Optional[str]]:
+    """
+    Peer lower-level company (whichever one was uploaded) -> NGIC -> CW
+    waterfall, applied to the raw {table_code: [[header row], [data row],
+    ...]} dicts process_ratebook returns per company. See the
+    LOWER_LEVEL_COMPANIES comment above: HICNJ/NICOF/NACO/NAFF are peers,
+    not a ranked chain, since only one of them is expected to be uploaded
+    for any single state's run — same as Business Auto's per-company
+    nesting (this company -> NGIC -> CW).
+
+    Returns (df, note). note is None in the normal case; it's set to a
+    short warning string if the table turned up in MORE THAN ONE
+    lower-level company at once — an unexpected situation (it implies two
+    different companies were both uploaded for the same state run) that
+    this surfaces instead of silently resolving with an arbitrary pick.
+    """
+    hits = [c for c in LOWER_LEVEL_COMPANIES if rate_tables.get(c) and table_code in rate_tables[c]]
+
+    note = None
+    if len(hits) > 1:
+        note = (
+            f"found in multiple lower-level companies at once ({', '.join(hits)}) "
+            f"— used {hits[0]}; normally only one lower-level company should be "
+            f"uploaded per state, so this is worth double-checking"
+        )
+
+    if hits:
+        tbl = rate_tables[hits[0]]
+        rows = tbl[table_code]
+        return pd.DataFrame(rows[1:], columns=rows[0]), note
+
     ngic = rate_tables.get("NGIC")
     if ngic and table_code in ngic:
         rows = ngic[table_code]
-        return pd.DataFrame(rows[1:], columns=rows[0])
+        return pd.DataFrame(rows[1:], columns=rows[0]), None
     cw = rate_tables.get("CW")
     if cw and table_code in cw:
         rows = cw[table_code]
-        return pd.DataFrame(rows[1:], columns=rows[0])
-    return None
+        return pd.DataFrame(rows[1:], columns=rows[0]), None
+    return None, None
 
 
 def classify_table(df: pd.DataFrame, class_codes: Dict[int, str]) -> Tuple[str, dict]:
@@ -269,7 +315,7 @@ def load_and_audit(
     detail_rows = []
 
     for table_code in ALL_PROGRAMS_TABLES:
-        df = build_nested_table(rate_tables, table_code)
+        df, nesting_note = build_nested_table(rate_tables, table_code)
         if df is None:
             summary_rows.append({
                 "Table": table_code,
@@ -284,18 +330,20 @@ def load_and_audit(
         classification, details = classify_table(df, class_codes)
 
         if classification == "NO_PROGRAM_DIMENSION":
+            note = "table has no (or only 1) Class_Code_Min value present — cannot test a per-program split"
             summary_rows.append({
                 "Table": table_code,
                 "Current code assumption": CURRENT_CODE_ASSUMPTION.get(table_code, ""),
                 "Finding": "NO_PROGRAM_DIMENSION",
                 "Programs": "",
                 "Missing programs": "",
-                "Notes": "table has no (or only 1) Class_Code_Min value present — cannot test a per-program split",
+                "Notes": f"{note}; {nesting_note}" if nesting_note else note,
             })
             continue
 
         groups_desc = " | ".join(", ".join(gp) for gp in details["group_programs"])
         missing_desc = ", ".join(class_codes[c] for c in details["missing_codes"])
+        note = RECOMMENDATION[classification]
 
         summary_rows.append({
             "Table": table_code,
@@ -303,7 +351,7 @@ def load_and_audit(
             "Finding": classification,
             "Programs": groups_desc,
             "Missing programs": missing_desc,
-            "Notes": RECOMMENDATION[classification],
+            "Notes": f"{note}; {nesting_note}" if nesting_note else note,
         })
 
         if classification in ("SPLIT_NOT_HAB", "MULTI_SPLIT"):

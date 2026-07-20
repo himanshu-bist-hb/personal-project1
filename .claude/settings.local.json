@@ -85,7 +85,8 @@
       "Bash(\"./venv/Scripts/python.exe\" -m py_compile app.py)",
       "Skill(claude-in-chrome)",
       "Bash(rm -f scratch_demo_NGIC_ratebook.xlsx)",
-      "PowerShell(Stop-Process *)"
+      "PowerShell(Stop-Process *)",
+      "Bash(\"./venv/Scripts/python.exe\" scratch_test_e2e.py)"
     ]
   }
 }

@@ -106,6 +106,14 @@ st.session_state.setdefault("bop_sel_all_store",   False)
 st.session_state.setdefault("bop_programs_store",  ["All Programs"])
 st.session_state.setdefault("bop_programs",        ["All Programs"])
 
+# All Programs consistency-check (audit_all_programs_split.py) — uses the
+# same uploaded ratebooks as rate-page generation above.
+st.session_state.setdefault("bop_audit_status",       "idle")   # idle | processing | success | error
+st.session_state.setdefault("bop_audit_msg",           "")
+st.session_state.setdefault("bop_audit_summary",       None)    # pd.DataFrame
+st.session_state.setdefault("bop_audit_detail",        None)    # pd.DataFrame
+st.session_state.setdefault("bop_audit_report_bytes",  None)
+
 # ─── Small Market session state ────────────────────────────────────────────
 st.session_state.setdefault("file_SM",          None)
 st.session_state.setdefault("file_ATA",         None)
@@ -2457,6 +2465,106 @@ elif active_lob == "Business Owners Policy":
 
         spacer(24)
         st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BOP Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
+
+    # ── All Programs Consistency Check ──────────────────────────────────────
+    # Checks every rating table printed under "All Programs" (see
+    # BOP/audit_all_programs_split.py) to confirm — straight from the
+    # uploaded ratebooks — whether the factors are really the same across
+    # all 7 BOP programs, only differ for Hab, or split further and belong
+    # in an individual program section instead. Uses the same ratebook
+    # uploads as "Create Rate Pages" above; only NGIC is required.
+    spacer(20)
+    st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"></div>', unsafe_allow_html=True)
+    spacer(10)
+    st.markdown('<div class="sec-label">&#128269; &nbsp;All Programs Consistency Check</div>', unsafe_allow_html=True)
+    st.markdown('<p class="f-hint">Confirms, from the uploaded ratebooks, whether each All Programs rating table really is the same across all 7 BOP programs (Hab, Auto, Food, Retail, Office, Service, Wholesale) &mdash; or whether it splits and belongs somewhere else in the manual.</p>', unsafe_allow_html=True)
+    spacer(6)
+
+    audit_ready = _bop_valid("NGIC")
+    ac1, _ac2 = st.columns([3, 9])
+    run_audit_clicked = False
+    with ac1:
+        if audit_ready:
+            st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+            run_audit_clicked = st.button("Run Consistency Check", key="bop_audit_btn", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+            st.button("Waiting — NGIC ratebook", key="bop_audit_btn_dis", use_container_width=True, disabled=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    if run_audit_clicked:
+        st.session_state.bop_audit_status = "processing"; st.rerun()
+
+    if st.session_state.bop_audit_status == "processing":
+        with st.spinner("Checking every All Programs rating table against the uploaded ratebooks..."):
+            from BOP.audit_all_programs_split import load_and_audit, to_excel_bytes
+            try:
+                def _rb_audit(k):
+                    f = st.session_state.get(f"bop_file_{k}")
+                    return io.BytesIO(f["bytes"]) if f and "error" not in f else None
+                summary_df, detail_df = load_and_audit(
+                    ngic=_rb_audit("NGIC"), naco=_rb_audit("NACO"), naff=_rb_audit("NAFF"),
+                    nicof=_rb_audit("NICOF"), hicnj=_rb_audit("HICNJ"), cw=_rb_audit("CW"),
+                )
+                st.session_state.bop_audit_summary = summary_df
+                st.session_state.bop_audit_detail = detail_df
+                st.session_state.bop_audit_report_bytes = to_excel_bytes(summary_df, detail_df)
+                st.session_state.bop_audit_status = "success"
+            except Exception as e:
+                import traceback; traceback.print_exc()
+                st.session_state.bop_audit_status = "error"; st.session_state.bop_audit_msg = str(e)
+        st.rerun()
+
+    if st.session_state.bop_audit_status == "success" and st.session_state.bop_audit_summary is not None:
+        summary_df = st.session_state.bop_audit_summary
+        spacer(10)
+
+        FINDING_COLORS = {
+            "SINGLE":               "#E6F4EA",
+            "HAB_SPLIT":            "#E6F0FA",
+            "SPLIT_NOT_HAB":        "#FFF4E0",
+            "MULTI_SPLIT":          "#FCE4E4",
+            "NO_PROGRAM_DIMENSION": "#F1F1F1",
+            "TABLE_NOT_FOUND":      "#F1F1F1",
+        }
+
+        def _row_style(row):
+            color = FINDING_COLORS.get(row["Finding"], "")
+            return [f"background-color: {color}"] * len(row)
+
+        counts = summary_df["Finding"].value_counts().to_dict()
+        def _badge(label, n, color):
+            return f'<span style="background:{color};border-radius:4px;padding:2px 8px;margin-right:6px;font-size:12px;">{label}: {n}</span>'
+        st.markdown(
+            _badge("Single", counts.get("SINGLE", 0), FINDING_COLORS["SINGLE"])
+            + _badge("Hab split", counts.get("HAB_SPLIT", 0), FINDING_COLORS["HAB_SPLIT"])
+            + _badge("Split, not Hab", counts.get("SPLIT_NOT_HAB", 0), FINDING_COLORS["SPLIT_NOT_HAB"])
+            + _badge("3+ way split", counts.get("MULTI_SPLIT", 0), FINDING_COLORS["MULTI_SPLIT"])
+            + _badge("No program data / not found",
+                     counts.get("NO_PROGRAM_DIMENSION", 0) + counts.get("TABLE_NOT_FOUND", 0),
+                     FINDING_COLORS["NO_PROGRAM_DIMENSION"]),
+            unsafe_allow_html=True,
+        )
+        spacer(6)
+
+        st.dataframe(summary_df.style.apply(_row_style, axis=1), use_container_width=True, hide_index=True)
+
+        needs_review = summary_df[summary_df["Finding"].isin(["SPLIT_NOT_HAB", "MULTI_SPLIT"])]
+        if not needs_review.empty:
+            detail_df = st.session_state.bop_audit_detail
+            with st.expander(f"⚠ {len(needs_review)} table(s) need a closer look — program groupings"):
+                st.dataframe(detail_df[detail_df["Table"].isin(needs_review["Table"])], use_container_width=True, hide_index=True)
+
+        spacer(8)
+        st.download_button(
+            "Download Full Report (.xlsx)",
+            data=st.session_state.bop_audit_report_bytes,
+            file_name="BOP All Programs Split Audit.xlsx",
+            key="bop_audit_download_btn",
+        )
+    elif st.session_state.bop_audit_status == "error":
+        spacer(10); st.error(f"Consistency check failed: {st.session_state.bop_audit_msg}")
 
 
 # ─── OTHER LOBs ───────────────────────────────────────────────────────────────

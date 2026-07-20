@@ -74,7 +74,18 @@
       "PowerShell($sp = \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\"; python -c \"import sys, time; sys.path.insert\\(0, r'C:\\\\Users\\\\Himanshu Bist\\\\OneDrive\\\\Desktop\\\\Projects\\\\BA-RatePages'\\); from BA.BApagebreaks import export_to_pdf; t0=time.perf_counter\\(\\); export_to_pdf\\(sys.argv[1], sys.argv[2]\\); print\\(f'TOTAL {time.perf_counter\\(\\)-t0:0.1f}s'\\)\" \"$sp\\\\ref_bop.xlsx\" \"$sp\\\\ref_bop_excel.pdf\")",
       "PowerShell($sp = \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\"; python \"$sp\\\\measure_ref.py\" \"$sp\\\\ref_bop_excel.pdf\" 12)",
       "PowerShell(python \"C:\\\\Users\\\\HIMANS~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages\\\\7f259240-8d66-44b6-a8ec-def681aca240\\\\scratchpad\\\\measure_ref2.py\")",
-      "Bash(tasklist //FI \"IMAGENAME eq EXCEL.EXE\")"
+      "Bash(tasklist //FI \"IMAGENAME eq EXCEL.EXE\")",
+      "Bash(grep -n \"BOP_RATEBOOK\\\\|RATEBOOK\\\\|network\\\\|M:\\\\\\\\\\\\\\\\\" \"/c/Users/Himanshu Bist/OneDrive/Desktop/Projects/BA-RatePages/config/constants.py\")",
+      "Bash(\"./venv/Scripts/python.exe\" -m py_compile BOP/audit_all_programs_split.py)",
+      "Bash(\"./venv/Scripts/python.exe\" scratch_make_test_ratebook.py)",
+      "Bash(\"./venv/Scripts/python.exe\" scratch_test_audit.py)",
+      "Bash(\"./venv/Scripts/python.exe\" -m BOP.audit_all_programs_split --ngic scratch_test_ratebook.xlsx --out scratch_audit_report.xlsx)",
+      "Bash(\"./venv/Scripts/python.exe\" scratch_test_audit2.py)",
+      "Bash(\"./venv/Scripts/python.exe\" -c \"import streamlit; print\\(streamlit.__version__\\)\")",
+      "Bash(\"./venv/Scripts/python.exe\" -m py_compile app.py)",
+      "Skill(claude-in-chrome)",
+      "Bash(rm -f scratch_demo_NGIC_ratebook.xlsx)",
+      "PowerShell(Stop-Process *)"
     ]
   }
 }

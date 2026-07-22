@@ -421,14 +421,14 @@ def load_and_audit(
     nicof=None,
     hicnj=None,
     cw=None,
-) -> Tuple[pd.DataFrame, pd.DataFrame]:
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Core entry point — accepts EITHER a file path string OR a file-like
     object (e.g. io.BytesIO from a Streamlit upload; load_ratebook already
     branches on hasattr(x, 'read')) for each ratebook, same calling
     convention BOPRatePages.run() uses. Only ngic is required.
 
-    Returns (summary_df, detail_df) — no file I/O, so this is safe to call
+    Returns (summary_df, detail_df, completeness_df) — no file I/O, so this is safe to call
     straight from a web UI as well as the CLI below.
     """
     cfg = load_bop_config()

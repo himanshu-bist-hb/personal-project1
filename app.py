@@ -101,7 +101,7 @@ st.session_state.setdefault("bop_version", "2.0")
 # widget state is dropped by Streamlit whenever a rerun happens before the
 # checkboxes render (e.g. clicking the Version toggle above them), so the
 # checkboxes are re-seeded from these mirrors every run.
-BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril"]
+BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service"]
 st.session_state.setdefault("bop_sel_all_store",   False)
 st.session_state.setdefault("bop_programs_store",  ["All Programs"])
 st.session_state.setdefault("bop_programs",        ["All Programs"])
@@ -2222,7 +2222,7 @@ elif active_lob == "Business Owners Policy":
     # Every checked program is built in ONE run (the ratebooks are opened and
     # extracted once), each saved as its own xlsx.
     st.markdown('<div class="sec-label">&#128218; &nbsp;Programs to Build</div>', unsafe_allow_html=True)
-    sel_cols = st.columns([2, 2, 2, 6])
+    sel_cols = st.columns([2] * (len(BOP_AVAILABLE_PROGRAMS) + 1) + [6])
     with sel_cols[0]:
         sel_all = st.checkbox("Select all", key="bop_prog_select_all",
                               value=st.session_state.bop_sel_all_store,
@@ -2248,7 +2248,7 @@ elif active_lob == "Business Owners Policy":
 
     with L:
         st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
-        st.markdown('<p class="f-hint"><b>All Programs</b> and <b>All Peril</b> pages are available today &mdash; the other BOP programs are coming soon.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint"><b>All Programs</b>, <b>All Peril</b>, <b>Hab</b> and <b>Auto Service</b> pages are available today &mdash; the other individual programs are coming soon.</p>', unsafe_allow_html=True)
         spacer(4)
 
         uploaded = st.file_uploader(
@@ -2310,6 +2310,13 @@ elif active_lob == "Business Owners Policy":
         BOP_PROGRAMS = [
             ("All Programs",         True,  "Available"),
             ("All Peril",            True,  "Available"),
+            ("Hab",                  True,  "Available"),
+            ("Auto Service",         True,  "Available"),
+            ("Food Service",         False, "Coming soon"),
+            ("Office",               False, "Coming soon"),
+            ("Retail",               False, "Coming soon"),
+            ("Service",              False, "Coming soon"),
+            ("Wholesale",            False, "Coming soon"),
             ("Class",                False, "Coming soon"),
             ("Rating Plans",         False, "Coming soon"),
             ("Common Rules",         False, "Coming soon"),

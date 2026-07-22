@@ -23,6 +23,10 @@ from . import AllPerilPage
 from . import AllPerilPageCurrent
 from . import AllProgramsPage
 from . import AllProgramsPageCurrent
+from . import HabPage
+from . import HabPageCurrent
+from . import AutoServicePage
+from . import AutoServicePageCurrent
 from .bop_config import load_bop_config
 from .BOPpagebreaks import process_pagebreaks, export_to_pdf
 
@@ -34,7 +38,12 @@ VALID_VERSIONS = ("2.0", "pre2.0")
 # "All Programs" -> AllProgramsPage / AllProgramsPageCurrent (by-peril tables)
 # "All Peril"    -> AllPerilPage / AllPerilPageCurrent (by-program tables,
 #   "allperil" peril only; never needs the Territory Definitions workbook)
-VALID_PROGRAMS = ("All Programs", "All Peril")
+# "Hab" / "Auto Service" -> the individual program pages. Like All Peril,
+#   neither ever needs the Territory Definitions workbook — 2.0 versions
+#   don't print a Territory Multiplier table at all (dropped when the
+#   All Programs Territory page took over); pre2.0 versions build theirs
+#   straight from each ratebook's own BP7_Peril_TerritorialFactor table.
+VALID_PROGRAMS = ("All Programs", "All Peril", "Hab", "Auto Service")
 
 
 def load_territory_defs(state_abb: str) -> pd.DataFrame:
@@ -178,6 +187,20 @@ def run(
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildAllPerilPage(progress_callback=cb)
+        elif prog == "Hab":
+            hab_cls = HabPage.Hab if version == "2.0" else HabPageCurrent.Hab
+            rate_pages_obj = hab_cls(
+                info.state_abb, rate_tables, perils, cfg.peril_conversions,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildHabPage(progress_callback=cb)
+        elif prog == "Auto Service":
+            auto_cls = AutoServicePage.Auto if version == "2.0" else AutoServicePageCurrent.Auto
+            rate_pages_obj = auto_cls(
+                info.state_abb, rate_tables, perils, cfg.peril_conversions,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildAutoPage(progress_callback=cb)
         elif version == "2.0":
             rate_pages_obj = AllProgramsPage.AllPrograms(
                 info.state_abb, rate_tables, perils,

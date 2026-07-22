@@ -163,6 +163,39 @@ def build():
         # Pre-2.0 All Peril: WH percentage sheets have one index column.
         ["WHPBG_AP_CURRENT", 1, 1, 159], ["WHPBG_AP_CURRENT", 2, "REST", 80],
         ["WHPPP_AP_CURRENT", 1, 1, 159], ["WHPPP_AP_CURRENT", 2, "REST", 80],
+        # Individual Programs (Hab, Auto Service) — transcribed from the
+        # root-level HabPage*.py / AutoServicePage*.py format*() methods.
+        # HAB_BR / AS_BR / HAB_LA / PROGRAM_TR are shared layout_key profiles
+        # (passed explicitly since each program's per-company base-rate tabs
+        # use tab codes like BRNACO that vary by company); the rest reuse
+        # their bare tab code as usual since it's shared across both
+        # programs (and future Food/Retail/Office/Service/Wholesale ports).
+        ["HAB_BR", 1, 1, 82], ["HAB_BR", 2, "REST", 120],
+        ["HAB_LA", 1, 1, 150],
+        ["AS_BR", 1, 1, 82], ["AS_BR", 2, "REST", 159],
+        ["PROGRAM_TR", 1, 1, 70], ["PROGRAM_TR", 2, "REST", 54],
+        ["CBG", 1, 1, 138], ["CBG", 2, "REST", 53],
+        ["CPP", 1, 1, 138], ["CPP", 2, "REST", 53],
+        ["YBBG", 1, 1, 131], ["YBBG", 2, "REST", 53],
+        ["YBPP", 1, 1, 131], ["YBPP", 2, "REST", 53],
+        ["NS", 1, 1, 145],
+        ["PDLD", 1, 1, 187], ["PDLD", 2, 2, 54],
+        ["LL", 1, 1, 205], ["LL", 2, 2, 54],
+        ["DO", 1, 1, 130], ["DO", 4, 4, 140],
+        ["DONM", 1, 1, 225],
+        ["ERP", 2, 2, 215],
+        ["PLUS", 1, 1, 350],
+        ["TO", 1, 1, 82], ["TO", 2, "REST", 80],
+        ["CW", 1, 1, 124], ["CW", 2, 2, 54],
+        ["LS", 1, 2, 95], ["LS", 3, "REST", 120],
+        # Pre-2.0 Auto Service's Liability Size of Risk splits by AutoServType
+        # (2 columns) instead of by peril, giving its data columns more room.
+        ["LS_CURRENT", 1, 2, 95], ["LS_CURRENT", 3, "REST", 195],
+        ["LPGE", 1, 1, 205], ["LPGE", 2, 2, 200],
+        ["AIGO", 1, 1, 480],
+        ["BGL", 1, 1, 100],
+        ["SPD", 1, 1, 90], ["SPD", 2, 2, 54],
+        ["FR", 1, 1, 145], ["FR", 2, 2, 100],
     ])
 
     # =======================================================================
@@ -202,6 +235,26 @@ def build():
         ["BABI_AP", 1, 1, 4, "NoDecimal"],
         ["AIBG_AP", 1, 2, 5, "NoDecimal"],
         ["AIPP_AP", 1, 2, 5, "NoDecimal"],
+        # Individual Programs (Hab, Auto Service) — see the Table Layout note.
+        ["HAB_BR", 2, "REST", 4, "#,##0.0000"],
+        ["HAB_LA", 2, 2, 4, "#,##0.000"],
+        ["AS_BR", 2, "REST", 4, "#,##0.0000"],
+        ["YBBG", 1, 1, 4, "###0"],
+        ["YBPP", 1, 1, 4, "###0"],
+        ["EBB", 1, 1, 4, "$#,##0.00"],
+        ["PDLD", 1, 1, 4, "NoDecimal"],
+        ["LL", 1, 1, 4, "NoDecimal"],
+        ["DO", 2, 2, 4, "NoDecimal"],
+        ["DO", 3, 4, 4, "$#,##0.00"],
+        ["DONM", 1, 1, 4, "NoDecimal"],
+        ["DONM", 2, 2, 4, "$#,##0.00"],
+        ["PLUS", 1, 1, 4, "$#,##0.00"],
+        ["LS", 1, 2, 5, "NoDecimal"],
+        ["LS_CURRENT", 1, 2, 5, "NoDecimal"],
+        ["LPGE", 1, 1, 4, "NoDecimal"],
+        ["LPGE", 2, 2, 4, "Currency"],
+        ["SPD", 1, 1, 4, "Currency"],
+        ["FR", 2, 2, 4, "$#,##0.00"],
     ])
 
     # =======================================================================
@@ -228,6 +281,10 @@ def build():
         ["AIBG_AP", 3, "1:4", "A:B", "Building Limit", "C:REST", ""],
         ["AIPP_AP", 3, "1:4", "A:B", "Building Limit", "C:REST", ""],
         ["BCEG_AP_SINGLE", 3, "1:4", "B:REST", "Entire State", "", ""],
+        # Individual Programs (Hab, Auto Service) — Liability Size of Risk's
+        # "Receipts Range" label spanning the Min/Max columns.
+        ["LS", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
+        ["LS_CURRENT", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
     ])
 
     # =======================================================================

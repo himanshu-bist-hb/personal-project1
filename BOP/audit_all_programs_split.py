@@ -29,6 +29,19 @@ waterfall — same idea as AllProgramsPage.AllPrograms.buildDataFrame, with
 one deliberate difference: see LOWER_LEVEL_COMPANIES below for why HICNJ is
 included here even though production's buildDataFrame currently skips it.
 
+Every one of these tables carries a "Peril TypeCode" column (allother1,
+cat1-4, fire1-4, ... plus a rollup value "allperil" — see the "bop checking
+logic.jpeg" screenshot). Production's AllProgramsPage.py always filters
+`Peril TypeCode` != "allperil" before sampling one Class_Code_Min and
+assuming the result holds for every program — "allperil" rows are a
+separate rollup consumed by the All Peril program page, and their factors
+legitimately vary by Class_Code_Min for reasons that have nothing to do
+with per-program consistency. So the check below is done PER Peril
+TypeCode value, with "allperil" rows dropped before comparing: a single
+peril that genuinely differs by program is flagged on its own, instead of
+dragging every other (perfectly consistent) peril in the same table down
+to a false split.
+
 USAGE
 -----
     python -m BOP.audit_all_programs_split --ngic "NGIC ratebook.xlsx" ^
@@ -43,15 +56,17 @@ production exactly — a table only found in a lower-level company file
 OUTPUT
 ------
 An Excel workbook with two sheets:
-  - "Summary" — one row per raw table: what the code currently assumes,
+  - "Summary" — one row per (raw table, Peril TypeCode) found in that table
+    (allperil rows excluded — see above): what the code currently assumes,
     what the data actually shows (SINGLE / HAB_SPLIT / SPLIT_NOT_HAB /
-    MULTI_SPLIT / NO_PROGRAM_DIMENSION / TABLE_NOT_FOUND), which programs
-    cluster together, and a recommendation.
-  - "Detail" — for every table that split 2-way-but-not-on-Hab or 3+ ways,
-    which Class_Code_Min values ended up in which group.
+    MULTI_SPLIT / NO_PROGRAM_DIMENSION / ALLPERIL_ONLY / TABLE_NOT_FOUND),
+    which programs cluster together, and a recommendation.
+  - "Detail" — for every (table, peril) that split 2-way-but-not-on-Hab or
+    3+ ways, which Class_Code_Min values ended up in which group.
 
 Classification meanings:
-  SINGLE              every program's rows are identical -> keep one section
+  SINGLE              every program's rows are identical for this peril ->
+                       keep in one All Programs section
   HAB_SPLIT           exactly two groups, one of them is Hab alone -> the
                        Hab / non-Hab split the code already uses elsewhere
                        is correct here too
@@ -62,6 +77,9 @@ Classification meanings:
                        individual program section(s), not All Programs
   NO_PROGRAM_DIMENSION table has no (or only one) Class_Code_Min value
                        present, so a split can't be tested either way
+  ALLPERIL_ONLY       every row for this table was the "allperil" rollup —
+                       nothing left to compare once it's excluded; this
+                       table belongs to the All Peril program page instead
   TABLE_NOT_FOUND     not present in any of the ratebooks supplied
 """
 
@@ -157,6 +175,27 @@ HAB_CODE = 10000
 VALUE_COL_MARKERS = ("factor", "modifier")
 FLOAT_ROUND = 6  # tolerance for comparing factor values across programs
 
+# The peril-breakdown column every one of these tables carries (see the
+# screenshot in "bop checking logic.jpeg"). "allperil" is a rollup row, not
+# an individual peril -- AllProgramsPage.py itself always excludes it
+# (`Peril TypeCode` != "allperil") before sampling one Class_Code_Min and
+# assuming the result is the same for every program. Lumping "allperil" rows
+# into the same comparison as the individual perils is what was causing
+# every table to come back as a false MULTI_SPLIT: allperil's factors
+# legitimately vary by Class_Code_Min for reasons unrelated to per-program
+# consistency, so they must never be compared program-to-program here.
+PERIL_COL = "Peril TypeCode"
+ALLPERIL_VALUE = "allperil"
+
+# Columns that identify WHICH Class_Code_Min band a row belongs to rather
+# than an independent rating key -- Class_Code_Max is always Class_Code_Min
+# + 9999 for these tables (e.g. 10000/19999 = Hab, 20000/29999 = Auto; see
+# the screenshot), so it is mechanically different for every program by
+# construction. Leaving it in the comparison "key" columns meant no two
+# programs' rows could ever compare equal, which alone was enough to make
+# every table come back split regardless of the allperil issue above.
+CODE_RANGE_COLS = ("Class_Code_Min", "Class_Code_Max")
+
 
 def _is_value_column(col: str) -> bool:
     lc = str(col).lower()
@@ -207,8 +246,13 @@ def build_nested_table(
     return None, None
 
 
-def classify_table(df: pd.DataFrame, class_codes: Dict[int, str]) -> Tuple[str, dict]:
+def classify_group(df: pd.DataFrame, class_codes: Dict[int, str]) -> Tuple[str, dict]:
     """
+    Classifies ONE peril group (all rows already narrowed to a single
+    Peril TypeCode value, with that column dropped -- or the whole table,
+    for the rare table that has no Peril TypeCode column at all) across
+    Class_Code_Min (== program).
+
     Returns (classification, details).
     classification is one of: NO_PROGRAM_DIMENSION, SINGLE, HAB_SPLIT,
     SPLIT_NOT_HAB, MULTI_SPLIT.
@@ -220,7 +264,7 @@ def classify_table(df: pd.DataFrame, class_codes: Dict[int, str]) -> Tuple[str, 
         return "NO_PROGRAM_DIMENSION", {}
 
     value_cols = [c for c in df.columns if _is_value_column(c)]
-    key_cols = [c for c in df.columns if c != "Class_Code_Min" and c not in value_cols]
+    key_cols = [c for c in df.columns if c not in CODE_RANGE_COLS and c not in value_cols]
 
     df = df.copy()
     df["Class_Code_Min"] = pd.to_numeric(df["Class_Code_Min"], errors="coerce")
@@ -273,11 +317,49 @@ def classify_table(df: pd.DataFrame, class_codes: Dict[int, str]) -> Tuple[str, 
     return classification, details
 
 
+def classify_table(df: pd.DataFrame, class_codes: Dict[int, str]) -> List[dict]:
+    """
+    Splits df by Peril TypeCode (dropping "allperil" rows entirely -- see
+    the PERIL_COL comment above) and classifies each peril's rows
+    independently across Class_Code_Min. This is the key fix: comparing one
+    combined blob per table meant a single peril that genuinely differs by
+    program (or the ever-present "allperil" rollup rows) dragged the WHOLE
+    table down to a false MULTI_SPLIT, even when every other peril in that
+    table was perfectly consistent across programs.
+
+    Returns a list of {"peril": <value or None>, "classification": ...,
+    "details": ...} dicts, one per Peril TypeCode value found (or a single
+    entry with peril=None if the table has no Peril TypeCode column, or
+    peril="(allperil only)" if every row was "allperil" and there is
+    nothing else to check).
+    """
+    if "Class_Code_Min" not in df.columns:
+        return [{"peril": None, "classification": "NO_PROGRAM_DIMENSION", "details": {}}]
+
+    if PERIL_COL not in df.columns:
+        classification, details = classify_group(df, class_codes)
+        return [{"peril": None, "classification": classification, "details": details}]
+
+    non_allperil = df[df[PERIL_COL].astype(str).str.strip().str.lower() != ALLPERIL_VALUE]
+    peril_values = sorted(non_allperil[PERIL_COL].dropna().unique().tolist(), key=str)
+
+    if not peril_values:
+        return [{"peril": "(allperil only)", "classification": "ALLPERIL_ONLY", "details": {}}]
+
+    results = []
+    for peril in peril_values:
+        sub = non_allperil[non_allperil[PERIL_COL] == peril].drop(columns=[PERIL_COL])
+        classification, details = classify_group(sub, class_codes)
+        results.append({"peril": peril, "classification": classification, "details": details})
+    return results
+
+
 RECOMMENDATION = {
     "SINGLE": "keep as one All Programs section",
     "HAB_SPLIT": "split into Hab / non-Hab sections",
     "SPLIT_NOT_HAB": "2-way split found but NOT along the Hab boundary — review before splitting",
     "MULTI_SPLIT": "3+ distinct factor patterns — move to individual program section(s), not All Programs",
+    "ALLPERIL_ONLY": "every row is the \"allperil\" rollup — belongs to the All Peril program page, not the per-program All Programs check",
 }
 
 
@@ -319,6 +401,7 @@ def load_and_audit(
         if df is None:
             summary_rows.append({
                 "Table": table_code,
+                "Peril TypeCode": "",
                 "Current code assumption": CURRENT_CODE_ASSUMPTION.get(table_code, ""),
                 "Finding": "TABLE_NOT_FOUND",
                 "Programs": "",
@@ -327,40 +410,59 @@ def load_and_audit(
             })
             continue
 
-        classification, details = classify_table(df, class_codes)
+        for result in classify_table(df, class_codes):
+            peril = result["peril"]
+            classification = result["classification"]
+            details = result["details"]
+            peril_label = "" if peril is None else str(peril)
 
-        if classification == "NO_PROGRAM_DIMENSION":
-            note = "table has no (or only 1) Class_Code_Min value present — cannot test a per-program split"
+            if classification == "NO_PROGRAM_DIMENSION":
+                note = "no (or only 1) Class_Code_Min value present — cannot test a per-program split"
+                summary_rows.append({
+                    "Table": table_code,
+                    "Peril TypeCode": peril_label,
+                    "Current code assumption": CURRENT_CODE_ASSUMPTION.get(table_code, ""),
+                    "Finding": "NO_PROGRAM_DIMENSION",
+                    "Programs": "",
+                    "Missing programs": "",
+                    "Notes": f"{note}; {nesting_note}" if nesting_note else note,
+                })
+                continue
+
+            if classification == "ALLPERIL_ONLY":
+                summary_rows.append({
+                    "Table": table_code,
+                    "Peril TypeCode": peril_label,
+                    "Current code assumption": CURRENT_CODE_ASSUMPTION.get(table_code, ""),
+                    "Finding": "ALLPERIL_ONLY",
+                    "Programs": "",
+                    "Missing programs": "",
+                    "Notes": RECOMMENDATION["ALLPERIL_ONLY"],
+                })
+                continue
+
+            groups_desc = " | ".join(", ".join(gp) for gp in details["group_programs"])
+            missing_desc = ", ".join(class_codes[c] for c in details["missing_codes"])
+            note = RECOMMENDATION[classification]
+
             summary_rows.append({
                 "Table": table_code,
+                "Peril TypeCode": peril_label,
                 "Current code assumption": CURRENT_CODE_ASSUMPTION.get(table_code, ""),
-                "Finding": "NO_PROGRAM_DIMENSION",
-                "Programs": "",
-                "Missing programs": "",
+                "Finding": classification,
+                "Programs": groups_desc,
+                "Missing programs": missing_desc,
                 "Notes": f"{note}; {nesting_note}" if nesting_note else note,
             })
-            continue
 
-        groups_desc = " | ".join(", ".join(gp) for gp in details["group_programs"])
-        missing_desc = ", ".join(class_codes[c] for c in details["missing_codes"])
-        note = RECOMMENDATION[classification]
-
-        summary_rows.append({
-            "Table": table_code,
-            "Current code assumption": CURRENT_CODE_ASSUMPTION.get(table_code, ""),
-            "Finding": classification,
-            "Programs": groups_desc,
-            "Missing programs": missing_desc,
-            "Notes": f"{note}; {nesting_note}" if nesting_note else note,
-        })
-
-        if classification in ("SPLIT_NOT_HAB", "MULTI_SPLIT"):
-            for g, gp in zip(details["groups"], details["group_programs"]):
-                detail_rows.append({
-                    "Table": table_code,
-                    "Program group": ", ".join(gp),
-                    "Class_Code_Min values": ", ".join(str(c) for c in g),
-                })
+            if classification in ("SPLIT_NOT_HAB", "MULTI_SPLIT"):
+                for g, gp in zip(details["groups"], details["group_programs"]):
+                    detail_rows.append({
+                        "Table": table_code,
+                        "Peril TypeCode": peril_label,
+                        "Program group": ", ".join(gp),
+                        "Class_Code_Min values": ", ".join(str(c) for c in g),
+                    })
 
     return pd.DataFrame(summary_rows), pd.DataFrame(detail_rows)
 

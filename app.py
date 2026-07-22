@@ -112,6 +112,7 @@ st.session_state.setdefault("bop_audit_status",       "idle")   # idle | process
 st.session_state.setdefault("bop_audit_msg",           "")
 st.session_state.setdefault("bop_audit_summary",       None)    # pd.DataFrame
 st.session_state.setdefault("bop_audit_detail",        None)    # pd.DataFrame
+st.session_state.setdefault("bop_audit_completeness",  None)    # pd.DataFrame
 st.session_state.setdefault("bop_audit_report_bytes",  None)
 
 # ─── Small Market session state ────────────────────────────────────────────
@@ -2503,13 +2504,14 @@ elif active_lob == "Business Owners Policy":
                 def _rb_audit(k):
                     f = st.session_state.get(f"bop_file_{k}")
                     return io.BytesIO(f["bytes"]) if f and "error" not in f else None
-                summary_df, detail_df = load_and_audit(
+                summary_df, detail_df, completeness_df = load_and_audit(
                     ngic=_rb_audit("NGIC"), naco=_rb_audit("NACO"), naff=_rb_audit("NAFF"),
                     nicof=_rb_audit("NICOF"), hicnj=_rb_audit("HICNJ"), cw=_rb_audit("CW"),
                 )
                 st.session_state.bop_audit_summary = summary_df
                 st.session_state.bop_audit_detail = detail_df
-                st.session_state.bop_audit_report_bytes = to_excel_bytes(summary_df, detail_df)
+                st.session_state.bop_audit_completeness = completeness_df
+                st.session_state.bop_audit_report_bytes = to_excel_bytes(summary_df, detail_df, completeness_df)
                 st.session_state.bop_audit_status = "success"
             except Exception as e:
                 import traceback; traceback.print_exc()
@@ -2555,6 +2557,20 @@ elif active_lob == "Business Owners Policy":
             detail_df = st.session_state.bop_audit_detail
             with st.expander(f"⚠ {len(needs_review)} table(s) need a closer look — program groupings"):
                 st.dataframe(detail_df[detail_df["Table"].isin(needs_review["Table"])], use_container_width=True, hide_index=True)
+
+        completeness_df = st.session_state.get("bop_audit_completeness")
+        if completeness_df is not None and not completeness_df.empty:
+            missing_df = completeness_df[completeness_df["Flag"] == "MISSING"]
+            spacer(10)
+            st.markdown('<div class="sec-label">Class Code Completeness &mdash; every Peril TypeCode (except allperil) checked against all 7 program bands</div>', unsafe_allow_html=True)
+            if missing_df.empty:
+                st.success("Every Peril TypeCode has a row for all 7 programs (Hab, Auto, Food, Retail, Office, Service, Wholesale) in every table checked.")
+            else:
+                st.error(f"{len(missing_df)} (table, Peril TypeCode) pair(s) are missing at least one program's Class_Code_Min band:")
+                st.dataframe(
+                    missing_df.style.apply(lambda row: ["background-color: #FCE4E4"] * len(row), axis=1),
+                    use_container_width=True, hide_index=True,
+                )
 
         spacer(8)
         st.download_button(

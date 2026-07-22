@@ -55,7 +55,7 @@ production exactly — a table only found in a lower-level company file
 
 OUTPUT
 ------
-An Excel workbook with two sheets:
+An Excel workbook with three sheets:
   - "Summary" — one row per (raw table, Peril TypeCode) found in that table
     (allperil rows excluded — see above): what the code currently assumes,
     what the data actually shows (SINGLE / HAB_SPLIT / SPLIT_NOT_HAB /
@@ -63,6 +63,15 @@ An Excel workbook with two sheets:
     which programs cluster together, and a recommendation.
   - "Detail" — for every (table, peril) that split 2-way-but-not-on-Hab or
     3+ ways, which Class_Code_Min values ended up in which group.
+  - "Class Code Completeness" — one row per (raw table, Peril TypeCode)
+    found (allperil excluded): which of the 7 program Class_Code_Min bands
+    (10000-80000, i.e. Hab/Auto/Food/Retail/Office/Service/Wholesale — see
+    the "bop check logic2.jpeg" screenshot) that peril actually has a row
+    for, which it's missing, and a MISSING flag. This is a structural
+    presence check, independent of the value-comparison Summary/Detail
+    sheets above -- it catches a peril appearing for only 1-2 programs,
+    which the Summary sheet can only report as NO_PROGRAM_DIMENSION
+    ("cannot test a split") without saying which programs are absent.
 
 Classification meanings:
   SINGLE              every program's rows are identical for this peril ->
@@ -354,6 +363,48 @@ def classify_table(df: pd.DataFrame, class_codes: Dict[int, str]) -> List[dict]:
     return results
 
 
+def check_class_code_completeness(df: pd.DataFrame, class_codes: Dict[int, str]) -> List[dict]:
+    """
+    Structural coverage check, separate from classify_table/classify_group
+    above: for every Peril TypeCode value in df OTHER THAN "allperil" (see
+    the screenshot "bop check logic2.jpeg" -- Class_Code_Min bands 10000
+    through 80000, one per program), does that peril have a row for EVERY
+    program's Class_Code_Min band, or is it missing one or more?
+
+    This deliberately does NOT compare factor values across programs (that
+    is what classify_group/classify_table do). It only asks "does this
+    peril show up for every program at all" -- which classify_group cannot
+    answer once a peril has 0 or 1 Class_Code_Min present, since it bails
+    out early with NO_PROGRAM_DIMENSION ("cannot test a per-program split")
+    instead of flagging the gap. A peril present for only one or two
+    programs out of seven is exactly the case that early return was
+    silently hiding.
+
+    Returns a list of {"peril": str, "present": [program names...],
+    "missing": [program names...]} dicts, one per non-allperil Peril
+    TypeCode found in df. "missing" is empty when that peril covers every
+    expected program (Hab/Auto/Food/Retail/Office/Service/Wholesale).
+    """
+    if PERIL_COL not in df.columns or "Class_Code_Min" not in df.columns:
+        return []
+
+    d = df.copy()
+    d["Class_Code_Min"] = pd.to_numeric(d["Class_Code_Min"], errors="coerce")
+    non_allperil = d[d[PERIL_COL].astype(str).str.strip().str.lower() != ALLPERIL_VALUE]
+
+    results = []
+    for peril in sorted(non_allperil[PERIL_COL].dropna().unique().tolist(), key=str):
+        codes_here = non_allperil.loc[non_allperil[PERIL_COL] == peril, "Class_Code_Min"].dropna()
+        present_codes = sorted(int(c) for c in codes_here.unique().tolist() if int(c) in class_codes)
+        missing_codes = sorted(set(class_codes.keys()) - set(present_codes))
+        results.append({
+            "peril": str(peril),
+            "present": [class_codes[c] for c in present_codes],
+            "missing": [class_codes[c] for c in missing_codes],
+        })
+    return results
+
+
 RECOMMENDATION = {
     "SINGLE": "keep as one All Programs section",
     "HAB_SPLIT": "split into Hab / non-Hab sections",
@@ -395,6 +446,7 @@ def load_and_audit(
 
     summary_rows = []
     detail_rows = []
+    completeness_rows = []
 
     for table_code in ALL_PROGRAMS_TABLES:
         df, nesting_note = build_nested_table(rate_tables, table_code)
@@ -409,6 +461,15 @@ def load_and_audit(
                 "Notes": "not present in any provided ratebook",
             })
             continue
+
+        for c in check_class_code_completeness(df, class_codes):
+            completeness_rows.append({
+                "Table": table_code,
+                "Peril TypeCode": c["peril"],
+                "Present programs": ", ".join(c["present"]),
+                "Missing programs": ", ".join(c["missing"]),
+                "Flag": "MISSING" if c["missing"] else "",
+            })
 
         for result in classify_table(df, class_codes):
             peril = result["peril"]
@@ -464,17 +525,19 @@ def load_and_audit(
                         "Class_Code_Min values": ", ".join(str(c) for c in g),
                     })
 
-    return pd.DataFrame(summary_rows), pd.DataFrame(detail_rows)
+    return pd.DataFrame(summary_rows), pd.DataFrame(detail_rows), pd.DataFrame(completeness_rows)
 
 
-def to_excel_bytes(summary_df: pd.DataFrame, detail_df: pd.DataFrame) -> bytes:
-    """Render (summary_df, detail_df) as a two-sheet .xlsx in memory —
-    used by both the CLI (writes to disk) and the Streamlit UI (offers a
-    download button without touching the filesystem)."""
+def to_excel_bytes(summary_df: pd.DataFrame, detail_df: pd.DataFrame, completeness_df: pd.DataFrame) -> bytes:
+    """Render (summary_df, detail_df, completeness_df) as a three-sheet
+    .xlsx in memory — used by both the CLI (writes to disk) and the
+    Streamlit UI (offers a download button without touching the
+    filesystem)."""
     buf = io.BytesIO()
     with pd.ExcelWriter(buf, engine="openpyxl") as writer:
         summary_df.to_excel(writer, sheet_name="Summary", index=False)
         detail_df.to_excel(writer, sheet_name="Detail", index=False)
+        completeness_df.to_excel(writer, sheet_name="Class Code Completeness", index=False)
     return buf.getvalue()
 
 
@@ -489,14 +552,22 @@ def run_audit(
 ) -> pd.DataFrame:
     """CLI wrapper — same as load_and_audit but also prints a text summary
     and saves the Excel report to out_path."""
-    summary_df, detail_df = load_and_audit(ngic, naco, naff, nicof, hicnj, cw)
+    summary_df, detail_df, completeness_df = load_and_audit(ngic, naco, naff, nicof, hicnj, cw)
 
     with open(out_path, "wb") as f:
-        f.write(to_excel_bytes(summary_df, detail_df))
+        f.write(to_excel_bytes(summary_df, detail_df, completeness_df))
 
     pd.set_option("display.max_columns", None)
     pd.options.display.width = None
     print(summary_df.to_string(index=False))
+
+    flagged = completeness_df[completeness_df["Flag"] == "MISSING"] if not completeness_df.empty else completeness_df
+    if flagged is not None and not flagged.empty:
+        print("\nClass Code Completeness — MISSING programs found:")
+        print(flagged.to_string(index=False))
+    else:
+        print("\nClass Code Completeness — no missing programs found for any peril.")
+
     print(f"\nSaved: {out_path}")
     return summary_df
 

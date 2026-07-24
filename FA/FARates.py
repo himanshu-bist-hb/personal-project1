@@ -399,12 +399,30 @@ class Auto(_BABase):
                 )
         return pivot
 
+    @staticmethod
+    def _normalize_223c2_text(value):
+        # Collapses the line-wrap newlines and en/em dashes used in the "Secondary
+        # Class" display text so it can be compared against the ratebook's plain,
+        # single-line "Farmers Use" text.
+        text = "" if value is None else str(value)
+        if text.lower() == "nan":
+            text = ""
+        text = text.replace("\n", " ").replace("–", "-").replace("—", "-")
+        return " ".join(text.split())
+
     def buildFARule223c2(self, company):
         # FA Rule 223.C.2 — TruckSecondaryClassFactorFarm_Ext
         # Logic:
         #   Truck Is A Trailer = No  → Liability, Other Than Collision, Collision columns
         #   Truck Is A Trailer = Yes, Coverage Type = Collision → Trailers Collision column
         # Secondary Class display text and Primary Class grouping come from the "FA Rule223" sheet in BA Input File.xlsx.
+        #
+        # Matching: the ratebook's "Secondary Class Numeric" always has to match the
+        # mapping's Class Code. If the ratebook row's "Farmers Use" is "Not Applicable",
+        # that's the only match needed (one ratebook row per class code). Otherwise
+        # (Farmers class codes 61/62/69, which have several ratebook rows per class
+        # code) the ratebook's "Farmers Use" must also match the mapping's
+        # "Secondary Class" text.
         _COLS = [
             "Primary Class", "Secondary Class",
             "4th-5th Digits of\nClass Code",
@@ -418,6 +436,8 @@ class Auto(_BABase):
             return _EMPTY
 
         mapping["Class Code"] = mapping["Class Code"].astype(str).str.strip().str.zfill(2)
+        mapping["Secondary Class Match"] = mapping["Secondary Class"].apply(self._normalize_223c2_text)
+        mapping["Farmers Use"] = mapping["Farmers Use"].apply(self._normalize_223c2_text)
 
         raw = self.rateTables[company].get("TruckSecondaryClassFactorFarm_Ext")
         if raw is None:
@@ -431,14 +451,20 @@ class Auto(_BABase):
         ).apply(lambda v: str(int(v)).zfill(2) if pd.notna(v) else "")
         df["Truck Is A Trailer"] = df["Truck Is A Trailer"].fillna("").astype(str).str.strip().str.upper()
         df["Coverage Type"]      = df["Coverage Type"].fillna("").astype(str).str.strip()
+        df["Farmers Use"]        = df["Farmers Use"].apply(self._normalize_223c2_text)
         df["Factor"]             = pd.to_numeric(df["Factor"], errors="coerce")
 
-        def _factor(code, trailer, coverage):
-            sub = df[
+        def _factor(code, trailer, coverage, secondary_class_match):
+            mask = (
                 (df["Secondary Class Numeric"] == code) &
                 (df["Truck Is A Trailer"] == trailer) &
                 (df["Coverage Type"] == coverage)
-            ]
+            )
+            if secondary_class_match is None:
+                mask &= (df["Farmers Use"] == "Not Applicable")
+            else:
+                mask &= (df["Farmers Use"] == secondary_class_match)
+            sub = df[mask]
             return sub["Factor"].iloc[0] if not sub.empty else None
 
         fmt = lambda v: f"{v:.3f}" if v is not None and pd.notna(v) else ""
@@ -446,14 +472,15 @@ class Auto(_BABase):
         rows = []
         for _, m in mapping.iterrows():
             code = m["Class Code"]
+            secondary_class_match = None if m["Farmers Use"] == "Not Applicable" else m["Secondary Class Match"]
             rows.append({
                 "Primary Class":              m["Primary Class"],
                 "Secondary Class":            m["Secondary Class"],
                 "4th-5th Digits of\nClass Code": code,
-                "Liability":                  fmt(_factor(code, "NO",  "Liability")),
-                "OTC":                        fmt(_factor(code, "NO",  "Other Than Collision")),
-                "Collision":                  fmt(_factor(code, "NO",  "Collision")),
-                "Trailers\nCollision":        fmt(_factor(code, "YES", "Collision")),
+                "Liability":                  fmt(_factor(code, "NO",  "Liability", secondary_class_match)),
+                "OTC":                        fmt(_factor(code, "NO",  "Other Than Collision", secondary_class_match)),
+                "Collision":                  fmt(_factor(code, "NO",  "Collision", secondary_class_match)),
+                "Trailers\nCollision":        fmt(_factor(code, "YES", "Collision", secondary_class_match)),
             })
 
         return pd.DataFrame(rows, columns=_COLS)

@@ -422,7 +422,8 @@ class Auto(_BABase):
         # that's the only match needed (one ratebook row per class code). Otherwise
         # (Farmers class codes 61/62/69, which have several ratebook rows per class
         # code) the ratebook's "Farmers Use" must also match the mapping's
-        # "Secondary Class" text.
+        # "Secondary Class" text. The mapping sheet has no "Farmers Use" column of
+        # its own, so which branch applies is derived from the ratebook data itself.
         _COLS = [
             "Primary Class", "Secondary Class",
             "4th-5th Digits of\nClass Code",
@@ -437,7 +438,6 @@ class Auto(_BABase):
 
         mapping["Class Code"] = mapping["Class Code"].astype(str).str.strip().str.zfill(2)
         mapping["Secondary Class Match"] = mapping["Secondary Class"].apply(self._normalize_223c2_text)
-        mapping["Farmers Use"] = mapping["Farmers Use"].apply(self._normalize_223c2_text)
 
         raw = self.rateTables[company].get("TruckSecondaryClassFactorFarm_Ext")
         if raw is None:
@@ -453,6 +453,12 @@ class Auto(_BABase):
         df["Coverage Type"]      = df["Coverage Type"].fillna("").astype(str).str.strip()
         df["Farmers Use"]        = df["Farmers Use"].apply(self._normalize_223c2_text)
         df["Factor"]             = pd.to_numeric(df["Factor"], errors="coerce")
+
+        # Class codes where the ratebook carries specific Farmers Use sub-types
+        # (rather than a single generic "Not Applicable" row).
+        codes_with_farmers_use = set(
+            df.loc[df["Farmers Use"] != "Not Applicable", "Secondary Class Numeric"]
+        )
 
         def _factor(code, trailer, coverage, secondary_class_match):
             mask = (
@@ -472,7 +478,7 @@ class Auto(_BABase):
         rows = []
         for _, m in mapping.iterrows():
             code = m["Class Code"]
-            secondary_class_match = None if m["Farmers Use"] == "Not Applicable" else m["Secondary Class Match"]
+            secondary_class_match = m["Secondary Class Match"] if code in codes_with_farmers_use else None
             rows.append({
                 "Primary Class":              m["Primary Class"],
                 "Secondary Class":            m["Secondary Class"],

@@ -129,6 +129,7 @@ class Excel:
             n_effective=self.nEffective,
             r_effective=self.rEffective,
             companies=self._footer_companies_text(),
+            program=self.programName,
         )
 
     def _footer_companies_text(self) -> str:

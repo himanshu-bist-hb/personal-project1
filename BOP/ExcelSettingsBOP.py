@@ -71,9 +71,14 @@ class Excel:
         self.headerMargin = fmt.get("HeaderMargin", 0.5)
         self.footerMargin = fmt.get("FooterMargin", 0.25)
         self.borderColor = fmt.get("BorderColor", "C1C1C1")
-        self.currencyFormat = fmt.get("CurrencyFormat", "$#,##0")
-        self.noDecimalFormat = fmt.get("NoDecimalFormat", "#,##0")
+        self.currencyFormat = fmt.get("CurrencyFormat", "$#,##0.000")
+        self.noDecimalFormat = fmt.get("NoDecimalFormat", "#,##0.000")
         self.zipCodeFormat = fmt.get("ZipCodeFormat", "####0")
+        # Factor/value columns with no explicit Number Formats entry (most
+        # tables' rate-factor columns) otherwise fall back to Excel's
+        # "General" format. All table values display at 3 decimal places
+        # except zip/pin codes, so this is the default for those columns.
+        self.defaultValueFormat = "#,##0.000"
         self._defaultPrintTitleRows = fmt.get("PrintTitleRows", "1:3")
 
         self.font = Font(name=self.fontName, size=self.fontSize)
@@ -259,12 +264,17 @@ class Excel:
 
         # Title, spacer and column-header rows: a handful of cells, style
         # directly. (A sub-header row, if any, was styled by _apply_sub_header.)
+        # The header row gets its own full box, matching the sub-header/data
+        # rows, so tables with a sub-header (e.g. PD's "Amount of Insurance")
+        # don't end up with the header text floating unboxed between the
+        # sub-header's box above and the data's box below.
         for col in range(1, max_col + 1):
             ws.cell(row=1, column=col).font = self.fontBold
             ws.cell(row=2, column=col).font = self.fontItalic
             header_cell = ws.cell(row=header_row, column=col)
             header_cell.font = self.fontBold
             header_cell.alignment = self._centerAlign
+            header_cell.border = self._thinBorder
 
         self._format_data_rows(ws, table_code, header_row + 1, max_row, max_col)
 
@@ -319,6 +329,7 @@ class Excel:
         scratch = ws.cell(row=first_row, column=1)
         scratch.font = self.font
         scratch.alignment = self._centerAlign
+        scratch.number_format = self.defaultValueFormat
         border_id = self.wb._borders.add(self._thinBorder)
 
         def _pair(style_array):

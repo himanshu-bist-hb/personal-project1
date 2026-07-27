@@ -139,29 +139,37 @@ class Excel:
         names = [COMPANY_NAMES.get(c, c).strip() for c in self.companyList if c != "CW"]
         return "\n".join(f"{n} " for n in names)
 
+    @staticmethod
+    def _set_hf_part(part, text: str, font: str, size: int) -> None:
+        """
+        Assign text/font/size to a header or footer section (ws.oddHeader.left,
+        ws.oddFooter.center, etc.) without going through the .font/.size
+        setters.
+
+        openpyxl's own serialization (_HeaderFooterPart.__str__) renders the
+        size code as "&{size} " — WITH a trailing space, to keep a text that
+        starts with a digit from merging into the size number (e.g. so "&10"
+        + "5th Ave" can't be misread as size 105). For multi-line text that
+        space becomes the very first character rendered, so only the FIRST
+        line is indented — e.g. NGIC (always first in the footer company
+        list) sat visibly indented while every other company didn't. None of
+        our header/footer text starts with a digit, so the codes are safe to
+        embed directly in .text and skip .font/.size entirely, avoiding the
+        stray space.
+        """
+        part.text = f'&"{font}"&{size}{text}'
+
     def _apply_standard_header(self, ws) -> None:
         hf = self._cfg.header_footer
-        ws.oddHeader.left.text = hf.get("HeaderLeftText", "")
-        ws.oddHeader.left.size = self.headerFontSize
-        ws.oddHeader.left.font = self.headerFont
-        ws.oddHeader.center.text = self._token_sub(hf.get("HeaderCenterTemplate", ""))
-        ws.oddHeader.center.size = self.headerFontSize
-        ws.oddHeader.center.font = self.headerFont
-        ws.oddHeader.right.text = self._token_sub(hf.get("HeaderRightTemplate", ""))
-        ws.oddHeader.right.size = self.headerFontSize
-        ws.oddHeader.right.font = self.headerFont
+        self._set_hf_part(ws.oddHeader.left, hf.get("HeaderLeftText", ""), self.headerFont, self.headerFontSize)
+        self._set_hf_part(ws.oddHeader.center, self._token_sub(hf.get("HeaderCenterTemplate", "")), self.headerFont, self.headerFontSize)
+        self._set_hf_part(ws.oddHeader.right, self._token_sub(hf.get("HeaderRightTemplate", "")), self.headerFont, self.headerFontSize)
 
     def _apply_default_footer(self, ws) -> None:
         hf = self._cfg.header_footer
-        ws.oddFooter.left.text = self._token_sub(hf.get("FooterLeftTemplate", ""))
-        ws.oddFooter.left.size = self.footerFontSize
-        ws.oddFooter.left.font = self.footerFont
-        ws.oddFooter.center.text = self._token_sub(hf.get("FooterCenterTemplate", ""))
-        ws.oddFooter.center.size = self.footerFontSize
-        ws.oddFooter.center.font = self.footerFont
-        ws.oddFooter.right.text = self._token_sub(hf.get("FooterRightTemplate", ""))
-        ws.oddFooter.right.size = self.footerFontSize
-        ws.oddFooter.right.font = self.footerFont
+        self._set_hf_part(ws.oddFooter.left, self._token_sub(hf.get("FooterLeftTemplate", "")), self.footerFont, self.footerFontSize)
+        self._set_hf_part(ws.oddFooter.center, self._token_sub(hf.get("FooterCenterTemplate", "")), self.footerFont, self.footerFontSize)
+        self._set_hf_part(ws.oddFooter.right, self._token_sub(hf.get("FooterRightTemplate", "")), self.footerFont, self.footerFontSize)
 
     def _apply_page_header_footer(self, ws) -> None:
         self._apply_page_setup(ws)

@@ -133,7 +133,10 @@ class Excel:
         )
 
     def _footer_companies_text(self) -> str:
-        names = [COMPANY_NAMES.get(c, c) for c in self.companyList if c != "CW"]
+        # .strip() guards against stray leading/trailing whitespace on any
+        # individual company name (e.g. NGIC showing indented relative to
+        # the other companies in the footer) regardless of where it enters.
+        names = [COMPANY_NAMES.get(c, c).strip() for c in self.companyList if c != "CW"]
         return "\n".join(f"{n} " for n in names)
 
     def _apply_standard_header(self, ws) -> None:

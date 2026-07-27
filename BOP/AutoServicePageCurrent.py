@@ -23,6 +23,14 @@ _THIN_BORDER = Border(
 
 
 class Auto:
+    # Tables buildBaseRates() needs present for a given company before it can
+    # be built without a KeyError.
+    _BASE_RATE_TABLES = (
+        'BP7_Peril_Building_Base_Rates',
+        'BP7_Peril_BPP_Base_Rates',
+        'BP7_Peril_Liability_Base_Rates',
+    )
+
     def __init__(self, state, rateTables, perils, perilsConversions, nEffective, rEffective) -> None:
         self.state = state
         self.rateTables = rateTables
@@ -252,9 +260,14 @@ class Auto:
         AutoService = ExcelSettingsBOP.Excel(state=self.state, programName='Auto Service', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
 
         sheetSpecs = []
+        # A company can be present in rateTables (its ratebook was uploaded)
+        # without having filed its own base-rate tables — a deviation
+        # ratebook may only override a handful of tables. Check for the
+        # specific tables buildBaseRates() needs, not just company
+        # membership, or it KeyErrors on that company's missing table.
         for company, tab, label in (('NACO', 'BRNACO', 'NW Assurance'), ('NAFF', 'BRNAFF', 'NW Affinity'),
                                      ('NGIC', 'BRNGIC', 'NW General Insurance Company'), ('NICOF', 'BRNICOF', 'NICOF')):
-            if company in self.rateTables:
+            if company in self.rateTables and all(t in self.rateTables[company] for t in self._BASE_RATE_TABLES):
                 sheetSpecs.append((tab, f'AS Table 3.B.1. {label} State Base Rates', lambda c=company: self.buildBaseRates(c), False, True, 'AS_BR', None))
 
         sheetSpecs += [

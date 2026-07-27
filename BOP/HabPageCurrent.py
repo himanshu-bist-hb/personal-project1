@@ -15,6 +15,15 @@ from . import ExcelSettingsBOP
 
 
 class Hab:
+    # Tables buildBaseRates() needs present for a given company before it can
+    # be built without a KeyError.
+    _BASE_RATE_TABLES = (
+        'BP7_Peril_Building_Base_Rates',
+        'BP7_Peril_BPP_Base_Rates',
+        'BP7_Peril_Liability_Base_Rates',
+        'BP7PerilBldgHabitationalSwimmingPoolsPropertyBaseRate',
+    )
+
     def __init__(self, state, rateTables, perils, perilsConversions, nEffective, rEffective) -> None:
         self.state = state
         self.rateTables = rateTables
@@ -212,12 +221,17 @@ class Hab:
         Hab = ExcelSettingsBOP.Excel(state=self.state, programName='Habitational', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
 
         sheetSpecs = []
+        # A company can be present in rateTables (its ratebook was uploaded)
+        # without having filed its own base-rate/related-exposures tables —
+        # a deviation ratebook may only override a handful of tables. Check
+        # for the specific tables each builder needs, not just company
+        # membership, or buildBaseRates()/buildRelatedAddtExposures() KeyErrors.
         for company, tab, label in (('NACO', 'BRNACO', 'NW Assurance'), ('NAFF', 'BRNAFF', 'NW Affinity'),
                                      ('NGIC', 'BRNGIC', 'NW General Insurance Company'), ('NICOF', 'BRNICOF', 'NICOF')):
-            if company in self.rateTables:
+            if company in self.rateTables and all(t in self.rateTables[company] for t in self._BASE_RATE_TABLES):
                 sheetSpecs.append((tab, f'H Table 3.B.1. {label} State Base Rates', lambda c=company: self.buildBaseRates(c), False, True, 'HAB_BR', None))
         for company, tab in (('NACO', 'LANACO'), ('NAFF', 'LANAFF'), ('NGIC', 'LANGIC'), ('NICOF', 'LANICOF')):
-            if company in self.rateTables:
+            if company in self.rateTables and 'BP7LiabilityChargesForRelatedAddnlExposures' in self.rateTables[company]:
                 sheetSpecs.append((tab, 'H Table 3.C.5. Liability Charges for Related Additional Exposures', lambda c=company: self.buildRelatedAddtExposures(c), False, True, 'HAB_LA', None))
 
         sheetSpecs += [

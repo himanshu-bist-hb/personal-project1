@@ -1,0 +1,74 @@
+# BA-RatePages full dependency pin list
+# Base captured via `pip freeze` from the working venv (2026-07-28) so the
+# work-machine environment can be reproduced exactly with:
+#   pip install -r requirements.txt
+
+# --- Core app (app.py / Streamlit UI) -------------------------------------
+streamlit==1.37.1
+pandas==2.3.3
+numpy==2.4.4
+
+# --- Excel I/O (BA/BOP/FA rate page generation) ----------------------------
+openpyxl==3.1.5
+et_xmlfile==2.0.0
+
+# --- PDF generation / post-processing --------------------------------------
+# reportlab: direct TRDEF page rendering (see PDF Direct Render fix)
+# pikepdf: strips Excel's tagged-PDF structure tree + recompresses (PDF Size Fix)
+reportlab==5.0.0
+pikepdf==10.10.0
+lxml==6.1.0
+Pillow==10.4.0
+pymupdf==1.28.0
+
+# --- Windows COM automation (Excel PDF export via win32com/pythoncom) ------
+pywin32==311
+
+# --- Word/PowerPoint doc generation (generate_guide_docx.py etc.) ----------
+python-docx==1.2.0
+
+# --- Legacy standalone BOP tkinter tool (BOPRatePageUserInterface.py) ------
+xlwings==0.36.10
+tabulate==0.10.0
+XlsxWriter==3.2.9
+ttkthemes==3.3.0
+
+# --- Transitive dependencies (pinned for reproducibility) ------------------
+altair==5.5.0
+attrs==26.1.0
+blinker==1.9.0
+cachetools==5.5.2
+certifi==2026.2.25
+charset-normalizer==3.4.7
+click==8.3.2
+colorama==0.4.6
+gitdb==4.0.12
+GitPython==3.1.46
+idna==3.11
+Jinja2==3.1.6
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+markdown-it-py==4.0.0
+MarkupSafe==3.0.3
+mdurl==0.1.2
+narwhals==2.19.0
+packaging==24.2
+protobuf==5.29.6
+pyarrow==23.0.1
+pydeck==0.9.1
+Pygments==2.20.0
+python-dateutil==2.9.0.post0
+pytz==2026.1.post1
+referencing==0.37.0
+requests==2.33.1
+rich==13.9.4
+rpds-py==0.30.0
+six==1.17.0
+smmap==5.0.3
+tenacity==8.5.0
+toml==0.10.2
+tornado==6.5.5
+typing_extensions==4.15.0
+tzdata==2026.1
+urllib3==2.6.3
+watchdog==4.0.2

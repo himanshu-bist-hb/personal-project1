@@ -78,7 +78,7 @@ def build():
     # =======================================================================
     ws = wb.create_sheet("Header Footer Text")
     _write_table(ws, ["Field", "Value"], [
-        ["HeaderLeftText", "Commercial Lines Manual: Division Nine - Businessowners"],
+        ["HeaderLeftText", "Commercial Lines Manual - Businessowners"],
         ["HeaderCenterTemplate", "\n\n{state} - Rate Pages"],
         ["HeaderRightTemplate", "Effective:\nNew: {n_effective}\nRenewal: {r_effective}"],
         ["FooterLeftTemplate", "{companies}"],

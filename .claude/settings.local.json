@@ -89,7 +89,20 @@
       "Bash(\"./venv/Scripts/python.exe\" scratch_test_e2e.py)",
       "Bash(xargs wc -l)",
       "Bash(export OPENBLAS_NUM_THREADS=1)",
-      "Bash(export OMP_NUM_THREADS=1)"
+      "Bash(export OMP_NUM_THREADS=1)",
+      "Bash(awk '{print $2}')",
+      "Bash(echo \"exit: $?\")",
+      "Bash(\"./venv/Scripts/python.exe\" -c \"import tabulate\")",
+      "Bash(\"./venv/Scripts/python.exe\" -c \"import xlsxwriter\")",
+      "Bash(\"./venv/Scripts/python.exe\" -c \"import xlwings\")",
+      "Bash(\"./venv/Scripts/python.exe\" -c \"import ttkthemes\")",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip show pikepdf reportlab streamlit)",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip index versions tabulate)",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip index versions xlsxwriter)",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip index versions xlwings)",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip index versions ttkthemes)",
+      "Bash(\"./venv/Scripts/python.exe\" -m pip install --dry-run -r requirements.txt)",
+      "Bash(./venv/Scripts/python.exe *)"
     ]
   }
 }

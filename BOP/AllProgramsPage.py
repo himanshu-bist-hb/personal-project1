@@ -208,18 +208,20 @@ class AllPrograms:
     def buildNamedStormDeductibleFactorH(self, coverage):
         return self._buildNamedStormDeductibleFactorForClass(10000, coverage)
 
-    # The ratebook's Named Storm table only ever carries Peril TypeCode "cat1" (after
-    # excluding "allperil"), but that code means "HU" here — unlike every other BOP table,
-    # where cat1 converts to "ST" via self.perilsConversions (see Peril Conversions tab).
-    # So this table's Peril column is hardcoded to "HU" rather than run through the shared
-    # conversion, matching RI's filed rate manual.
+    # The ratebook's Named Storm table represents a single peril — Named Storm / Hurricane —
+    # under the internal code "cat1", which converts to "HU" here, unlike every other BOP
+    # table where cat1 converts to "ST" via self.perilsConversions (see Peril Conversions
+    # tab). Filtering strictly to "cat1" (rather than "in self.perils", which pulls in every
+    # peril RI writes — cat2, cat3, fire1, etc.) matters: this table apparently carries rows
+    # for other peril codes too (structural carryover, not meaningful for Named Storm), and
+    # hardcoding all of them to "HU" collided into duplicate pivot-index rows.
     def _buildNamedStormDeductibleFactorForClass(self, classCodeMin, coverage):
         nsDedPeril = self.buildDataFrame("BP7_Peril_Named_Storm_Deductible_Factor")
         if coverage.casefold() == 'building': # Case-insensitive comparison
-            filteredNSDeductibleFactor = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` in {self.perils} & `Peril TypeCode` != "allperil" & Coverage == "Building" & `Named Storm Deductible` > 5'). \
+            filteredNSDeductibleFactor = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` == "cat1" & Coverage == "Building" & `Named Storm Deductible` > 5'). \
                 rename(columns={'BPPTIB_AmtofInsurance_Min': 'BPP Min', 'BPPTIB_AmtofInsurance_Max': 'BPP Max', 'BLDG_AmtofInsurance': 'Building'})
         elif coverage.casefold() == 'bpp': # Case-insensitive comparison
-            filteredNSDeductibleFactor = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` in {self.perils} & `Peril TypeCode` != "allperil" & Coverage == "BPP" & `Named Storm Deductible` > 5'). \
+            filteredNSDeductibleFactor = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` == "cat1" & Coverage == "BPP" & `Named Storm Deductible` > 5'). \
                 rename(columns={'BPPTIB_AmtofInsurance_Min': 'BPP Min', 'BPPTIB_AmtofInsurance_Max': 'BPP Max', 'BLDG_AmtofInsurance': 'Building'})
         filteredNSDeductibleFactor = filteredNSDeductibleFactor.copy()
         filteredNSDeductibleFactor['Peril'] = 'HU'
@@ -228,6 +230,14 @@ class AllPrograms:
         tierLabels = [f'${tier:,}' for tier in tierOrder]
         filteredNSDeductibleFactor['Named Storm Deductible'] = filteredNSDeductibleFactor['Named Storm Deductible'].apply(lambda v: f'${v:,}')
         sortedNSDeductibleFactor = filteredNSDeductibleFactor.fillna({'BPP Max': '+'}).sort_values(by=['Peril', 'BPP Min', 'BPP Max', 'Building']) # Filling in missing values and sorting
+        dupMask = sortedNSDeductibleFactor.duplicated(subset=['Peril', 'BPP Min', 'BPP Max', 'Building', 'Named Storm Deductible'], keep=False)
+        if dupMask.any():
+            dupRows = sortedNSDeductibleFactor[dupMask]
+            raise ValueError(
+                f"Named Storm Deductible Factor ({coverage}, Class_Code_Min={classCodeMin}): "
+                f"{dupMask.sum()} rows still collide on (Peril, BPP Min, BPP Max, Building, Named Storm Deductible) "
+                f"after filtering to Peril TypeCode == 'cat1'. Sample colliding rows:\n{dupRows.head(10)}"
+            )
         pivotedNSDeductibleFactor = sortedNSDeductibleFactor.pivot(index=['Peril', 'BPP Min', 'BPP Max', 'Building'], columns='Named Storm Deductible', values='Named Storm Percentage Deductible Factor').reset_index(['Peril', 'BPP Min', 'BPP Max', 'Building'])
         orderedCols = ['Peril', 'BPP Min', 'BPP Max', 'Building'] + [t for t in tierLabels if t in pivotedNSDeductibleFactor.columns]
         return pivotedNSDeductibleFactor[orderedCols]

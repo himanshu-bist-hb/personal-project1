@@ -226,7 +226,7 @@ class AllPrograms:
         tierOrder = [500, 1000, 2500, 5000, 10000, 15000, 20000, 25000, 50000]
         tierLabels = [f'${tier:,}' for tier in tierOrder]
         filteredNSDeductibleFactor['Named Storm Deductible'] = filteredNSDeductibleFactor['Named Storm Deductible'].apply(lambda v: f'${v:,}')
-        sortedNSDeductibleFactor = filteredNSDeductibleFactor.fillna({'BPP Max': '+'}).sort_values(by=['Peril', 'BPP Min', 'BPP Max', 'Building']) # Filling in missing values and sorting
+        sortedNSDeductibleFactor = filteredNSDeductibleFactor.fillna({'BPP Max': 2000000}).sort_values(by=['Peril', 'BPP Min', 'BPP Max', 'Building']) # Filling in missing values (unbounded BPP Max) and sorting; kept numeric (not a "+" string) so it renders as "$2,000,000" through the same Currency-style number format as every other value in the column
         dupMask = sortedNSDeductibleFactor.duplicated(subset=['Peril', 'BPP Min', 'BPP Max', 'Building', 'Named Storm Deductible'], keep=False)
         if dupMask.any():
             dupRows = sortedNSDeductibleFactor[dupMask]

@@ -211,10 +211,12 @@ def build():
     _write_table(ws, ["TableCode", "ColStart", "ColEnd", "RowStart", "Format"], [
         ["PD", 1, 4, 5, "Currency"],
         ["PDH", 1, 4, 5, "Currency"],
-        ["NSPP", 1, 4, 5, "Currency"],
-        ["NSPPH", 1, 4, 5, "Currency"],
-        ["NSBG", 1, 4, 5, "Currency"],
-        ["NSBGH", 1, 4, 5, "Currency"],
+        # Whole-dollar amounts, no decimals (unlike the shared "Currency" format,
+        # which is "$#,##0.000" and looks awkward on whole-number amounts).
+        ["NSPP", 1, 4, 5, "$#,##0"],
+        ["NSPPH", 1, 4, 5, "$#,##0"],
+        ["NSBG", 1, 4, 5, "$#,##0"],
+        ["NSBGH", 1, 4, 5, "$#,##0"],
         ["WHOBG", 1, 4, 5, "Currency"],
         ["WHOBGH", 1, 4, 5, "Currency"],
         ["WHOPP", 1, 4, 5, "Currency"],

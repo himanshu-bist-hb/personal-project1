@@ -200,6 +200,38 @@ class AllPrograms:
         sortedWHDeductibleFactor = updatedWHDeductibleFactor.fillna({'BPP Max': '+'}).sort_values(by=['Peril', 'BPP Min', 'BPP Max', 'Building']) # Filling in missing values and sorting
         return sortedWHDeductibleFactor.astype({'WH_PercentOrAmount': 'int32'}).pivot(index=['Peril', 'BPP Min', 'BPP Max', 'Building'], columns='WH_PercentOrAmount', values='WH Factor').reset_index(['Peril', 'BPP Min', 'BPP Max', 'Building'])
 
+    # Builds the RI-only named storm deductible factor table for the given coverage (either Building or BPP)
+    # Returns a dataframe
+    def buildNamedStormDeductibleFactor(self, coverage):
+        return self._buildNamedStormDeductibleFactorForClass(40000, coverage)
+
+    def buildNamedStormDeductibleFactorH(self, coverage):
+        return self._buildNamedStormDeductibleFactorForClass(10000, coverage)
+
+    # The ratebook's Named Storm table only ever carries Peril TypeCode "cat1" (after
+    # excluding "allperil"), but that code means "HU" here — unlike every other BOP table,
+    # where cat1 converts to "ST" via self.perilsConversions (see Peril Conversions tab).
+    # So this table's Peril column is hardcoded to "HU" rather than run through the shared
+    # conversion, matching RI's filed rate manual.
+    def _buildNamedStormDeductibleFactorForClass(self, classCodeMin, coverage):
+        nsDedPeril = self.buildDataFrame("BP7_Peril_Named_Storm_Deductible_Factor")
+        if coverage.casefold() == 'building': # Case-insensitive comparison
+            filteredNSDeductibleFactor = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` in {self.perils} & `Peril TypeCode` != "allperil" & Coverage == "Building" & `Named Storm Deductible` > 5'). \
+                rename(columns={'BPPTIB_AmtofInsurance_Min': 'BPP Min', 'BPPTIB_AmtofInsurance_Max': 'BPP Max', 'BLDG_AmtofInsurance': 'Building'})
+        elif coverage.casefold() == 'bpp': # Case-insensitive comparison
+            filteredNSDeductibleFactor = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` in {self.perils} & `Peril TypeCode` != "allperil" & Coverage == "BPP" & `Named Storm Deductible` > 5'). \
+                rename(columns={'BPPTIB_AmtofInsurance_Min': 'BPP Min', 'BPPTIB_AmtofInsurance_Max': 'BPP Max', 'BLDG_AmtofInsurance': 'Building'})
+        filteredNSDeductibleFactor = filteredNSDeductibleFactor.copy()
+        filteredNSDeductibleFactor['Peril'] = 'HU'
+        filteredNSDeductibleFactor = filteredNSDeductibleFactor.astype({'Named Storm Deductible': 'int32'})
+        tierOrder = [500, 1000, 2500, 5000, 10000, 15000, 20000, 25000, 50000]
+        tierLabels = [f'${tier:,}' for tier in tierOrder]
+        filteredNSDeductibleFactor['Named Storm Deductible'] = filteredNSDeductibleFactor['Named Storm Deductible'].apply(lambda v: f'${v:,}')
+        sortedNSDeductibleFactor = filteredNSDeductibleFactor.fillna({'BPP Max': '+'}).sort_values(by=['Peril', 'BPP Min', 'BPP Max', 'Building']) # Filling in missing values and sorting
+        pivotedNSDeductibleFactor = sortedNSDeductibleFactor.pivot(index=['Peril', 'BPP Min', 'BPP Max', 'Building'], columns='Named Storm Deductible', values='Named Storm Percentage Deductible Factor').reset_index(['Peril', 'BPP Min', 'BPP Max', 'Building'])
+        orderedCols = ['Peril', 'BPP Min', 'BPP Max', 'Building'] + [t for t in tierLabels if t in pivotedNSDeductibleFactor.columns]
+        return pivotedNSDeductibleFactor[orderedCols]
+
     # Builds the wind/hail deductible per building factor table for the given coverage (either Building or BPP)
     # Returns a dataframe
     def buildWHDeductiblePerBuilding(self, coverage):
@@ -409,6 +441,20 @@ class AllPrograms:
             ('AIBI', 'AS, FS, H, O, R, S, W Table 3.C.2.e. Automatic Increase In Building Insurance (A.I.I.) Factor', self.buildAnnualIncrease, True, True, None),
             ('PD', 'AS, FS, O, R, S, W Table 3.C.2.f. Property Deductible Factor', self.buildPropertyDeductible, False, True, None),
             ('PDH', 'H Table 3.C.2.f. Property Deductible Factor', self.buildPropertyDeductibleH, False, True, None),
+        ]
+
+        # RI-only: Named Storm Deductible Factor sheets, immediately before the
+        # Windstorm/Hail Deductible Factor sheets (RI's manual places Named Storm
+        # right ahead of Windstorm/Hail, both numbered Table 3.C.2.g.(1)).
+        if self.state == 'RI':
+            sheetSpecs += [
+                ('NSPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactor('BPP'), False, True, None),
+                ('NSPPH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactorH('BPP'), False, True, None),
+                ('NSBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactor('Building'), False, True, None),
+                ('NSBGH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactorH('Building'), False, True, None),
+            ]
+
+        sheetSpecs += [
             ('WHOBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactor('Building'), False, True, None),
             ('WHOBGH', 'H Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactorH('Building'), False, True, None),
             ('WHOPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildWHDeductibleFactor('BPP'), False, True, None),

@@ -104,6 +104,11 @@ def build():
         ["AIBI", 1, 1, 208], ["AIBI", 2, 2, 54],
         ["PD", 1, 3, 74], ["PD", 4, 4, 105], ["PD", 5, "REST", 53],
         ["PDH", 1, 3, 74], ["PDH", 4, 4, 105], ["PDH", 5, "REST", 53],
+        # RI-only Named Storm Deductible Factor sheets — same column shape as WHOBG/WHOPP.
+        ["NSPP", 1, 2, 74], ["NSPP", 3, 3, 105], ["NSPP", 4, 4, 105], ["NSPP", 5, "REST", 62],
+        ["NSPPH", 1, 2, 74], ["NSPPH", 3, 3, 105], ["NSPPH", 4, 4, 105], ["NSPPH", 5, "REST", 62],
+        ["NSBG", 1, 2, 74], ["NSBG", 3, 3, 105], ["NSBG", 4, 4, 105], ["NSBG", 5, "REST", 62],
+        ["NSBGH", 1, 2, 74], ["NSBGH", 3, 3, 105], ["NSBGH", 4, 4, 105], ["NSBGH", 5, "REST", 62],
         ["WHOBG", 1, 2, 74], ["WHOBG", 3, 3, 105], ["WHOBG", 4, 4, 105], ["WHOBG", 5, "REST", 62],
         ["WHOBGH", 1, 2, 74], ["WHOBGH", 3, 3, 105], ["WHOBGH", 4, 4, 105], ["WHOBGH", 5, "REST", 62],
         ["WHOPP", 1, 2, 74], ["WHOPP", 3, 3, 105], ["WHOPP", 4, 4, 105], ["WHOPP", 5, "REST", 62],
@@ -206,6 +211,10 @@ def build():
     _write_table(ws, ["TableCode", "ColStart", "ColEnd", "RowStart", "Format"], [
         ["PD", 1, 4, 5, "Currency"],
         ["PDH", 1, 4, 5, "Currency"],
+        ["NSPP", 1, 4, 5, "Currency"],
+        ["NSPPH", 1, 4, 5, "Currency"],
+        ["NSBG", 1, 4, 5, "Currency"],
+        ["NSBGH", 1, 4, 5, "Currency"],
         ["WHOBG", 1, 4, 5, "Currency"],
         ["WHOBGH", 1, 4, 5, "Currency"],
         ["WHOPP", 1, 4, 5, "Currency"],
@@ -266,6 +275,10 @@ def build():
                        "Label1Range", "Label1Text", "Label2Range", "Label2Text"], [
         ["PD", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", ""],
         ["PDH", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", ""],
+        ["NSPP", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Named Storm Deductible"],
+        ["NSPPH", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Named Storm Deductible"],
+        ["NSBG", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Named Storm Deductible"],
+        ["NSBGH", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Named Storm Deductible"],
         ["WHOBG", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Wind-Hail Deductible"],
         ["WHOBGH", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Wind-Hail Deductible"],
         ["WHOPP", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Wind-Hail Deductible"],
@@ -305,6 +318,12 @@ def build():
     ws = wb.create_sheet("Page Break Rules")
     _write_table(ws, ["SheetPrefix", "Rule"], [
         ["Index", "index"],
+        # RI-only Named Storm sheets are long enough to need real pagination
+        # instead of being squeezed onto one page. Deliberately not a bare "NS"
+        # prefix — HabPage.py already has an unrelated tab literally named "NS"
+        # ("Number of Stories Factor") that must keep the default rule.
+        ["NSPP", "fit_width_only"],
+        ["NSBG", "fit_width_only"],
         ["*", "fit_single_page"],
     ])
 

@@ -82,7 +82,9 @@ def build():
         ["HeaderCenterTemplate", "\n\n{state} - Rate Pages"],
         ["HeaderRightTemplate", "Effective:\nNew: {n_effective}\nRenewal: {r_effective}"],
         ["FooterLeftTemplate", "{companies}"],
-        ["FooterCenterTemplate", "{state_abb} - &[Tab] - &P "],
+        # {section} resolves per page type via ExcelSettingsBOP.Excel._SECTION_CODES
+        # (All Programs->PG, All Peril->AP, Habitational->H, Auto Service->AS).
+        ["FooterCenterTemplate", "{section} - {state_abb} - &[Tab] - &P "],
         ["FooterRightTemplate", ""],
     ])
 

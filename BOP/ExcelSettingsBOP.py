@@ -44,6 +44,16 @@ class Excel:
         wb = pages.getWB()
     """
 
+    # Short section code for the {section} footer token, keyed by the exact
+    # programName each page module passes in (see the ExcelSettingsBOP.Excel(...)
+    # call in AllProgramsPage.py / AllPerilPage.py / HabPage.py / AutoServicePage.py).
+    _SECTION_CODES = {
+        "All Programs": "PG",
+        "All Peril": "AP",
+        "Habitational": "H",
+        "Auto Service": "AS",
+    }
+
     def __init__(self, state, programName, nEffective, rEffective, companyList) -> None:
         self.wb = Workbook()
         self.wb.active.title = "Index"
@@ -130,6 +140,7 @@ class Excel:
             r_effective=self.rEffective,
             companies=self._footer_companies_text(),
             program=self.programName,
+            section=self._SECTION_CODES.get(self.programName, self.programName),
         )
 
     def _footer_companies_text(self) -> str:

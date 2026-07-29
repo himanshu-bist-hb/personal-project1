@@ -239,6 +239,41 @@ class AllPrograms:
         orderedCols = ['Peril', 'BPP Min', 'BPP Max', 'Building'] + [t for t in tierLabels if t in pivotedNSDeductibleFactor.columns]
         return pivotedNSDeductibleFactor[orderedCols]
 
+    # Builds the RI-only optional named storm percentage deductible factor table for the
+    # given coverage (either Building or BPP). Mirrors _buildWHDeductiblePercentageForClass's
+    # shape (Peril as pivoted columns, deductible % as row index), but the source table
+    # stores the same 5 percentage-tier rows twice (once for each of two BLDG_AmtofInsurance
+    # sentinel values, 0 and 2000000000, with identical factors) — that's this table's
+    # analogue of WH_Deductible_Per_Building's "AmtOfInsurance == 1" filter, so we
+    # deduplicate on (Peril, tier) instead of filtering to a specific sentinel value.
+    # Returns a dataframe
+    def buildNamedStormDeductiblePercentage(self, coverage):
+        return self._buildNamedStormDeductiblePercentageForClass(40000, coverage)
+
+    def buildNamedStormDeductiblePercentageH(self, coverage):
+        return self._buildNamedStormDeductiblePercentageForClass(10000, coverage)
+
+    def _buildNamedStormDeductiblePercentageForClass(self, classCodeMin, coverage):
+        nsDedPeril = self.buildDataFrame("BP7_Peril_Named_Storm_Deductible_Factor")
+        if coverage.casefold() == 'building': # Case-insensitive comparison
+            filteredNSPercentage = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` in {self.perils} & Coverage == "Building" & `Named Storm Deductible` <= 5')
+        elif coverage.casefold() == 'bpp': # Case-insensitive comparison
+            filteredNSPercentage = nsDedPeril.query(f'Class_Code_Min == {classCodeMin} & `Peril TypeCode` in {self.perils} & Coverage == "BPP" & `Named Storm Deductible` <= 5')
+        filteredNSPercentage = filteredNSPercentage.filter(items=['Peril TypeCode', 'Named Storm Deductible', 'Named Storm Percentage Deductible Factor']).drop_duplicates()
+        dupMask = filteredNSPercentage.duplicated(subset=['Peril TypeCode', 'Named Storm Deductible'], keep=False)
+        if dupMask.any():
+            dupRows = filteredNSPercentage[dupMask]
+            raise ValueError(
+                f"Named Storm Deductible Percentage ({coverage}, Class_Code_Min={classCodeMin}): "
+                f"{dupMask.sum()} rows have conflicting factor values for the same Peril/percentage-tier "
+                f"combination (expected the BLDG_AmtofInsurance=0/2000000000 duplicate rows to match exactly). "
+                f"Sample colliding rows:\n{dupRows.head(10)}"
+            )
+        filteredNSPercentage = filteredNSPercentage.astype({'Named Storm Deductible': 'int32'})
+        filteredNSPercentage['Wind / Hail Deductible'] = filteredNSPercentage['Named Storm Deductible'].astype(str) + '%'
+        return filteredNSPercentage.replace({'Peril TypeCode': self.perilsConversions}). \
+            pivot(index=['Wind / Hail Deductible'], columns='Peril TypeCode', values='Named Storm Percentage Deductible Factor').reset_index(['Wind / Hail Deductible'])
+
     # Builds the wind/hail deductible per building factor table for the given coverage (either Building or BPP)
     # Returns a dataframe
     def buildWHDeductiblePerBuilding(self, coverage):
@@ -459,6 +494,10 @@ class AllPrograms:
                 ('NSPPH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactorH('BPP'), False, True, None),
                 ('NSBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactor('Building'), False, True, None),
                 ('NSBGH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactorH('Building'), False, True, None),
+                ('NSPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentage('BPP'), False, True, None),
+                ('NSPPPH', 'H Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentageH('BPP'), False, True, None),
+                ('NSPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentage('Building'), False, True, None),
+                ('NSPBGH', 'H Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentageH('Building'), False, True, None),
             ]
 
         sheetSpecs += [

@@ -109,6 +109,11 @@ def build():
         ["NSPPH", 1, 2, 74], ["NSPPH", 3, 3, 105], ["NSPPH", 4, 4, 105], ["NSPPH", 5, "REST", 62],
         ["NSBG", 1, 2, 74], ["NSBG", 3, 3, 105], ["NSBG", 4, 4, 105], ["NSBG", 5, "REST", 62],
         ["NSBGH", 1, 2, 74], ["NSBGH", 3, 3, 105], ["NSBGH", 4, 4, 105], ["NSBGH", 5, "REST", 62],
+        # RI-only Named Storm percentage-deductible sheets — same column shape as WHPBG/WHPPP.
+        ["NSPPP", 1, 1, 159], ["NSPPP", 2, 2, 105], ["NSPPP", 3, "REST", 70],
+        ["NSPPPH", 1, 1, 159], ["NSPPPH", 2, 2, 105], ["NSPPPH", 3, "REST", 70],
+        ["NSPBG", 1, 1, 159], ["NSPBG", 2, 2, 105], ["NSPBG", 3, "REST", 70],
+        ["NSPBGH", 1, 1, 159], ["NSPBGH", 2, 2, 105], ["NSPBGH", 3, "REST", 70],
         ["WHOBG", 1, 2, 74], ["WHOBG", 3, 3, 105], ["WHOBG", 4, 4, 105], ["WHOBG", 5, "REST", 62],
         ["WHOBGH", 1, 2, 74], ["WHOBGH", 3, 3, 105], ["WHOBGH", 4, 4, 105], ["WHOBGH", 5, "REST", 62],
         ["WHOPP", 1, 2, 74], ["WHOPP", 3, 3, 105], ["WHOPP", 4, 4, 105], ["WHOPP", 5, "REST", 62],

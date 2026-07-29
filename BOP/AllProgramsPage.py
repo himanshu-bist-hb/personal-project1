@@ -469,6 +469,13 @@ class AllPrograms:
         # tab of BOP Input File.xlsx.
         bcegLayoutKey = 'BCEG_MULTI' if self.state in self.buildingCodes else 'BCEG_SINGLE'
 
+        # RI has both Named Storm (Table 3.C.2.g.(1)/(2)) and Windstorm/Hail sheets, so
+        # WH's own table numbers shift down to (3)/(4)/(5) for RI only — every other
+        # state keeps WH at its usual (1)/(2)/(3), unaffected by this.
+        whOccNum = '(3)' if self.state == 'RI' else '(1)'
+        whBldgNum = '(4)' if self.state == 'RI' else '(2)'
+        whPctNum = '(5)' if self.state == 'RI' else '(3)'
+
         # (tab name, page title, builder callable, useIndex, useHeader, layout_key)
         # Builders are callables (not pre-built DataFrames) so progress can be
         # reported before each table is computed, not after all of them.
@@ -486,33 +493,35 @@ class AllPrograms:
         ]
 
         # RI-only: Named Storm Deductible Factor sheets, immediately before the
-        # Windstorm/Hail Deductible Factor sheets (RI's manual places Named Storm
-        # right ahead of Windstorm/Hail, both numbered Table 3.C.2.g.(1)).
+        # Windstorm/Hail Deductible Factor sheets. RI's manual numbers these
+        # Table 3.C.2.g.(1) (Named Storm, fixed) and (2) (Named Storm, percentage);
+        # WH's own tables shift down to (3)/(4)/(5) for RI only, via whOccNum/
+        # whBldgNum/whPctNum above.
         if self.state == 'RI':
             sheetSpecs += [
                 ('NSPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactor('BPP'), False, True, None),
                 ('NSPPH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactorH('BPP'), False, True, None),
                 ('NSBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactor('Building'), False, True, None),
                 ('NSBGH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactorH('Building'), False, True, None),
-                ('NSPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentage('BPP'), False, True, None),
-                ('NSPPPH', 'H Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentageH('BPP'), False, True, None),
-                ('NSPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentage('Building'), False, True, None),
-                ('NSPBGH', 'H Table 3.C.2.g.(3). Optional Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentageH('Building'), False, True, None),
+                ('NSPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentage('BPP'), False, True, None),
+                ('NSPPPH', 'H Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentageH('BPP'), False, True, None),
+                ('NSPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentage('Building'), False, True, None),
+                ('NSPBGH', 'H Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentageH('Building'), False, True, None),
             ]
 
         sheetSpecs += [
-            ('WHOBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactor('Building'), False, True, None),
-            ('WHOBGH', 'H Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactorH('Building'), False, True, None),
-            ('WHOPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildWHDeductibleFactor('BPP'), False, True, None),
-            ('WHOPPH', 'H Table 3.C.2.g.(1). Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildWHDeductibleFactorH('BPP'), False, True, None),
-            ('WHBBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', lambda: self.buildWHDeductiblePerBuilding('Building'), False, True, None),
-            ('WHBBGH', 'H Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', lambda: self.buildWHDeductiblePerBuildingH('Building'), False, True, None),
-            ('WHBPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', lambda: self.buildWHDeductiblePerBuilding('BPP'), False, True, None),
-            ('WHBPPH', 'H Table 3.C.2.g.(2). Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', lambda: self.buildWHDeductiblePerBuildingH('BPP'), False, True, None),
-            ('WHPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - Building', lambda: self.buildWHDeductiblePercentage('Building'), False, True, None),
-            ('WHPBGH', 'H Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - Building', lambda: self.buildWHDeductiblePercentageH('Building'), False, True, None),
-            ('WHPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', lambda: self.buildWHDeductiblePercentage('BPP'), False, True, None),
-            ('WHPPPH', 'H Table 3.C.2.g.(3). Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', lambda: self.buildWHDeductiblePercentageH('BPP'), False, True, None),
+            ('WHOBG', f'AS, FS, O, R, S, W Table 3.C.2.g.{whOccNum}. Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactor('Building'), False, True, None),
+            ('WHOBGH', f'H Table 3.C.2.g.{whOccNum}. Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildWHDeductibleFactorH('Building'), False, True, None),
+            ('WHOPP', f'AS, FS, O, R, S, W Table 3.C.2.g.{whOccNum}. Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildWHDeductibleFactor('BPP'), False, True, None),
+            ('WHOPPH', f'H Table 3.C.2.g.{whOccNum}. Windstorm or Hail Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildWHDeductibleFactorH('BPP'), False, True, None),
+            ('WHBBG', f'AS, FS, O, R, S, W Table 3.C.2.g.{whBldgNum}. Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', lambda: self.buildWHDeductiblePerBuilding('Building'), False, True, None),
+            ('WHBBGH', f'H Table 3.C.2.g.{whBldgNum}. Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - Building', lambda: self.buildWHDeductiblePerBuildingH('Building'), False, True, None),
+            ('WHBPP', f'AS, FS, O, R, S, W Table 3.C.2.g.{whBldgNum}. Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', lambda: self.buildWHDeductiblePerBuilding('BPP'), False, True, None),
+            ('WHBPPH', f'H Table 3.C.2.g.{whBldgNum}. Windstorm or Hail Deductible Factor - Per Building Fixed Deductible Amount - BPP', lambda: self.buildWHDeductiblePerBuildingH('BPP'), False, True, None),
+            ('WHPBG', f'AS, FS, O, R, S, W Table 3.C.2.g.{whPctNum}. Windstorm or Hail Deductible Factor - Percentage Deductible - Building', lambda: self.buildWHDeductiblePercentage('Building'), False, True, None),
+            ('WHPBGH', f'H Table 3.C.2.g.{whPctNum}. Windstorm or Hail Deductible Factor - Percentage Deductible - Building', lambda: self.buildWHDeductiblePercentageH('Building'), False, True, None),
+            ('WHPPP', f'AS, FS, O, R, S, W Table 3.C.2.g.{whPctNum}. Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', lambda: self.buildWHDeductiblePercentage('BPP'), False, True, None),
+            ('WHPPPH', f'H Table 3.C.2.g.{whPctNum}. Windstorm or Hail Deductible Factor - Percentage Deductible - BPP', lambda: self.buildWHDeductiblePercentageH('BPP'), False, True, None),
             ('BA', 'AS, FS, H, O, R, S, W Table 3.C.2.h. Burglar Alarm Modifier', self.buildBurglarAlarmFactor, False, True, None),
             ('CSFA', 'AS, FS, H, O, R, S, W Table 3.C.2.i. Central Station Fire Alarm Modifier', self.buildFireAlarmFactor, True, True, None),
             ('BABG', 'AS, FS, H, O, R, S, W Table 3.C.2.j. Building Age Modifier - Building', lambda: self.buildBuildingAgeModifier('Building'), False, True, None),

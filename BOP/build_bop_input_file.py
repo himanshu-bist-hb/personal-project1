@@ -162,6 +162,11 @@ def build():
         ["WHBPP_AP", 1, 1, 222], ["WHBPP_AP", 2, 2, 150], ["WHBPP_AP", 3, "REST", 80],
         ["WHPBG_AP", 1, 1, 159], ["WHPBG_AP", 2, 2, 105], ["WHPBG_AP", 3, "REST", 80],
         ["WHPPP_AP", 1, 1, 159], ["WHPPP_AP", 2, 2, 105], ["WHPPP_AP", 3, "REST", 80],
+        # RI-only Named Storm percentage-deductible sheets on the All Peril page — same
+        # column shape as WHPBG_AP/WHPPP_AP (the fixed-deductible NSPP/NSBG sheets reuse
+        # the All Programs NSPP/NSBG profile directly via layout_key=None, no _AP needed).
+        ["NSPPP_AP", 1, 1, 159], ["NSPPP_AP", 2, 2, 105], ["NSPPP_AP", 3, "REST", 80],
+        ["NSPBG_AP", 1, 1, 159], ["NSPBG_AP", 2, 2, 105], ["NSPBG_AP", 3, "REST", 80],
         ["CSFA_AP", 1, "REST", 100],
         ["BABG_AP", 1, 1, 145], ["BABG_AP", 2, "REST", 80],
         ["BAPP_AP", 1, 1, 145], ["BAPP_AP", 2, "REST", 80],

@@ -88,6 +88,14 @@ def disable_fit_to_page(ws):
     ws.sheet_properties.pageSetUpPr.fitToPage = False
     ws.page_setup.fitToWidth = 0
     ws.page_setup.fitToHeight = 0
+    # Excel persists a computed "scale" attribute as a fallback even while
+    # fitToPage=True (e.g. after a sheet has been opened/resaved by real Excel
+    # during export_to_pdf/_sanitize_xlsx) — if that sheet previously needed a
+    # tiny scale to cram onto one page, disabling fit-to-page without resetting
+    # this leaves that stale tiny percentage in charge, printing everything
+    # shrunk into a corner instead of at normal size. Pin it to 100% so
+    # "disabled" really means normal-size natural pagination.
+    ws.page_setup.scale = 100
 
 
 def add_break_after(ws, row):

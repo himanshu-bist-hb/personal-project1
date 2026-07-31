@@ -346,6 +346,15 @@ def build():
         # ("Number of Stories Factor") that must keep the default rule.
         ["NSPP", "fit_width_only"],
         ["NSBG", "fit_width_only"],
+        # PDLD ("Property Damage Liability Deductible", Hab/Auto Service programs)
+        # must be listed before PD below — it would otherwise match the "PD"
+        # prefix too and inherit fit_width_only, which isn't what it needs.
+        # Explicit here so it keeps today's default (fit_single_page) either way.
+        ["PDLD", "fit_single_page"],
+        # Property Deductible Factor (All Programs / All Peril) — long enough to
+        # need real pagination across pages, same as the Named Storm sheets above,
+        # instead of being squeezed onto a single page.
+        ["PD", "fit_width_only"],
         ["*", "fit_single_page"],
     ])
 

@@ -364,6 +364,17 @@ def build():
         # landscape so there's enough room that the forced scale-down stays
         # close to Named Storm's own (also non-100%) scale instead of much smaller.
         ["PD", "fit_width_landscape"],
+        # Building Age Modifier (All Programs / All Peril, both BP-2.0 and
+        # pre-2.0) — Building_Age_Min runs roughly year-by-year (~100 rows) and
+        # has a similar peril-column count to Property Deductible, so it hits
+        # the same "everything squeezed onto one page" unreadability under the
+        # default rule. Same fix: single page width, landscape for room, rows
+        # flow down naturally with the header row repeating on each page
+        # (print_title_rows "1:3" is already the default set at sheet creation
+        # in ExcelSettingsBOP._apply_page_setup — nothing else to configure).
+        ["BABG", "fit_width_landscape"],
+        ["BAPP", "fit_width_landscape"],
+        ["BABI", "fit_width_landscape"],
         ["*", "fit_single_page"],
     ])
 

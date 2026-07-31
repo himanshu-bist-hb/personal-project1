@@ -381,6 +381,20 @@ def build():
         ["BABG", "fit_width_landscape"],
         ["BAPP", "fit_width_landscape"],
         ["BABI", "fit_width_landscape"],
+        # Windstorm/Hail Deductible Factor sheets (All Programs / All Peril,
+        # both BP-2.0 and pre-2.0) — same column shape/count as the Named Storm
+        # sheets above (RI's Named Storm and non-RI's WH tables share the same
+        # underlying builder pattern), so the same plain fit_width_only (no
+        # landscape needed, unlike the wider PD/Building Age sheets) gets them
+        # printing exactly like Named Storm already does. Each prefix also
+        # covers its own "H" (Hab-split) sibling via startswith, e.g. "WHOBG"
+        # matches both "WHOBG" and "WHOBGH" — no separate row needed.
+        ["WHOBG", "fit_width_only"],
+        ["WHOPP", "fit_width_only"],
+        ["WHBBG", "fit_width_only"],
+        ["WHBPP", "fit_width_only"],
+        ["WHPBG", "fit_width_only"],
+        ["WHPPP", "fit_width_only"],
         ["*", "fit_single_page"],
     ])
 

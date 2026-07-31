@@ -164,10 +164,13 @@ def build():
         ["MVBG_AP", 1, 1, 215], ["MVBG_AP", 2, 2, 100],
         ["MVPP_AP", 1, 1, 215], ["MVPP_AP", 2, 2, 100],
         ["PD_AP", 1, 4, 105], ["PD_AP", 5, "REST", 80],
-        ["WHBBG_AP", 1, 1, 222], ["WHBBG_AP", 2, 2, 150], ["WHBBG_AP", 3, "REST", 80],
-        ["WHBPP_AP", 1, 1, 222], ["WHBPP_AP", 2, 2, 150], ["WHBPP_AP", 3, "REST", 80],
-        ["WHPBG_AP", 1, 1, 159], ["WHPBG_AP", 2, 2, 105], ["WHPBG_AP", 3, "REST", 80],
-        ["WHPPP_AP", 1, 1, 159], ["WHPPP_AP", 2, 2, 105], ["WHPPP_AP", 3, "REST", 80],
+        # Aligned to the exact same widths as WHBBG/WHBPP/WHPBG/WHPPP (All
+        # Programs) — there was no real reason for these to differ, and the
+        # user wants All Peril's Windstorm/Hail sheets to print identically.
+        ["WHBBG_AP", 1, 1, 222], ["WHBBG_AP", 2, 2, 159], ["WHBBG_AP", 3, "REST", 70],
+        ["WHBPP_AP", 1, 1, 222], ["WHBPP_AP", 2, 2, 159], ["WHBPP_AP", 3, "REST", 70],
+        ["WHPBG_AP", 1, 1, 159], ["WHPBG_AP", 2, 2, 105], ["WHPBG_AP", 3, "REST", 70],
+        ["WHPPP_AP", 1, 1, 159], ["WHPPP_AP", 2, 2, 105], ["WHPPP_AP", 3, "REST", 70],
         # RI-only Named Storm percentage-deductible sheets on the All Peril page — same
         # column shape as WHPBG_AP/WHPPP_AP (the fixed-deductible NSPP/NSBG sheets reuse
         # the All Programs NSPP/NSBG profile directly via layout_key=None, no _AP needed).
@@ -181,9 +184,10 @@ def build():
         ["AIPP_AP", 1, 2, 82], ["AIPP_AP", 3, "REST", 80],
         ["BCEG_AP_SINGLE", 1, 1, 82], ["BCEG_AP_SINGLE", 2, 2, 100],
         ["TIB_AP", 1, 1, 100], ["TIB_AP", 2, 2, 68],
-        # Pre-2.0 All Peril: WH percentage sheets have one index column.
-        ["WHPBG_AP_CURRENT", 1, 1, 159], ["WHPBG_AP_CURRENT", 2, "REST", 80],
-        ["WHPPP_AP_CURRENT", 1, 1, 159], ["WHPPP_AP_CURRENT", 2, "REST", 80],
+        # Pre-2.0 All Peril: WH percentage sheets have one index column. Widths
+        # aligned to match WHPBG_CURRENT/WHPPP_CURRENT (All Programs) exactly.
+        ["WHPBG_AP_CURRENT", 1, 1, 159], ["WHPBG_AP_CURRENT", 2, "REST", 70],
+        ["WHPPP_AP_CURRENT", 1, 1, 159], ["WHPPP_AP_CURRENT", 2, "REST", 70],
         # Individual Programs (Hab, Auto Service) — transcribed from the
         # root-level HabPage*.py / AutoServicePage*.py format*() methods.
         # HAB_BR / AS_BR / HAB_LA / PROGRAM_TR are shared layout_key profiles
@@ -253,9 +257,13 @@ def build():
         ["WHBBGH", 1, 2, 4, "$#,##0"],
         ["WHBPP", 1, 2, 4, "$#,##0"],
         ["WHBPPH", 1, 2, 4, "$#,##0"],
-        ["BABG", 1, 1, 4, "NoDecimal"],
-        ["BAPP", 1, 1, 4, "NoDecimal"],
-        ["BABI", 1, 1, 4, "NoDecimal"],
+        # Building Age Years is a plain age number (0-100, plus a "101-1000"
+        # text bucket) — not a dollar amount, so no "$" prefix, but the shared
+        # "NoDecimal" alias is actually "#,##0.000" (misleadingly named — still
+        # 3 decimals), so it needs its own literal whole-number format.
+        ["BABG", 1, 1, 4, "#,##0"],
+        ["BAPP", 1, 1, 4, "#,##0"],
+        ["BABI", 1, 1, 4, "#,##0"],
         ["AIBG", 1, 2, 5, "$#,##0"],
         ["AIPP", 1, 2, 5, "$#,##0"],
         ["EBL", 1, 2, 5, "$#,##0"],
@@ -271,9 +279,9 @@ def build():
         ["WHPPP_AP", 2, 2, 4, "$#,##0"],
         ["NSPPP_AP", 2, 2, 4, "$#,##0"],
         ["NSPBG_AP", 2, 2, 4, "$#,##0"],
-        ["BABG_AP", 1, 1, 4, "NoDecimal"],
-        ["BAPP_AP", 1, 1, 4, "NoDecimal"],
-        ["BABI_AP", 1, 1, 4, "NoDecimal"],
+        ["BABG_AP", 1, 1, 4, "#,##0"],
+        ["BAPP_AP", 1, 1, 4, "#,##0"],
+        ["BABI_AP", 1, 1, 4, "#,##0"],
         ["AIBG_AP", 1, 2, 5, "$#,##0"],
         ["AIPP_AP", 1, 2, 5, "$#,##0"],
         # Individual Programs (Hab, Auto Service) — see the Table Layout note.

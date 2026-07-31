@@ -271,8 +271,21 @@ class AllPrograms:
             )
         filteredNSPercentage = filteredNSPercentage.astype({'Named Storm Deductible': 'int32'})
         filteredNSPercentage['Wind / Hail Deductible'] = filteredNSPercentage['Named Storm Deductible'].astype(str) + '%'
-        return filteredNSPercentage.replace({'Peril TypeCode': self.perilsConversions}). \
+        pivotedNSPercentage = filteredNSPercentage.replace({'Peril TypeCode': self.perilsConversions}). \
             pivot(index=['Wind / Hail Deductible'], columns='Peril TypeCode', values='Named Storm Percentage Deductible Factor').reset_index(['Wind / Hail Deductible'])
+
+        # The percentage-deductible factor doesn't vary by Amount of Insurance (the
+        # source table only carries it as duplicate sentinel rows, deduplicated
+        # above), but the filed rate page still lists every AOI band from the
+        # fixed-deductible table (1) above for the same coverage, repeating the
+        # same factor on each band — so pull that band list and cross-join it in.
+        aoiCol = 'Building' if coverage.casefold() == 'building' else 'BPP Min'
+        aoiValues = sorted(self._buildNamedStormDeductibleFactorForClass(classCodeMin, coverage)[aoiCol].unique())
+        aoiFrame = pd.DataFrame({'Amount of Insurance': aoiValues})
+        expanded = aoiFrame.merge(pivotedNSPercentage, how='cross')
+        return expanded.sort_values(by=['Wind / Hail Deductible', 'Amount of Insurance'])[
+            ['Wind / Hail Deductible', 'Amount of Insurance'] + [c for c in pivotedNSPercentage.columns if c != 'Wind / Hail Deductible']
+        ]
 
     # Builds the wind/hail deductible per building factor table for the given coverage (either Building or BPP)
     # Returns a dataframe
@@ -499,14 +512,14 @@ class AllPrograms:
         # whBldgNum/whPctNum above.
         if self.state == 'RI':
             sheetSpecs += [
-                ('NSPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactor('BPP'), False, True, None),
-                ('NSPPH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactorH('BPP'), False, True, None),
                 ('NSBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactor('Building'), False, True, None),
                 ('NSBGH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - Building', lambda: self.buildNamedStormDeductibleFactorH('Building'), False, True, None),
-                ('NSPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentage('BPP'), False, True, None),
-                ('NSPPPH', 'H Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentageH('BPP'), False, True, None),
-                ('NSPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentage('Building'), False, True, None),
-                ('NSPBGH', 'H Table 3.C.2.g.(2). Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentageH('Building'), False, True, None),
+                ('NSPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactor('BPP'), False, True, None),
+                ('NSPPH', 'H Table 3.C.2.g.(1). Named Storm Deductible Factor - Per Occurrence Fixed Deductible Amount - BPP', lambda: self.buildNamedStormDeductibleFactorH('BPP'), False, True, None),
+                ('NSPBG', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Optional Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentage('Building'), False, True, None),
+                ('NSPBGH', 'H Table 3.C.2.g.(2). Optional Named Storm Deductible Factor - Percentage Deductible - Building', lambda: self.buildNamedStormDeductiblePercentageH('Building'), False, True, None),
+                ('NSPPP', 'AS, FS, O, R, S, W Table 3.C.2.g.(2). Optional Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentage('BPP'), False, True, None),
+                ('NSPPPH', 'H Table 3.C.2.g.(2). Optional Named Storm Deductible Factor - Percentage Deductible - BPP', lambda: self.buildNamedStormDeductiblePercentageH('BPP'), False, True, None),
             ]
 
         sheetSpecs += [

@@ -229,6 +229,12 @@ def build():
         ["NSPPH", 1, 4, 5, "$#,##0"],
         ["NSBG", 1, 4, 5, "$#,##0"],
         ["NSBGH", 1, 4, 5, "$#,##0"],
+        # Percentage-deductible sheets' "Amount of Insurance" column (2) — same
+        # whole-dollar convention as NSPP/NSBG above, not the 3-decimal "Currency".
+        ["NSPPP", 2, 2, 4, "$#,##0"],
+        ["NSPPPH", 2, 2, 4, "$#,##0"],
+        ["NSPBG", 2, 2, 4, "$#,##0"],
+        ["NSPBGH", 2, 2, 4, "$#,##0"],
         ["WHOBG", 1, 4, 5, "Currency"],
         ["WHOBGH", 1, 4, 5, "Currency"],
         ["WHOPP", 1, 4, 5, "Currency"],
@@ -253,6 +259,8 @@ def build():
         ["WHBPP_AP", 1, 2, 4, "Currency"],
         ["WHPBG_AP", 2, 2, 4, "Currency"],
         ["WHPPP_AP", 2, 2, 4, "Currency"],
+        ["NSPPP_AP", 2, 2, 4, "$#,##0"],
+        ["NSPBG_AP", 2, 2, 4, "$#,##0"],
         ["BABG_AP", 1, 1, 4, "NoDecimal"],
         ["BAPP_AP", 1, 1, 4, "NoDecimal"],
         ["BABI_AP", 1, 1, 4, "NoDecimal"],

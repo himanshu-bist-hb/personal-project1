@@ -52,12 +52,23 @@ def _handle_disable_fit_to_page(ws, dest_filename):
     disable_fit_to_page(ws)
 
 
+def _handle_fit_width_landscape(ws, dest_filename):
+    # Same "one page wide, rows flow down" behavior as fit_width_only, but in
+    # landscape — for sheets with too many data columns (e.g. Property
+    # Deductible's per-peril columns) to stay readable at portrait width
+    # without either shrinking to near-unreadable or splitting the table
+    # across page-widths (a "vertical" page break through the middle of a row).
+    ws.page_setup.orientation = "landscape"
+    fit_width_only(ws)
+
+
 # Rule name (as written in the "Page Break Rules" tab) -> handler function.
 _RULE_HANDLERS = {
     "index": _handle_index,
     "fit_single_page": _handle_fit_single_page,
     "fit_width_only": _handle_fit_width_only,
     "disable_fit_to_page": _handle_disable_fit_to_page,
+    "fit_width_landscape": _handle_fit_width_landscape,
 }
 
 

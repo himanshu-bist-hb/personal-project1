@@ -104,8 +104,12 @@ def build():
         ["MVPP", 1, 1, 138], ["MVPP", 2, "REST", 53],
         ["BV", 1, 1, 229], ["BV", 2, 2, 54],
         ["AIBI", 1, 1, 208], ["AIBI", 2, 2, 54],
-        ["PD", 1, 3, 74], ["PD", 4, 4, 105], ["PD", 5, "REST", 53],
-        ["PDH", 1, 3, 74], ["PDH", 4, 4, 105], ["PDH", 5, "REST", 53],
+        # Cols 1-4 (Property Deductible / BPP Min / BPP Max / Building) are all
+        # large whole-dollar amounts (up to $2,000,000,000) — 74px was too
+        # narrow and rendered as "####" overflow; 105px (same as Building
+        # already used) fits the widest value comfortably.
+        ["PD", 1, 4, 105], ["PD", 5, "REST", 53],
+        ["PDH", 1, 4, 105], ["PDH", 5, "REST", 53],
         # RI-only Named Storm Deductible Factor sheets — same column shape as WHOBG/WHOPP.
         ["NSPP", 1, 2, 74], ["NSPP", 3, 3, 105], ["NSPP", 4, 4, 105], ["NSPP", 5, "REST", 62],
         ["NSPPH", 1, 2, 74], ["NSPPH", 3, 3, 105], ["NSPPH", 4, 4, 105], ["NSPPH", 5, "REST", 62],
@@ -159,7 +163,7 @@ def build():
         ["PCPP_AP", 1, 1, 131], ["PCPP_AP", 2, "REST", 80],
         ["MVBG_AP", 1, 1, 215], ["MVBG_AP", 2, 2, 100],
         ["MVPP_AP", 1, 1, 215], ["MVPP_AP", 2, 2, 100],
-        ["PD_AP", 1, 3, 74], ["PD_AP", 4, 4, 105], ["PD_AP", 5, "REST", 80],
+        ["PD_AP", 1, 4, 105], ["PD_AP", 5, "REST", 80],
         ["WHBBG_AP", 1, 1, 222], ["WHBBG_AP", 2, 2, 150], ["WHBBG_AP", 3, "REST", 80],
         ["WHBPP_AP", 1, 1, 222], ["WHBPP_AP", 2, 2, 150], ["WHBPP_AP", 3, "REST", 80],
         ["WHPBG_AP", 1, 1, 159], ["WHPBG_AP", 2, 2, 105], ["WHPBG_AP", 3, "REST", 80],
@@ -348,15 +352,18 @@ def build():
         ["NSBG", "fit_width_only"],
         # PDLD ("Property Damage Liability Deductible", Hab/Auto Service programs)
         # must be listed before PD below — it would otherwise match the "PD"
-        # prefix too and inherit disable_fit_to_page, which isn't what it needs.
+        # prefix too and inherit fit_width_landscape, which isn't what it needs.
         # Explicit here so it keeps today's default (fit_single_page) either way.
         ["PDLD", "fit_single_page"],
         # Property Deductible Factor (All Programs / All Peril) — has far more
-        # peril columns than the Named Storm sheets above (up to 18 vs ~9), so
-        # fit_width_only's "squeeze every column onto one page width" still
-        # shrank the font to near-unreadable. disable_fit_to_page prints at
-        # natural scale and lets both rows and columns paginate as needed.
-        ["PD", "disable_fit_to_page"],
+        # peril columns than the Named Storm sheets above (up to 18 vs ~9).
+        # disable_fit_to_page (tried first) let it print at full scale but also
+        # let it split across page-WIDTH (a stray vertical break through the
+        # table) since it's too wide for one portrait page. fit_width_landscape
+        # forces single-page-width like Named Storm's fit_width_only, but in
+        # landscape so there's enough room that the forced scale-down stays
+        # close to Named Storm's own (also non-100%) scale instead of much smaller.
+        ["PD", "fit_width_landscape"],
         ["*", "fit_single_page"],
     ])
 

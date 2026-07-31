@@ -221,10 +221,10 @@ def build():
     # =======================================================================
     ws = wb.create_sheet("Number Formats")
     _write_table(ws, ["TableCode", "ColStart", "ColEnd", "RowStart", "Format"], [
-        ["PD", 1, 4, 5, "Currency"],
-        ["PDH", 1, 4, 5, "Currency"],
         # Whole-dollar amounts, no decimals (unlike the shared "Currency" format,
         # which is "$#,##0.000" and looks awkward on whole-number amounts).
+        ["PD", 1, 4, 5, "$#,##0"],
+        ["PDH", 1, 4, 5, "$#,##0"],
         ["NSPP", 1, 4, 5, "$#,##0"],
         ["NSPPH", 1, 4, 5, "$#,##0"],
         ["NSBG", 1, 4, 5, "$#,##0"],
@@ -254,7 +254,7 @@ def build():
         ["WHOBG_CURRENT", 1, 4, 5, "Currency"],
         ["WHOPP_CURRENT", 1, 4, 5, "Currency"],
         # All Peril (*_AP) — see the Table Layout note.
-        ["PD_AP", 1, 4, 5, "Currency"],
+        ["PD_AP", 1, 4, 5, "$#,##0"],
         ["WHBBG_AP", 1, 2, 4, "Currency"],
         ["WHBPP_AP", 1, 2, 4, "Currency"],
         ["WHPBG_AP", 2, 2, 4, "Currency"],

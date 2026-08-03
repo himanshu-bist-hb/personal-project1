@@ -578,23 +578,27 @@ _HUGE_SHEET_ROWS  = 10_000   # a sheet taller than this triggers the parallel pa
 _PARALLEL_WORKERS = 4
 
 
-def _plan_parallel_export(xlsx_path):
+def _plan_parallel_export(xlsx_path, excluded=()):
     """
     Return a list of worker groups, or None when a plain single-instance
     export is the right choice. Each group is a list of
     (sheet_name, first_row, last_row, max_col) units in workbook order;
     first_row/last_row are None for "whole sheet".
+
+    excluded: sheet names to leave out of the PDF entirely (in addition to
+    "Index", which is always excluded).
     """
     try:
         import pikepdf  # required to merge the per-worker PDFs
     except ImportError:
         return None
 
+    skip = {"Index"} | set(excluded)
     wb = openpyxl.load_workbook(xlsx_path, read_only=True)
     try:
         sheets = []
         for ws in wb.worksheets:
-            if ws.title == "Index" or ws.sheet_state != "visible":
+            if ws.title in skip or ws.sheet_state != "visible":
                 continue
             sheets.append((ws.title, ws.max_row or 1, ws.max_column or 1))
     finally:
@@ -817,19 +821,24 @@ _PAPER_SIZES_PT = {
 }
 
 
-def _plan_direct_render(xlsx_path):
+def _plan_direct_render(xlsx_path, excluded=()):
     """Return {"sheets": [...], "has_small": bool} when the workbook's huge
-    sheets can be drawn directly (all of them trailing), else None."""
+    sheets can be drawn directly (all of them trailing), else None.
+
+    excluded: sheet names to leave out of the PDF entirely (in addition to
+    "Index", which is always excluded).
+    """
     try:
         import reportlab  # noqa: F401
         import pikepdf    # noqa: F401
     except ImportError:
         return None
 
+    skip = {"Index"} | set(excluded)
     wb = openpyxl.load_workbook(xlsx_path, read_only=True)
     try:
         vis = [(ws.title, ws.max_row or 1) for ws in wb.worksheets
-               if ws.title != "Index" and ws.sheet_state == "visible"]
+               if ws.title not in skip and ws.sheet_state == "visible"]
     finally:
         wb.close()
 
@@ -1302,10 +1311,14 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
     return out_pdf
 
 
-def _export_pdf_direct(xlsx_path, direct_sheets, has_small, pdf_path, progress):
+def _export_pdf_direct(xlsx_path, direct_sheets, has_small, pdf_path, progress, excluded=()):
     """Excel exports the small sheets in a worker thread while the huge grid
     sheets are drawn with reportlab; the parts are stitched with pikepdf.
-    Raises on any failure (caller falls back to the Excel-only exports)."""
+    Raises on any failure (caller falls back to the Excel-only exports).
+
+    excluded: sheet names to leave out of the PDF entirely (in addition to
+    "Index" and direct_sheets, which are always hidden from Excel's export).
+    """
     import tempfile
     import threading
     import pikepdf
@@ -1319,7 +1332,7 @@ def _export_pdf_direct(xlsx_path, direct_sheets, has_small, pdf_path, progress):
     except OSError:
         pass
 
-    hide = set(direct_sheets) | {"Index"}
+    hide = set(direct_sheets) | {"Index"} | set(excluded)
     paper = {}
     ready = threading.Event()
     errors = []
@@ -1419,16 +1432,22 @@ def _export_pdf_direct(xlsx_path, direct_sheets, has_small, pdf_path, progress):
                 pass
 
 
-def export_to_pdf(xlsx_path, pdf_path, progress_callback=None):
+def export_to_pdf(xlsx_path, pdf_path, progress_callback=None, exclude_sheets=None):
     """
     Convert an .xlsx file to PDF using Excel via COM.
 
-    All sheets except 'Index' are included. The xlsx is opened read-only
-    and never modified. Raises RuntimeError if the PDF is not produced.
+    All sheets except 'Index' are included. exclude_sheets (optional) names
+    additional sheets to leave out entirely — e.g. BOP's "All Programs" build
+    excludes the huge trailing "TRDEF" (Territory Definitions) sheet from the
+    main PDF, generated separately/optionally via export_single_sheet_pdf.
+    The xlsx is opened read-only and never modified. Raises RuntimeError if
+    the PDF is not produced.
     """
     import win32com.client
     import pythoncom
     import tempfile
+
+    excluded = set(exclude_sheets) if exclude_sheets else set()
 
     def _progress(msg):
         print(f"[pagebreaks] {msg}")
@@ -1480,7 +1499,7 @@ def export_to_pdf(xlsx_path, pdf_path, progress_callback=None):
     # only the small sheets, then stitch. Anything going wrong falls through
     # to the parallel / single-instance Excel exports below.
     try:
-        direct = _plan_direct_render(src_for_excel)
+        direct = _plan_direct_render(src_for_excel, excluded)
     except Exception as exc:
         print(f"[pagebreaks] direct-render planning skipped ({exc})")
         direct = None
@@ -1488,7 +1507,8 @@ def export_to_pdf(xlsx_path, pdf_path, progress_callback=None):
         t_export = time.perf_counter()
         try:
             _export_pdf_direct(src_for_excel, direct["sheets"],
-                               direct["has_small"], pdf_path, _progress)
+                               direct["has_small"], pdf_path, _progress,
+                               excluded)
             if not (os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0):
                 raise RuntimeError("direct-render PDF missing or empty")
             print(f"[pagebreaks] direct-render export took "
@@ -1507,7 +1527,7 @@ def export_to_pdf(xlsx_path, pdf_path, progress_callback=None):
     # Excel instances; anything going wrong here falls through to the normal
     # single-instance export below.
     try:
-        plan = _plan_parallel_export(src_for_excel)
+        plan = _plan_parallel_export(src_for_excel, excluded)
     except Exception as exc:
         print(f"[pagebreaks] parallel planning skipped ({exc})")
         plan = None
@@ -1544,16 +1564,20 @@ def export_to_pdf(xlsx_path, pdf_path, progress_callback=None):
         _progress("PDF — opening workbook...")
         workbook = excel.Workbooks.Open(src_for_excel, ReadOnly=True, UpdateLinks=0)
 
-        # Hide Index from the PDF without touching the source file.
+        # Hide Index (and any exclude_sheets) from the PDF without touching
+        # the source file.
+        hide_names = {"Index"} | excluded
+        first_visible = None
         for sheet in workbook.Sheets:
-            if sheet.Name == "Index":
+            if sheet.Name in hide_names:
                 sheet.Visible = 0  # xlSheetHidden
-            else:
-                # Make sure the first non-Index sheet is active so Excel
-                # picks a sensible page-1.
-                try: sheet.Activate()
-                except Exception: pass
-                break
+            elif first_visible is None:
+                first_visible = sheet
+        # Make sure the first visible sheet is active so Excel picks a
+        # sensible page-1.
+        if first_visible is not None:
+            try: first_visible.Activate()
+            except Exception: pass
 
         _progress("PDF — Excel is rendering pages (the long step)...")
         workbook.ExportAsFixedFormat(
@@ -1600,6 +1624,142 @@ def export_to_pdf(xlsx_path, pdf_path, progress_callback=None):
     raise RuntimeError(f"PDF was not created: {pdf_path}")
 
 
+def export_single_sheet_pdf(xlsx_path, pdf_path, sheet_name, progress_callback=None):
+    """
+    Export exactly one sheet of xlsx_path to pdf_path.
+
+    Used for BOP's optional standalone Territory Definitions ("TRDEF") PDF,
+    kept out of the main "All Programs" export (see export_to_pdf's
+    exclude_sheets) since that one sheet alone can dominate export time.
+    Tries the same direct grid-render path used for huge trailing sheets in
+    export_to_pdf; falls back to a plain Excel COM export of just that sheet
+    if that fails. The xlsx is opened read-only and never modified.
+    """
+    import tempfile
+    import win32com.client
+    import pythoncom
+
+    def _progress(msg):
+        print(f"[pagebreaks] {msg}")
+        if progress_callback:
+            progress_callback(msg)
+
+    xlsx_path = os.path.normpath(os.path.abspath(xlsx_path))
+    pdf_path  = os.path.normpath(os.path.abspath(pdf_path))
+
+    if not os.path.exists(xlsx_path):
+        raise FileNotFoundError(f"Excel file not found: {xlsx_path}")
+
+    wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    try:
+        if sheet_name not in wb.sheetnames:
+            raise ValueError(f"sheet {sheet_name!r} not found in {xlsx_path}")
+    finally:
+        wb.close()
+
+    os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
+    if os.path.exists(pdf_path):
+        try: os.remove(pdf_path)
+        except PermissionError:
+            raise RuntimeError(f"PDF is open in another program: {pdf_path}")
+
+    src_for_excel = xlsx_path
+    local_xlsx = None
+    onedrive = os.environ.get("OneDrive", "")
+    if onedrive and xlsx_path.lower().startswith(os.path.normpath(onedrive).lower()):
+        local_xlsx = os.path.join(
+            tempfile.gettempdir(),
+            f"~rate_pages_src_{os.getpid()}.xlsx",
+        )
+        shutil.copy2(xlsx_path, local_xlsx)
+        src_for_excel = local_xlsx
+
+    _kill_excel_instances()
+
+    try:
+        try:
+            _export_pdf_direct(src_for_excel, [sheet_name], False, pdf_path, _progress)
+            if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+                return pdf_path
+            raise RuntimeError("direct-render PDF missing or empty")
+        except Exception as exc:
+            print(f"[pagebreaks] direct render of {sheet_name!r} failed "
+                  f"({exc}) — falling back to Excel export")
+            try: os.remove(pdf_path)
+            except OSError: pass
+
+        # Fallback: plain Excel COM export of just this one sheet.
+        raw_pdf = os.path.join(tempfile.gettempdir(),
+                                f"~rate_pages_export_{os.getpid()}.pdf")
+        if os.path.exists(raw_pdf):
+            try: os.remove(raw_pdf)
+            except OSError: pass
+
+        pythoncom.CoInitialize()
+        excel = None
+        workbook = None
+        try:
+            _progress(f"PDF — launching Excel to export {sheet_name}...")
+            excel = win32com.client.DispatchEx("Excel.Application")
+            excel.Visible = False
+            excel.DisplayAlerts = False
+            excel.ScreenUpdating = False
+            excel.EnableEvents = False
+
+            workbook = excel.Workbooks.Open(src_for_excel, ReadOnly=True, UpdateLinks=0)
+            target = None
+            for sheet in workbook.Sheets:
+                if sheet.Name == sheet_name:
+                    target = sheet
+                else:
+                    sheet.Visible = 0  # xlSheetHidden
+            if target is None:
+                raise RuntimeError(f"sheet {sheet_name!r} not found")
+            target.Activate()
+
+            _progress(f"PDF — Excel is rendering {sheet_name} "
+                      f"(this can take a while)...")
+            workbook.ExportAsFixedFormat(
+                Type=_XL_TYPE_PDF,
+                Filename=raw_pdf,
+                Quality=_XL_QUALITY_STD,
+                IncludeDocProperties=False,
+                IgnorePrintAreas=False,
+                OpenAfterPublish=False,
+            )
+        finally:
+            try:
+                if workbook is not None:
+                    workbook.Close(SaveChanges=False)
+            except Exception:
+                pass
+            try:
+                if excel is not None:
+                    excel.Quit()
+            except Exception:
+                pass
+            pythoncom.CoUninitialize()
+
+        for _ in range(10):
+            if os.path.exists(raw_pdf) and os.path.getsize(raw_pdf) > 0:
+                break
+            time.sleep(0.2)
+        else:
+            raise RuntimeError(f"PDF was not created: {raw_pdf}")
+
+        _progress("PDF — compressing...")
+        _compress_pdf(raw_pdf, pdf_path)
+
+        if os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 0:
+            return pdf_path
+        raise RuntimeError(f"PDF was not created: {pdf_path}")
+    finally:
+        if local_xlsx is not None:
+            try: os.remove(local_xlsx)
+            except OSError: pass
+
+
 # Example usage:
 # process_pagebreaks(r"C:\path\to\workbook.xlsx", "ignored.pdf")
 # export_to_pdf(r"C:\path\to\workbook.xlsx", r"C:\path\to\workbook.pdf")
+# export_single_sheet_pdf(r"C:\path\to\workbook.xlsx", r"C:\path\to\TRDEF.pdf", "TRDEF")

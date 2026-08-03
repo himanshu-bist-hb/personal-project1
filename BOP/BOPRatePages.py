@@ -28,7 +28,7 @@ from . import HabPageCurrent
 from . import AutoServicePage
 from . import AutoServicePageCurrent
 from .bop_config import load_bop_config
-from .BOPpagebreaks import process_pagebreaks, export_to_pdf
+from .BOPpagebreaks import process_pagebreaks, export_to_pdf, export_single_sheet_pdf
 
 # "2.0" -> AllProgramsPage.AllPrograms (needs Territory Defs)
 # "pre2.0" -> AllProgramsPageCurrent.AllPrograms (no Territory Defs at all —
@@ -44,6 +44,12 @@ VALID_VERSIONS = ("2.0", "pre2.0")
 #   All Programs Territory page took over); pre2.0 versions build theirs
 #   straight from each ratebook's own BP7_Peril_TerritorialFactor table.
 VALID_PROGRAMS = ("All Programs", "All Peril", "Hab", "Auto Service")
+
+# The 2.0 "All Programs" workbook's last sheet — its 82k-row Territory
+# Definitions table dominates PDF export time, so the main PDF export
+# excludes it (see run()/generate_pdf_only's exclude_sheets) and it is
+# generated separately/optionally via generate_territory_defs_pdf.
+TERRITORY_DEFS_SHEET = "TRDEF"
 
 
 def load_territory_defs(state_abb: str) -> pd.DataFrame:
@@ -246,20 +252,62 @@ def run(
     return xlsx_outs, pdf_outs
 
 
-def generate_pdf_only(xlsx_path: str, pdf_path: str, progress_callback: Optional[Callable[[str], None]] = None) -> str:
+def generate_pdf_only(
+    xlsx_path: str,
+    pdf_path: str,
+    progress_callback: Optional[Callable[[str], None]] = None,
+    exclude_sheets: Optional[Sequence[str]] = None,
+) -> str:
     """
     Convert an existing rate-pages .xlsx into a PDF using Excel's own print
     engine, so every page-break / fit-to-page / print-area setting already
     written to the workbook is honored.
+
+    exclude_sheets: sheet names to leave out of the PDF entirely — used by
+    the "All Programs" (2.0) build to skip TERRITORY_DEFS_SHEET, which is
+    generated separately/optionally via generate_territory_defs_pdf.
     """
     import os
     if progress_callback: progress_callback("Launching Excel...")
     t0 = time.perf_counter()
-    out = export_to_pdf(xlsx_path, pdf_path, progress_callback=progress_callback)
+    out = export_to_pdf(xlsx_path, pdf_path, progress_callback=progress_callback,
+                         exclude_sheets=exclude_sheets)
     if not (os.path.exists(out) and os.path.getsize(out) > 0):
         raise RuntimeError(f"PDF was not created at {out}")
     elapsed = time.perf_counter() - t0
     if progress_callback:
         progress_callback(f"PDF created in {elapsed:0.1f}s — {os.path.basename(out)} 🎉")
     print(f"[BOPRatePages] PDF generated: {out}")
+    return out
+
+
+def territory_defs_pdf_path(xlsx_path: str) -> str:
+    """The output path generate_territory_defs_pdf writes to for a given
+    "All Programs" xlsx, kept alongside it."""
+    p = Path(xlsx_path)
+    return str(p.with_name(f"{p.stem} - Territory Definitions.pdf"))
+
+
+def generate_territory_defs_pdf(
+    xlsx_path: str,
+    progress_callback: Optional[Callable[[str], None]] = None,
+) -> str:
+    """
+    Export just the Territory Definitions ("TRDEF") sheet of an "All
+    Programs" (2.0) workbook to its own PDF. Optional companion to
+    generate_pdf_only, which excludes that sheet from the main PDF since it
+    alone can dominate export time (82k rows).
+    """
+    import os
+    pdf_path = territory_defs_pdf_path(xlsx_path)
+    if progress_callback: progress_callback("Launching Excel...")
+    t0 = time.perf_counter()
+    out = export_single_sheet_pdf(xlsx_path, pdf_path, TERRITORY_DEFS_SHEET,
+                                   progress_callback=progress_callback)
+    if not (os.path.exists(out) and os.path.getsize(out) > 0):
+        raise RuntimeError(f"PDF was not created at {out}")
+    elapsed = time.perf_counter() - t0
+    if progress_callback:
+        progress_callback(f"Territory Definitions PDF created in {elapsed:0.1f}s — {os.path.basename(out)} 🎉")
+    print(f"[BOPRatePages] Territory Definitions PDF generated: {out}")
     return out

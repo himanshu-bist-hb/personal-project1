@@ -28,6 +28,7 @@ from BA.BApagebreaks import (
     disable_fit_to_page,
     _sanitize_xlsx,
     export_to_pdf,
+    export_single_sheet_pdf,
 )
 from .bop_config import load_bop_config
 

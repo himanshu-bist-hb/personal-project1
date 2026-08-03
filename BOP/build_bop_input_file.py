@@ -404,10 +404,14 @@ def build():
         ["WHPBG", "fit_width_only"],
         ["WHPPP", "fit_width_only"],
         # "TRDEF" (Territory Definitions — a different, much larger grid-level
-        # sheet, tens of thousands of rows) must be listed before "TR" below —
-        # it would otherwise match the "TR" prefix too. Explicit here so it
-        # keeps today's default (fit_single_page) either way.
-        ["TRDEF", "fit_single_page"],
+        # sheet, tens of thousands of rows, 21 columns) must be listed before
+        # "TR" below — it would otherwise match the "TR" prefix too.
+        # fit_single_page squeezed the whole sheet (tens of thousands of rows)
+        # onto ONE page, flooring the scale at 10% and making the text
+        # unreadable. Same fix as PD/Building Age above: single page width,
+        # landscape for room, rows flow down naturally with the header row
+        # repeating on each page.
+        ["TRDEF", "fit_width_landscape"],
         # State Territory Multiplier — only 6 narrow columns (Peril, Territory,
         # Building, BPP, Liability, BI), same treatment as Named Storm/WH:
         # single page width in portrait (no landscape needed, unlike the wider

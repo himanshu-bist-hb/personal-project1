@@ -942,6 +942,7 @@ def _parse_grid_sheet_settings(xlsx_path, sheet_name):
         "fit_w": int(setup.get("fitToWidth", 1)),
         "fit_h": int(setup.get("fitToHeight", 1)),
         "scale_pct": int(setup.get("scale", 100) or 100),
+        "orientation": setup.get("orientation", "portrait"),
         "paper_size": int(setup["paperSize"]) if setup.get("paperSize") else None,
         "first_page_number": int(setup.get("firstPageNumber", 1) or 1),
         "default_row_height": float(fmt_pr.get("defaultRowHeight", 15.0)),
@@ -1079,6 +1080,9 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
 
     # ── Geometry (points) ───────────────────────────────────────────────────
     page_w, page_h = page_size
+    if s["orientation"] == "landscape" and page_w < page_h:
+        page_w, page_h = page_h, page_w
+    page_size = (page_w, page_h)
     mg = s["margins"]
     ml, mr = mg["left"] * 72.0, mg["right"] * 72.0
     mt, mb = mg["top"] * 72.0, mg["bottom"] * 72.0

@@ -1106,6 +1106,61 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
 
     string_width = pdfmetrics.stringWidth
 
+    # ── Value display cache (General + the few config number formats) ───────
+    # Hoisted above the column-width auto-fit pass below (and shared with the
+    # draw loop further down) so every value's display text/width is only
+    # computed once no matter how many times it repeats in the sheet.
+    def _make_fmt(excel_fmt):
+        if excel_fmt and excel_fmt.startswith("$"):
+            return lambda v: f"${v:,.0f}" if isinstance(v, (int, float)) else str(v)
+        if excel_fmt and "#,##0" in excel_fmt:
+            return lambda v: f"{v:,.0f}" if isinstance(v, (int, float)) else str(v)
+        return None
+
+    col_fmt_fns = {ci: fn for ci, fn in
+                   ((ci, _make_fmt(f)) for ci, f in col_fmts.items()) if fn}
+
+    def _general(v):
+        if isinstance(v, float):
+            return str(int(v)) if v.is_integer() else f"{v:.10g}"
+        return str(v)
+
+    disp_cache = {}
+    width_cache = {}
+
+    def _disp_text(v, ci):
+        txt = disp_cache.get(v)
+        if txt is None:
+            fmt = col_fmt_fns.get(ci)
+            txt = fmt(v) if fmt else _general(v)
+            disp_cache[v] = txt
+        return txt
+
+    def _disp_width(txt):
+        w = width_cache.get(txt)
+        if w is None:
+            w = string_width(txt, d_fontname, d_size)
+            width_cache[txt] = w
+        return w
+
+    # A saved column width usually just reflects openpyxl's plain default —
+    # "bestFit" columns (nearly every table's) only get their real width
+    # when a live Excel session opens/recalculates the file, which never
+    # happens on this direct-render path. Without this, any column whose
+    # actual content is wider than that guess draws past its boundary and
+    # overlaps the next column's text. Widen each column to fit its widest
+    # value (never narrower than the saved/configured width).
+    content_w_by_col = [0.0] * n_cols
+    for row in values[title_rows:]:
+        for ci in range(n_cols):
+            v = row[ci]
+            if v is None:
+                continue
+            w = _disp_width(_disp_text(v, ci))
+            if w > content_w_by_col[ci]:
+                content_w_by_col[ci] = w
+    col_w = [max(w, content_w_by_col[ci] + 8.0) for ci, w in enumerate(col_w)]
+
     def _wrap(text, font, size, avail):
         if string_width(text, font, size) <= avail or " " not in text:
             return [text]
@@ -1161,22 +1216,6 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
     total_pages = len(col_pages) * len(row_chunks)
     progress(f"PDF — drawing {sheet_name} ({n_data:,} rows, {total_pages} pages)...")
 
-    # ── Value display cache (General + the few config number formats) ───────
-    def _make_fmt(excel_fmt):
-        if excel_fmt and excel_fmt.startswith("$"):
-            return lambda v: f"${v:,.0f}" if isinstance(v, (int, float)) else str(v)
-        if excel_fmt and "#,##0" in excel_fmt:
-            return lambda v: f"{v:,.0f}" if isinstance(v, (int, float)) else str(v)
-        return None
-
-    col_fmt_fns = {ci: fn for ci, fn in
-                   ((ci, _make_fmt(f)) for ci, f in col_fmts.items()) if fn}
-
-    def _general(v):
-        if isinstance(v, float):
-            return str(int(v)) if v.is_integer() else f"{v:.10g}"
-        return str(v)
-
     hdr_secs = _parse_hf_sections(s["odd_header"])
     ftr_secs = _parse_hf_sections(s["odd_footer"])
     mh_pt = mg["header"] * 72.0
@@ -1218,8 +1257,6 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
     d_base_off = -d_descent + 0.8       # baseline above cell bottom
     h_descent = pdfmetrics.getDescent(h_font) / 1000.0 * h_size
     h_base_off = -h_descent + 0.8
-    width_cache = {}
-    disp_cache = {}
 
     page_no = s["first_page_number"]
     for colset in col_pages:
@@ -1295,15 +1332,8 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
                     v = row[ci]
                     if v is None:
                         continue
-                    txt = disp_cache.get(v)
-                    if txt is None:
-                        fmt = col_fmt_fns.get(ci)
-                        txt = fmt(v) if fmt else _general(v)
-                        disp_cache[v] = txt
-                    w = width_cache.get(txt)
-                    if w is None:
-                        w = string_width(txt, d_fontname, d_size)
-                        width_cache[txt] = w
+                    txt = _disp_text(v, ci)
+                    w = _disp_width(txt)
                     set_origin(centers[i] - w * 0.5, y_base)
                     text_out(txt)
             c.drawText(tx)

@@ -101,11 +101,18 @@ st.session_state.setdefault("bop_version", "2.0")
 # checkboxes, which the user could change while looking at the results.
 st.session_state.setdefault("bop_built_programs", [])
 st.session_state.setdefault("bop_built_version",  "2.0")
+# Optional "max PDF size" — when set, a PDF over this many MB is split into
+# "_part1"/"_part2"/... files each under the limit (see split_pdf_by_size).
+# None (the default, nothing typed) keeps today's single-PDF behavior.
+st.session_state.setdefault("bop_pdf_max_mb", None)
+# Actual PDF paths produced by the last "Generate PDF Documents" run — may
+# hold more entries than bop_xlsx_paths/bop_pdf_paths when a split happened.
+st.session_state.setdefault("bop_pdf_final_paths", [])
 # Optional standalone Territory Definitions PDF (All Programs, 2.0 only —
 # excluded from the main PDF above since its 82k-row sheet dominates export
 # time; generated separately only if the user wants it).
 st.session_state.setdefault("bop_terr_pdf_status", "idle")
-st.session_state.setdefault("bop_terr_pdf_path",   None)
+st.session_state.setdefault("bop_terr_pdf_paths",  [])
 st.session_state.setdefault("bop_terr_pdf_msg",    "")
 # Program selection — All Programs pre-checked to match the old default.
 # The *_store keys are plain session values that mirror the checkbox widgets:
@@ -2441,7 +2448,8 @@ elif active_lob == "Business Owners Policy":
                 st.session_state.bop_built_programs = built_programs
                 st.session_state.bop_built_version = st.session_state.bop_version
                 st.session_state.bop_run_status = "success"; st.session_state.bop_pdf_status = "idle"
-                st.session_state.bop_terr_pdf_status = "idle"; st.session_state.bop_terr_pdf_path = None
+                st.session_state.bop_pdf_final_paths = []
+                st.session_state.bop_terr_pdf_status = "idle"; st.session_state.bop_terr_pdf_paths = []
             except Exception as e:
                 import traceback; traceback.print_exc()
                 st.session_state.bop_run_status = "error"; st.session_state.bop_run_msg = str(e)
@@ -2459,6 +2467,8 @@ elif active_lob == "Business Owners Policy":
                 n_pdf = len(st.session_state.bop_xlsx_paths)
                 built_programs = st.session_state.bop_built_programs
                 built_version = st.session_state.bop_built_version
+                max_mb = st.session_state.bop_pdf_max_mb
+                final_paths = []
                 for i, (xp, pp) in enumerate(zip(st.session_state.bop_xlsx_paths, st.session_state.bop_pdf_paths), start=1):
                     def _cb(msg, _i=i, _n=n_pdf):
                         update_pdf_progress(f"[{_i}/{_n}] {msg}" if _n > 1 else msg)
@@ -2467,7 +2477,9 @@ elif active_lob == "Business Owners Policy":
                     # PDF here; the user can generate it separately below.
                     prog_name = built_programs[i - 1] if i - 1 < len(built_programs) else None
                     exclude = [TERRITORY_DEFS_SHEET] if (prog_name == "All Programs" and built_version == "2.0") else None
-                    generate_pdf_only(xp, pp, progress_callback=_cb, exclude_sheets=exclude)
+                    final_paths.extend(generate_pdf_only(xp, pp, progress_callback=_cb,
+                                                          exclude_sheets=exclude, max_pdf_mb=max_mb))
+                st.session_state.bop_pdf_final_paths = final_paths
                 st.session_state.bop_pdf_status = "success"
             except Exception as e:
                 import traceback; traceback.print_exc()
@@ -2485,8 +2497,9 @@ elif active_lob == "Business Owners Policy":
             try:
                 idx = st.session_state.bop_built_programs.index("All Programs")
                 xp = st.session_state.bop_xlsx_paths[idx]
-                out_pdf = generate_territory_defs_pdf(xp, progress_callback=update_terr_progress)
-                st.session_state.bop_terr_pdf_path = out_pdf
+                out_pdfs = generate_territory_defs_pdf(xp, progress_callback=update_terr_progress,
+                                                        max_pdf_mb=st.session_state.bop_pdf_max_mb)
+                st.session_state.bop_terr_pdf_paths = out_pdfs
                 st.session_state.bop_terr_pdf_status = "success"
             except Exception as e:
                 import traceback; traceback.print_exc()
@@ -2500,6 +2513,14 @@ elif active_lob == "Business Owners Policy":
             if st.session_state.bop_pdf_status != "success":
                 n_files = len(st.session_state.bop_xlsx_paths)
                 pdf_label = "Generate PDF Documents" if n_files > 1 else "Generate PDF Document"
+                st.markdown('<p class="f-label">&#128202; &nbsp;Max PDF Size (MB, optional)</p>', unsafe_allow_html=True)
+                st.markdown('<p class="f-hint">Leave blank to generate a single PDF, as today. If a generated PDF ends up larger than this, it\'s split into "_part1", "_part2", etc., each under the limit — a sheet\'s pages stay together in one part whenever they fit.</p>', unsafe_allow_html=True)
+                st.number_input(
+                    "Max PDF size (MB)", min_value=0.1, step=1.0,
+                    key="bop_pdf_max_mb", label_visibility="collapsed",
+                    placeholder="No limit — single PDF",
+                )
+                spacer(6)
                 st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
                 if st.button(pdf_label, key="bop_gen_pdf_btn", use_container_width=True):
                     st.session_state.bop_confirm_step = "pdf_processing"; st.rerun()
@@ -2507,7 +2528,7 @@ elif active_lob == "Business Owners Policy":
                 if st.session_state.bop_pdf_status == "error":
                     st.error(f"PDF Error: {st.session_state.bop_run_msg}")
             else:
-                for pp in st.session_state.bop_pdf_paths:
+                for pp in st.session_state.bop_pdf_final_paths:
                     st.success(f"&#10003;  PDF created: {Path(pp).name}")
 
                 # Territory Definitions ("TRDEF") — All Programs, 2.0 only.
@@ -2517,7 +2538,8 @@ elif active_lob == "Business Owners Policy":
                         and st.session_state.bop_built_version == "2.0"):
                     spacer(10)
                     if st.session_state.bop_terr_pdf_status == "success":
-                        st.success(f"&#10003;  Territory Definitions PDF created: {Path(st.session_state.bop_terr_pdf_path).name}")
+                        for tp in st.session_state.bop_terr_pdf_paths:
+                            st.success(f"&#10003;  Territory Definitions PDF created: {Path(tp).name}")
                     else:
                         st.markdown('<p class="f-hint">Territory Definitions is the last sheet of the All Programs workbook &mdash; its PDF is optional and generated separately since it can take longer.</p>', unsafe_allow_html=True)
                         st.markdown('<div class="btn-ready">', unsafe_allow_html=True)

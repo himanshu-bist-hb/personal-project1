@@ -28,7 +28,9 @@ from . import HabPageCurrent
 from . import AutoServicePage
 from . import AutoServicePageCurrent
 from .bop_config import load_bop_config
-from .BOPpagebreaks import process_pagebreaks, export_to_pdf, export_single_sheet_pdf
+from .BOPpagebreaks import (
+    process_pagebreaks, export_to_pdf, export_single_sheet_pdf, split_pdf_by_size,
+)
 
 # "2.0" -> AllProgramsPage.AllPrograms (needs Territory Defs)
 # "pre2.0" -> AllProgramsPageCurrent.AllPrograms (no Territory Defs at all —
@@ -257,7 +259,8 @@ def generate_pdf_only(
     pdf_path: str,
     progress_callback: Optional[Callable[[str], None]] = None,
     exclude_sheets: Optional[Sequence[str]] = None,
-) -> str:
+    max_pdf_mb: Optional[float] = None,
+) -> List[str]:
     """
     Convert an existing rate-pages .xlsx into a PDF using Excel's own print
     engine, so every page-break / fit-to-page / print-area setting already
@@ -266,6 +269,14 @@ def generate_pdf_only(
     exclude_sheets: sheet names to leave out of the PDF entirely — used by
     the "All Programs" (2.0) build to skip TERRITORY_DEFS_SHEET, which is
     generated separately/optionally via generate_territory_defs_pdf.
+
+    max_pdf_mb: if given and the resulting PDF is larger than this, it is
+    split into "<name>_part1.pdf", "<name>_part2.pdf", etc., each under the
+    limit (see split_pdf_by_size) — a sheet's pages are kept together in one
+    part whenever they fit.
+
+    Returns the list of PDF paths actually produced — a single-item list
+    unless max_pdf_mb forced a split.
     """
     import os
     if progress_callback: progress_callback("Launching Excel...")
@@ -274,11 +285,15 @@ def generate_pdf_only(
                          exclude_sheets=exclude_sheets)
     if not (os.path.exists(out) and os.path.getsize(out) > 0):
         raise RuntimeError(f"PDF was not created at {out}")
+    outs = split_pdf_by_size(out, max_pdf_mb, xlsx_path=xlsx_path,
+                              exclude_sheets=exclude_sheets,
+                              progress_callback=progress_callback)
     elapsed = time.perf_counter() - t0
     if progress_callback:
-        progress_callback(f"PDF created in {elapsed:0.1f}s — {os.path.basename(out)} 🎉")
-    print(f"[BOPRatePages] PDF generated: {out}")
-    return out
+        names = ", ".join(os.path.basename(o) for o in outs)
+        progress_callback(f"PDF created in {elapsed:0.1f}s — {names} 🎉")
+    print(f"[BOPRatePages] PDF generated: {outs}")
+    return outs
 
 
 def territory_defs_pdf_path(xlsx_path: str) -> str:
@@ -291,12 +306,21 @@ def territory_defs_pdf_path(xlsx_path: str) -> str:
 def generate_territory_defs_pdf(
     xlsx_path: str,
     progress_callback: Optional[Callable[[str], None]] = None,
-) -> str:
+    max_pdf_mb: Optional[float] = None,
+) -> List[str]:
     """
     Export just the Territory Definitions ("TRDEF") sheet of an "All
     Programs" (2.0) workbook to its own PDF. Optional companion to
     generate_pdf_only, which excludes that sheet from the main PDF since it
     alone can dominate export time (82k rows).
+
+    max_pdf_mb: if given and the resulting PDF is larger than this, it is
+    split into "<name>_part1.pdf", "<name>_part2.pdf", etc. (see
+    split_pdf_by_size) — TRDEF is a single sheet, so a split here is always
+    a plain page-count cut, same as any other single-sheet PDF over the
+    limit.
+
+    Returns the list of PDF paths actually produced.
     """
     import os
     pdf_path = territory_defs_pdf_path(xlsx_path)
@@ -306,8 +330,10 @@ def generate_territory_defs_pdf(
                                    progress_callback=progress_callback)
     if not (os.path.exists(out) and os.path.getsize(out) > 0):
         raise RuntimeError(f"PDF was not created at {out}")
+    outs = split_pdf_by_size(out, max_pdf_mb, progress_callback=progress_callback)
     elapsed = time.perf_counter() - t0
     if progress_callback:
-        progress_callback(f"Territory Definitions PDF created in {elapsed:0.1f}s — {os.path.basename(out)} 🎉")
-    print(f"[BOPRatePages] Territory Definitions PDF generated: {out}")
-    return out
+        names = ", ".join(os.path.basename(o) for o in outs)
+        progress_callback(f"Territory Definitions PDF created in {elapsed:0.1f}s — {names} 🎉")
+    print(f"[BOPRatePages] Territory Definitions PDF generated: {outs}")
+    return outs

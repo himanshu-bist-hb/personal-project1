@@ -29,6 +29,7 @@ from BA.BApagebreaks import (
     _sanitize_xlsx,
     export_to_pdf,
     export_single_sheet_pdf,
+    split_pdf_by_size,
 )
 from .bop_config import load_bop_config
 

@@ -1793,7 +1793,183 @@ def export_single_sheet_pdf(xlsx_path, pdf_path, sheet_name, progress_callback=N
             except OSError: pass
 
 
+def _sheet_page_counts(xlsx_path, exclude_sheets=None):
+    """
+    Page count per visible sheet, in workbook/export order — [] if Excel/COM
+    isn't available or anything goes wrong.
+
+    Used by split_pdf_by_size to plan part boundaries around whole sheets
+    instead of cutting blindly by page count; a [] result just means the
+    caller falls back to plain byte-threshold splitting with no sheet
+    awareness (still correct, just less tidy about where it cuts).
+    """
+    import win32com.client
+    import pythoncom
+
+    hide = {"Index"} | set(exclude_sheets or ())
+    pythoncom.CoInitialize()
+    excel = None
+    workbook = None
+    counts = []
+    try:
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
+        excel.ScreenUpdating = False
+        excel.EnableEvents = False
+        workbook = excel.Workbooks.Open(
+            os.path.normpath(os.path.abspath(xlsx_path)), ReadOnly=True, UpdateLinks=0)
+        for sheet in workbook.Sheets:
+            if sheet.Name in hide:
+                continue
+            counts.append((sheet.Name, int(sheet.PageSetup.Pages.Count)))
+    except Exception as exc:
+        print(f"[pagebreaks] sheet page-count lookup failed ({exc})")
+        return []
+    finally:
+        try:
+            if workbook is not None:
+                workbook.Close(SaveChanges=False)
+        except Exception:
+            pass
+        try:
+            if excel is not None:
+                excel.Quit()
+        except Exception:
+            pass
+        pythoncom.CoUninitialize()
+    return counts
+
+
+def split_pdf_by_size(pdf_path, max_mb, xlsx_path=None, exclude_sheets=None,
+                       progress_callback=None):
+    """
+    If pdf_path is larger than max_mb, split it into several PDFs each under
+    that size, replacing it with "<stem>_part1.pdf", "<stem>_part2.pdf", etc.
+    (in page order). A sheet's own pages are kept together in one part
+    whenever they fit; a sheet whose pages alone exceed max_mb on their own
+    is split across parts by page count instead, since there's no other way
+    to get it under the limit.
+
+    max_mb: falsy (None/0) -> no splitting; pdf_path is returned unchanged.
+    xlsx_path/exclude_sheets: optional — when given, used (via Excel COM) to
+    look up each visible sheet's page count so parts can be planned around
+    whole sheets; if that lookup isn't available, the whole document is
+    treated as one "sheet" (pure byte-threshold splitting).
+
+    Returns the list of output paths in page order — [pdf_path] unchanged
+    when no split was needed.
+    """
+    import pikepdf
+
+    def _progress(msg):
+        print(f"[pagebreaks] {msg}")
+        if progress_callback:
+            progress_callback(msg)
+
+    if not max_mb:
+        return [pdf_path]
+
+    max_bytes = float(max_mb) * 1_000_000
+    total_size = os.path.getsize(pdf_path)
+    if total_size <= max_bytes:
+        return [pdf_path]
+
+    sheet_counts = []
+    if xlsx_path:
+        try:
+            sheet_counts = _sheet_page_counts(xlsx_path, exclude_sheets)
+        except Exception as exc:
+            print(f"[pagebreaks] sheet page-count lookup skipped ({exc})")
+
+    stem, ext = os.path.splitext(pdf_path)
+    out_paths = []
+
+    with pikepdf.open(pdf_path) as src:
+        n_pages = len(src.pages)
+        if n_pages <= 1:
+            return [pdf_path]  # a single page can't be split any further
+
+        if sheet_counts and sum(c for _, c in sheet_counts) == n_pages:
+            bounds = []
+            p = 0
+            for _, cnt in sheet_counts:
+                bounds.append((p, p + cnt))
+                p += cnt
+        else:
+            bounds = [(0, n_pages)]  # no sheet-boundary info — one big "sheet"
+
+        avg_bytes = total_size / n_pages
+        max_pages = max(1, int(max_bytes // avg_bytes))
+
+        # Pre-chunk any sheet whose own pages already exceed the page budget
+        # on their own; sheets that fit stay as one atom so a part boundary
+        # won't land inside them unless it has to.
+        atoms = []
+        for s, e in bounds:
+            if e - s <= max_pages:
+                atoms.append([s, e])
+            else:
+                p = s
+                while p < e:
+                    p2 = min(p + max_pages, e)
+                    atoms.append([p, p2])
+                    p = p2
+        atoms.reverse()  # so .pop() below takes them back in document order
+
+        _progress(f"PDF — {total_size/1e6:.1f} MB exceeds the {max_mb:g} MB "
+                  f"limit, splitting {n_pages} pages...")
+
+        part_no = 0
+        while atoms:
+            group_s = atoms[-1][0]
+            group_e = group_s
+            taken = 0
+            while atoms and (atoms[-1][1] - group_s) <= max_pages:
+                group_e = atoms.pop()[1]
+                taken += 1
+            if not taken:
+                group_e = atoms.pop()[1]  # a lone atom already over max_pages
+
+            # Verify against the REAL compressed size (max_pages above is
+            # only a planning estimate from the whole document's average);
+            # shrink and requeue the remainder if this part still runs over.
+            end = group_e
+            while True:
+                part_no += 1
+                part_path = f"{stem}_part{part_no}{ext}"
+                part = pikepdf.new()
+                try:
+                    part.pages.extend(src.pages[group_s:end])
+                    part.save(part_path, compress_streams=True,
+                              recompress_flate=True,
+                              object_stream_mode=pikepdf.ObjectStreamMode.generate)
+                finally:
+                    part.close()
+                size = os.path.getsize(part_path)
+                if size <= max_bytes or end - group_s <= 1:
+                    break
+                part_no -= 1
+                try: os.remove(part_path)
+                except OSError: pass
+                shrink = max(1, (end - group_s) // 8)
+                end -= shrink
+
+            _progress(f"PDF — wrote {os.path.basename(part_path)} "
+                      f"({end - group_s} pages, {size/1e6:.1f} MB)")
+            out_paths.append(part_path)
+            if end < group_e:
+                atoms.append([end, group_e])  # leftover carries into the next part
+
+    try:
+        os.remove(pdf_path)
+    except OSError:
+        pass
+    return out_paths
+
+
 # Example usage:
 # process_pagebreaks(r"C:\path\to\workbook.xlsx", "ignored.pdf")
 # export_to_pdf(r"C:\path\to\workbook.xlsx", r"C:\path\to\workbook.pdf")
 # export_single_sheet_pdf(r"C:\path\to\workbook.xlsx", r"C:\path\to\TRDEF.pdf", "TRDEF")
+# split_pdf_by_size(r"C:\path\to\workbook.pdf", 10, xlsx_path=r"C:\path\to\workbook.xlsx")

@@ -58,7 +58,8 @@ class AllPrograms:
     def buildSprinklerFactor(self):
         sprinklerPeril = self.buildDataFrame("BP7_Peril_Sprinkler_Discount")
         filteredSprinklerPeril = sprinklerPeril.query(f'Class_Code_Min == 40000 & `Peril TypeCode` in {self.perils}').filter(items=['Peril TypeCode', 'Bldg Sprinkler Factor', 'BPP Sprinkler Factor'])
-        return filteredSprinklerPeril.replace({'Peril TypeCode': self.perilsConversions}).rename(columns={'Peril TypeCode': 'Peril', 'Bldg Sprinkler Factor': 'Building', 'BPP Sprinkler Factor': 'BPP'}).sort_values(by=['Peril'])
+        filteredSprinklerPeril = filteredSprinklerPeril.replace({'Peril TypeCode': self.perilsConversions}).rename(columns={'Peril TypeCode': 'Peril', 'Bldg Sprinkler Factor': 'Building', 'BPP Sprinkler Factor': 'BPP'}).sort_values(by=['Peril'])
+        return filteredSprinklerPeril[filteredSprinklerPeril['Peril'] != 'NC-BINC']
 
     # Builds the protection class table for the given coverage (either Building or BPP)
     # Returns a dataframe

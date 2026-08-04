@@ -71,7 +71,7 @@ class AllPrograms:
         sprinklerPeril = self.buildDataFrame("BP7_Peril_Sprinkler_Discount")
         filteredSprinklerPeril = sprinklerPeril.query(f'Class_Code_Min == 20000 & `Peril TypeCode` in {self.perils} ').filter(items=['Peril TypeCode', 'Bldg Sprinkler Factor', 'BPP Sprinkler Factor'])
         filteredSprinklerPeril = filteredSprinklerPeril.replace({'Peril TypeCode': self.perilsConversions}).rename(columns={'Peril TypeCode': 'Peril', 'Bldg Sprinkler Factor': 'Building', 'BPP Sprinkler Factor': 'BPP'}).sort_values(by=['Peril'])
-        filteredSprinklerPeril = filteredSprinklerPeril.drop(filteredSprinklerPeril[filteredSprinklerPeril['Peril'] == 'L-Products'].index)
+        filteredSprinklerPeril = filteredSprinklerPeril.drop(filteredSprinklerPeril[filteredSprinklerPeril['Peril'].isin(['L-Products', 'NC-BINC'])].index)
         sprinklerPerilBI = self.buildDataFrame("BP7_Peril_Sprinkler_Discount")
         filteredSprinklerPerilBI = sprinklerPerilBI.query(f'Class_Code_Min == 40000 & `Peril TypeCode` in {self.perils} ').filter(items=['Peril TypeCode', 'BPP Sprinkler Factor'])
         filteredSprinklerPerilBI = filteredSprinklerPerilBI.replace({'Peril TypeCode': self.perilsConversions}).rename(columns={'Peril TypeCode': 'Peril', 'BPP Sprinkler Factor': 'Bus Inc'}).sort_values(by=['Peril'])

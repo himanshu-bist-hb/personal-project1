@@ -103,7 +103,16 @@
       "Bash(\"./venv/Scripts/python.exe\" -m pip index versions ttkthemes)",
       "Bash(\"./venv/Scripts/python.exe\" -m pip install --dry-run -r requirements.txt)",
       "Bash(./venv/Scripts/python.exe *)",
-      "Bash(venv/Scripts/python.exe -c ' *)"
+      "Bash(venv/Scripts/python.exe -c ' *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8534)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:8535)",
+      "Bash(taskkill //F //IM streamlit.exe)",
+      "Bash(pkill -f \"streamlit run\")",
+      "Bash(curl -s -o /dev/null -w \"8534: %{http_code}\\\\n\" http://localhost:8534 --max-time 2)",
+      "Bash(curl -s -o /dev/null -w \"8535: %{http_code}\\\\n\" http://localhost:8535 --max-time 2)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //PID 30360)",
+      "Bash(taskkill //F //PID 26260)"
     ]
   }
 }

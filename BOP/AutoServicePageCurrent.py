@@ -7,6 +7,8 @@
 # workbook), and Liability Size of Risk splits by AutoServType instead of by
 # peril, which BP-2.0 changed.
 
+from copy import copy
+
 import numpy as np
 import pandas as pd
 from openpyxl.styles import Alignment, Border, Side
@@ -235,7 +237,15 @@ class Auto:
         ws['A4'] = 'Per Employee / Occurrence'
         ws['C3'] = 'Total Limits'
         ws['C4'] = 'Per Employee / Occurrence'
-        for cell in ws['3:3']:
+        # "Additional Premium" is the DataFrame's own header text for the
+        # 5th column (row 5, dropped below) — fold it up into the merged
+        # block so it reads at the same height as the two label columns
+        # next to it instead of floating alone above an otherwise-blank box.
+        ws['E3'] = ws['E5'].value
+        # Box + bold both label rows (row 3's "Optional Increased Limits" /
+        # "Total Limits" AND row 4's "Per Employee / Occurrence" underneath
+        # each) so the whole two-row header reads as one bordered block.
+        for cell in list(ws['3:3']) + list(ws['4:4']):
             cell.border = _THIN_BORDER
             cell.font = boldFont
             cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
@@ -243,11 +253,27 @@ class Auto:
         ws.merge_cells('A4:B4')
         ws.merge_cells('C3:D3')
         ws.merge_cells('C4:D4')
+        ws.merge_cells('E3:E4')
+        ws['E3'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        # The DataFrame's own header row (raw column names like
+        # "OptionalLimitsPerEmployee") lands right below as row 5 — the
+        # two-row box above already labels these columns, so drop it instead
+        # of showing both.
+        ws.delete_rows(5)
         ws.print_title_rows = '1:4'
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col)
             for row in range(5, ws.max_row + 1):
                 cell = ws[char + str(row)]
+                # _format_data_rows stamps one SHARED style object across
+                # every data cell for speed (see its docstring); mutating
+                # .number_format directly on a shared object silently
+                # changes every cell sharing it too — whichever column is
+                # processed last here would win for the WHOLE table. Give
+                # this cell its own copy first, same as the footnote loop in
+                # ExcelSettingsBOP.format_table already does.
+                if cell._style is not None:
+                    cell._style = copy(cell._style)
                 cell.number_format = '$#,##0' if col < 5 else '$#,##0.00'
 
     # Sets up the Auto Service Excel file and creates a separate worksheet

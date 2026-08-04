@@ -292,7 +292,11 @@ def build():
         ["YBPP", 1, 1, 4, "###0"],
         ["EBB", 1, 1, 4, "$#,##0.00"],
         ["PDLD", 1, 1, 4, "NoDecimal"],
-        ["LL", 1, 1, 4, "NoDecimal"],
+        # "NoDecimal" is itself 3-decimal (Formatting Defaults ->
+        # NoDecimalFormat = "#,##0.000", despite the name) — Liability Limit
+        # of Insurance is a whole-dollar limit amount, so it gets a literal
+        # no-decimal format instead of that misleadingly-named alias.
+        ["LL", 1, 1, 4, "#,##0"],
         ["DO", 2, 2, 4, "NoDecimal"],
         ["DO", 3, 4, 4, "$#,##0.00"],
         ["DONM", 1, 1, 4, "NoDecimal"],
@@ -302,7 +306,10 @@ def build():
         ["LS_CURRENT", 1, 2, 5, "NoDecimal"],
         ["LPGE", 1, 1, 4, "NoDecimal"],
         ["LPGE", 2, 2, 4, "Currency"],
-        ["SPD", 1, 1, 4, "Currency"],
+        # Special Property Damage Deductible (Auto Service) — "Currency" is
+        # $#,##0.000 (3 decimals); the Deductible column is a whole-dollar
+        # amount, so it prints with a dollar sign but no decimals instead.
+        ["SPD", 1, 1, 4, "$#,##0"],
         ["FR", 2, 2, 4, "$#,##0.00"],
     ])
 

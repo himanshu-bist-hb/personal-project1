@@ -91,11 +91,11 @@ class AllPrograms:
         filteredProtectionPeril = protectionPeril.query(f'Class_Code_Min == 20000 & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions, 'ProtectionClass': self.protectionClassConversions}). \
                 rename(columns={'ProtectionClass': 'Protection Class'})
         if coverage.casefold() == 'building': # Case-insensitive comparison
-            pivotedProtectionPeril = filteredProtectionPeril.pivot(index='Protection Class', columns='Peril TypeCode', values='BldgProtectionClassFactor').reset_index('Protection Class').drop('L-Products', axis=1)
+            pivotedProtectionPeril = filteredProtectionPeril.pivot(index='Protection Class', columns='Peril TypeCode', values='BldgProtectionClassFactor').reset_index('Protection Class').drop('L-Products', axis=1).drop(columns='NC-BINC', errors='ignore')
             pivotedProtectionPeril['Protection Class Number'] = pivotedProtectionPeril['Protection Class'].apply(self.getProtectionClassValue)
             return pivotedProtectionPeril.sort_values(by=['Protection Class Number']).loc[:, pivotedProtectionPeril.columns != 'Protection Class Number']
         elif coverage.casefold() == 'bpp': # Case-insensitive comparison
-            pivotedProtectionPeril = filteredProtectionPeril.pivot(index='Protection Class', columns='Peril TypeCode', values='BPPProtectionClassFactor').reset_index('Protection Class').drop('L-Products', axis=1)
+            pivotedProtectionPeril = filteredProtectionPeril.pivot(index='Protection Class', columns='Peril TypeCode', values='BPPProtectionClassFactor').reset_index('Protection Class').drop('L-Products', axis=1).drop(columns='NC-BINC', errors='ignore')
             pivotedProtectionPeril['Protection Class Number'] = pivotedProtectionPeril['Protection Class'].apply(self.getProtectionClassValue)
             return pivotedProtectionPeril.sort_values(by=['Protection Class Number']).loc[:, pivotedProtectionPeril.columns != 'Protection Class Number']
 
@@ -106,7 +106,7 @@ class AllPrograms:
         filteredProtectionPeril = protectionPeril.query(f'Class_Code_Min == 40000 & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions, 'ProtectionClass': self.protectionClassConversions}). \
                 rename(columns={'ProtectionClass': 'Protection Class'})
         if coverage.casefold() == 'business income': # Case-insensitive comparison
-            pivotedProtectionPeril = filteredProtectionPeril.pivot(index='Protection Class', columns='Peril TypeCode', values='BPPProtectionClassFactor').reset_index('Protection Class').drop('L-Products', axis=1)
+            pivotedProtectionPeril = filteredProtectionPeril.pivot(index='Protection Class', columns='Peril TypeCode', values='BPPProtectionClassFactor').reset_index('Protection Class').drop('L-Products', axis=1).drop(columns='NC-BINC', errors='ignore')
             pivotedProtectionPeril['Protection Class Number'] = pivotedProtectionPeril['Protection Class'].apply(self.getProtectionClassValue)
             pivotedProtectionPeril['NC-Water'] = ""
             pivotedProtectionPeril['NW-Fire'] = ""
@@ -124,9 +124,9 @@ class AllPrograms:
         updatedMasonryVeneerPeril["Masonry Veneer Percentage"] = updatedMasonryVeneerPeril["Masonry_Veneer_Min_Percent"] + ' - ' + updatedMasonryVeneerPeril["Masonry_Veneer_Max_Percent"] + '%' # Creating a single column for the percentage
         filteredMasonryVeneer = updatedMasonryVeneerPeril.query(f'`Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions})
         if coverage.casefold() == 'building': # Case-insensitive comparison
-            return filteredMasonryVeneer.pivot(index='Masonry Veneer Percentage', columns='Peril TypeCode', values='Bldg_Masonry_Veneer_Factor').reset_index('Masonry Veneer Percentage').drop('L-Products', axis=1)
+            return filteredMasonryVeneer.pivot(index='Masonry Veneer Percentage', columns='Peril TypeCode', values='Bldg_Masonry_Veneer_Factor').reset_index('Masonry Veneer Percentage').drop('L-Products', axis=1).drop(columns='NC-BINC', errors='ignore')
         elif coverage.casefold() == 'bpp': # Case-insensitive comparison
-            return filteredMasonryVeneer.pivot(index='Masonry Veneer Percentage', columns='Peril TypeCode', values='BPP_Masonry_Veneer_Factor').reset_index('Masonry Veneer Percentage').drop('L-Products', axis=1)
+            return filteredMasonryVeneer.pivot(index='Masonry Veneer Percentage', columns='Peril TypeCode', values='BPP_Masonry_Veneer_Factor').reset_index('Masonry Veneer Percentage').drop('L-Products', axis=1).drop(columns='NC-BINC', errors='ignore')
 
     # Builds the building valuation options factor table
     # Returns a dataframe

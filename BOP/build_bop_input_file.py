@@ -205,6 +205,11 @@ def build():
         ["YBPP", 1, 1, 131], ["YBPP", 2, "REST", 53],
         ["NS", 1, 1, 145],
         ["PDLD", 1, 1, 187], ["PDLD", 2, 2, 54],
+        # Hab's PDLD sheet needs its own Number Formats profile (dollar sign
+        # on the Deductible Amount column — Auto Service's shares the "PDLD"
+        # tab name but doesn't want the "$"), so it gets a separate layout
+        # key too even though the column widths are identical to PDLD's.
+        ["PDLD_HAB", 1, 1, 187], ["PDLD_HAB", 2, 2, 54],
         ["LL", 1, 1, 205], ["LL", 2, 2, 54],
         ["DO", 1, 1, 130], ["DO", 4, 4, 140],
         ["DONM", 1, 1, 225],
@@ -297,6 +302,12 @@ def build():
         # they get a literal no-decimal format instead of that
         # misleadingly-named alias.
         ["PDLD", 1, 1, 4, "#,##0"],
+        # Hab wants a "$" on the numeric Deductible Amount values (the text
+        # "No Deductible" row is untouched by a number format either way) —
+        # Auto Service's identical-tab-name PDLD sheet does not, so this is
+        # a separate layout key (see the Table Layout entry above), not an
+        # edit to the shared "PDLD" row.
+        ["PDLD_HAB", 1, 1, 4, "$#,##0"],
         ["LL", 1, 1, 4, "#,##0"],
         ["DO", 2, 2, 4, "#,##0"],
         ["DO", 3, 4, 4, "$#,##0.00"],

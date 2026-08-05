@@ -291,15 +291,16 @@ def build():
         ["YBBG", 1, 1, 4, "###0"],
         ["YBPP", 1, 1, 4, "###0"],
         ["EBB", 1, 1, 4, "$#,##0.00"],
-        ["PDLD", 1, 1, 4, "NoDecimal"],
         # "NoDecimal" is itself 3-decimal (Formatting Defaults ->
-        # NoDecimalFormat = "#,##0.000", despite the name) — Liability Limit
-        # of Insurance is a whole-dollar limit amount, so it gets a literal
-        # no-decimal format instead of that misleadingly-named alias.
+        # NoDecimalFormat = "#,##0.000", despite the name) — P.D. Deductible
+        # Amount / Liability Limit / D&O Limit are whole-dollar amounts, so
+        # they get a literal no-decimal format instead of that
+        # misleadingly-named alias.
+        ["PDLD", 1, 1, 4, "#,##0"],
         ["LL", 1, 1, 4, "#,##0"],
-        ["DO", 2, 2, 4, "NoDecimal"],
+        ["DO", 2, 2, 4, "#,##0"],
         ["DO", 3, 4, 4, "$#,##0.00"],
-        ["DONM", 1, 1, 4, "NoDecimal"],
+        ["DONM", 1, 1, 4, "#,##0"],
         ["DONM", 2, 2, 4, "$#,##0.00"],
         ["PLUS", 1, 1, 4, "$#,##0.00"],
         ["LS", 1, 2, 5, "NoDecimal"],

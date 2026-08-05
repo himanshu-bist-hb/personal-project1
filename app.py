@@ -104,7 +104,18 @@ st.session_state.setdefault("bop_built_version",  "2.0")
 # Optional "max PDF size" — when set, a PDF over this many MB is split into
 # "_part1"/"_part2"/... files each under the limit (see split_pdf_by_size).
 # None (the default, nothing typed) keeps today's single-PDF behavior.
+# bop_pdf_max_mb is the key-bound number_input's own value; it's only
+# rendered while bop_pdf_status != "success", and — same gotcha as the
+# program checkboxes above — Streamlit drops a key-bound widget's
+# session_state entry once it goes a run without being rendered. The
+# Territory Definitions PDF button is clicked several reruns after that
+# widget stops rendering, so reading bop_pdf_max_mb directly at that point
+# silently sees None even if the user typed a limit. bop_pdf_max_mb_store
+# mirrors it into a plain (non-widget) key right after each render, the
+# same pattern already used for bop_programs_store/bop_sel_all_store; every
+# downstream PDF-generation call reads the store, never the raw widget key.
 st.session_state.setdefault("bop_pdf_max_mb", None)
+st.session_state.setdefault("bop_pdf_max_mb_store", None)
 # Actual PDF paths produced by the last "Generate PDF Documents" run — may
 # hold more entries than bop_xlsx_paths/bop_pdf_paths when a split happened.
 st.session_state.setdefault("bop_pdf_final_paths", [])
@@ -2467,7 +2478,7 @@ elif active_lob == "Business Owners Policy":
                 n_pdf = len(st.session_state.bop_xlsx_paths)
                 built_programs = st.session_state.bop_built_programs
                 built_version = st.session_state.bop_built_version
-                max_mb = st.session_state.bop_pdf_max_mb
+                max_mb = st.session_state.bop_pdf_max_mb_store
                 final_paths = []
                 for i, (xp, pp) in enumerate(zip(st.session_state.bop_xlsx_paths, st.session_state.bop_pdf_paths), start=1):
                     def _cb(msg, _i=i, _n=n_pdf):
@@ -2498,7 +2509,7 @@ elif active_lob == "Business Owners Policy":
                 idx = st.session_state.bop_built_programs.index("All Programs")
                 xp = st.session_state.bop_xlsx_paths[idx]
                 out_pdfs = generate_territory_defs_pdf(xp, progress_callback=update_terr_progress,
-                                                        max_pdf_mb=st.session_state.bop_pdf_max_mb)
+                                                        max_pdf_mb=st.session_state.bop_pdf_max_mb_store)
                 st.session_state.bop_terr_pdf_paths = out_pdfs
                 st.session_state.bop_terr_pdf_status = "success"
             except Exception as e:
@@ -2520,6 +2531,10 @@ elif active_lob == "Business Owners Policy":
                     key="bop_pdf_max_mb", label_visibility="collapsed",
                     placeholder="No limit — single PDF",
                 )
+                # Mirror into the plain (non-widget) store every run this
+                # renders — see the setdefault comment above for why reading
+                # bop_pdf_max_mb directly, later, isn't safe.
+                st.session_state.bop_pdf_max_mb_store = st.session_state.bop_pdf_max_mb
                 spacer(6)
                 st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
                 if st.button(pdf_label, key="bop_gen_pdf_btn", use_container_width=True):

@@ -35,7 +35,12 @@ class Auto:
     def __init__(self, state, rateTables, perils, perilsConversions, nEffective, rEffective) -> None:
         self.state = state
         self.rateTables = rateTables
-        self.perils = perils
+        # Individual program pages (unlike All Programs) also show the
+        # "AllPeril" row/column — the root-level desktop tool passed a
+        # separate `programPerils = perils + ['allperil']` for exactly this
+        # reason (see StatePageGenerator.py). `perils` itself never contains
+        # "allperil" (see "Perils By State" in BOP Input File.xlsx).
+        self.perils = list(perils) + ['allperil']
         self.perilsConversions = perilsConversions
         self.nEffective = nEffective
         self.rEffective = rEffective

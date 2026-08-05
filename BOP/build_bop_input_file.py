@@ -304,8 +304,11 @@ def build():
         ["PLUS", 1, 1, 4, "$#,##0.00"],
         ["LS", 1, 2, 5, "NoDecimal"],
         ["LS_CURRENT", 1, 2, 5, "NoDecimal"],
-        ["LPGE", 1, 1, 4, "NoDecimal"],
-        ["LPGE", 2, 2, 4, "Currency"],
+        # LPG Exposures (Auto Service) — "NoDecimal"/"Currency" are actually
+        # #,##0.000 / $#,##0.000 (3 decimals despite the names); both columns
+        # are whole-number, so literal formats without decimals instead.
+        ["LPGE", 1, 1, 4, "#,##0"],
+        ["LPGE", 2, 2, 4, "$#,##0"],
         # Special Property Damage Deductible (Auto Service) — "Currency" is
         # $#,##0.000 (3 decimals); the Deductible column is a whole-dollar
         # amount, so it prints with a dollar sign but no decimals instead.

@@ -15,7 +15,7 @@ import re
 import time
 import copy
 
-from config.constants import BA_INPUT_FILE, SM_COMPANIES, MM_COMPANIES
+from config.constants import BA_INPUT_FILE, SM_COMPANIES, MM_COMPANIES, COMPANY_NAMES, COMPANY_NUMBERS
 
 # Define custom warning classes. Makes custom warnings when key functions fail more user friendly.
 # Search up the warning names to see use cases if interested.
@@ -79,7 +79,7 @@ class Auto:
     _STATE_LEVEL_COMPANY = "NGIC"
     _COMPANIES_CHECK = [
         "NGIC", "NACO", "NAFF", "CCMIC", "HICNJ",
-        "NICOF", "NMIC", "AICOA", "NICOA", "NPCIC",
+        "NICOF", "HIC", "APCIC", "NMIC", "AICOA", "NICOA", "NPCIC",
     ]
 
     def __init__(self, StateAbb, State, rateTables, nEffective, rEffective, NAICSDescriptions, SchedRatingMod) -> None:
@@ -281,7 +281,7 @@ class Auto:
 
             LCM Protocol: Goes through list of sheets that are flagged as LCM/Company Dev applicable. Then apply the multipliers.
         """
-        ratebook_names = ['NAFF', 'NACO', 'NICOF', 'CCMIC', 'HICNJ', 'NICOA', 'AICOA', 'NPCIC', 'NMIC', 'NWAG', 'NGIC', 'ATA'] # Level 2 company needs to be last.
+        ratebook_names = ['NAFF', 'NACO', 'NICOF', 'CCMIC', 'HICNJ', 'HIC', 'APCIC', 'NICOA', 'AICOA', 'NPCIC', 'NMIC', 'NWAG', 'NGIC', 'ATA'] # Level 2 company needs to be last.
 
         available_names = []
         for name in ratebook_names:
@@ -4882,7 +4882,7 @@ class Auto:
     # Builds RULE T1- Telematics
     @log_exceptions
     def buildRule451(self, company):
-        sm_mig_list = ["NICOF","NACO","NAFF","CCMIC","HICNJ"]
+        sm_mig_list = ["NICOF","NACO","NAFF","CCMIC","HICNJ","HIC","APCIC"]
         sm_run = ["NGIC"]
         mm_mig_list = ["NICOA","AICOA","NPCIC"]
         mm_run = ["NMIC"]
@@ -4911,7 +4911,7 @@ class Auto:
         return capping_data
 
     def buildRule451Renewals(self, company):
-        sm_mig_list = ["NICOF","NACO","NAFF","CCMIC","HICNJ"]
+        sm_mig_list = ["NICOF","NACO","NAFF","CCMIC","HICNJ","HIC","APCIC"]
         sm_run = ["NGIC"]
         mm_mig_list = ["NICOA","AICOA","NPCIC"]
         mm_run = ["NMIC"]
@@ -9050,34 +9050,13 @@ class Auto:
                             cell.border = border
 
     def overideFooter(self, ws, companies):
-        # Dictionary to map company abbreviations to full names
-        company_names = {
-            'NAFF': 'Nationwide Affinity Insurance Company of America',
-            'NACO': 'Nationwide Assurance Company',
-            'NGIC': 'Nationwide General Insurance Company',
-            'CCMIC' : 'Colonial County Mutual Insurance Company',
-            'HICNJ' : 'Harleysville Insurance Company of New Jersey',
-            'NICOF': 'Nationwide Insurance Company of Florida',
-            'NMIC' : 'Nationwide Mutual Insurance Company',
-            "AICOA" : "Allied Insurance Company of America",
-            "NICOA" : "Nationwide Insurance Company of America",
-            "NPCIC" : "Nationwide Property Casualty Insurance Company",
-            "NWAG" : "Nationwide Agribusiness Insurance Company"
-        }
-
-        company_numbers = {
-            'NAFF': '21',
-            'NACO': '27',
-            'NGIC': '25',
-            'CCMIC' : '12',
-            'HICNJ' : 'G',
-            'NICOF': '40',
-            'NMIC' : '01',
-            "AICOA" : "32",
-            "NICOA" : "07",
-            "NPCIC" : "28",
-            "NWAG" : "AG"
-        }
+        # Company abbreviation -> full name / short tab-name code. Sourced
+        # from config.constants (single source of truth — see its "Add new
+        # company here; nowhere else" comment) instead of a local copy, so
+        # a newly added company (e.g. HIC/APCIC) can't silently be missing
+        # from footers just because this dict wasn't kept in sync.
+        company_names = COMPANY_NAMES
+        company_numbers = COMPANY_NUMBERS
 
         # Clear existing footers
         ws.oddFooter.left.text = ""
@@ -9119,38 +9098,12 @@ class Auto:
         if len(self.CompanyListDif) == 1:
             included_companies = self.existing_companies
 
-        # Apply footers based on companies
-        if len(included_companies) == 5:
-            ws.oddFooter.left.text = (
-                f"{company_names[included_companies[0]]} \n "
-                f"{company_names[included_companies[1]]} \n "
-                f"{company_names[included_companies[2]]} \n "
-                f"{company_names[included_companies[3]]} \n"
-                f"{company_names[included_companies[4]]}"
-            )
-
-        elif len(included_companies) == 4:
-            ws.oddFooter.left.text = (
-                f"{company_names[included_companies[0]]} \n "
-                f"{company_names[included_companies[1]]} \n "
-                f"{company_names[included_companies[2]]} \n "
-                f"{company_names[included_companies[3]]}"
-            )
-        elif len(included_companies) == 3:
-            ws.oddFooter.left.text = (
-                f"{company_names[included_companies[0]]} \n "
-                f"{company_names[included_companies[1]]} \n "
-                f"{company_names[included_companies[2]]}"
-            )
-        elif len(included_companies) == 2:
-            ws.oddFooter.left.text = (
-                f"{company_names[included_companies[0]]} \n "
-                f"{company_names[included_companies[1]]}"
-            )
-        elif len(included_companies) == 1:
-            ws.oddFooter.left.text = f"{company_names[included_companies[0]]}"
-        else:
-            ws.oddFooter.left.text = ""
+        # Apply footers based on companies. Previously a hand-written chain
+        # of "== 5 / == 4 / == 3 / == 2 / == 1" branches — capped at 5, so
+        # any cluster of 6+ companies (now possible with SM_COMPANIES at 8
+        # entries, e.g. once HIC/APCIC are included) silently fell through
+        # to the "else" blank-footer case. Joining generalizes to any count.
+        ws.oddFooter.left.text = " \n ".join(company_names[c] for c in included_companies)
 
     def overideHeaderFL(self, AutoPages):
         # In FL space is needed within the right sided header for a stamp. This code moves the right header to the left header.
@@ -10461,7 +10414,7 @@ class Auto:
 
     def _page_rule_293(self, RatePages, shared):
         #Rule 293 (Varies by state)
-        ratebook_names = ['NGIC', 'NWAG', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
+        ratebook_names = ['NGIC', 'NWAG', 'NAFF', 'NACO', 'CCMIC', 'HICNJ', 'NICOF', 'HIC', 'APCIC', 'NMIC', 'NICOA', 'NPCIC', 'AICOA']
 
         available_companies = []
         for company in ratebook_names:

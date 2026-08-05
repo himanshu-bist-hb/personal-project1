@@ -79,13 +79,15 @@ COMPANY_NAMES: dict[str, str] = {
     "NICOA": "Nationwide Insurance Company of America",
     "NPCIC": "Nationwide Property Casualty Insurance Company",
     "NWAG":  "Nationwide Agribusiness Insurance Company",
+    "HIC":   "Harleysville Insurance Company",
+    "APCIC": "Allied Property Casualty Insurance Company",
 }
 
 # Companies that belong to the Middle Market ratebook.
 MM_COMPANIES: list[str] = ["AICOA", "NMIC", "NICOA", "NPCIC"]
 
 # Companies that belong to the Small Market ratebook.
-SM_COMPANIES: list[str] = ["NGIC", "NACO", "NAFF", "NICOF", "HICNJ", "CCMIC"]
+SM_COMPANIES: list[str] = ["NGIC", "NACO", "NAFF", "NICOF", "HICNJ", "CCMIC", "HIC", "APCIC"]
 
 # Short numeric codes used when tab names exceed Excel's 31-char limit.
 COMPANY_NUMBERS: dict[str, str] = {
@@ -100,6 +102,8 @@ COMPANY_NUMBERS: dict[str, str] = {
     "NICOA": "07",
     "NPCIC": "28",
     "NWAG":  "AG",
+    "HIC":   "47",
+    "APCIC": "03",
 }
 
 

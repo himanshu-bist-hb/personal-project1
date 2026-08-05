@@ -226,6 +226,27 @@ def build():
         ["BGL", 1, 1, 100],
         ["SPD", 1, 1, 90], ["SPD", 2, 2, 54],
         ["FR", 1, 1, 145], ["FR", 2, 2, 100],
+        # Retail-only tables — see BOP/RetailPage.py's module docstring for
+        # which codes above (CBG/CPP/YBBG/YBPP/EBB/CW/PDLD/LL/DO/DONM/ERP/
+        # LPGE/FR/AS_BR/PROGRAM_TR) Retail reuses as-is (widths transcribed
+        # from the root RetailPage.py format*() methods matched exactly).
+        ["DC", 2, 2, 250], ["DC", 3, 3, 245],
+        ["DCEQ", 1, 1, 245],
+        ["ET", 1, 1, 82], ["ET", 2, "REST", 80],
+        ["GLO", 1, 1, 145], ["GLO", 2, 2, 70], ["GLO", 3, 3, 215],
+        ["FL", 2, 2, 145],
+        ["HE", 1, 1, 170], ["HE", 2, 2, 190],
+        ["OPTI", 1, 1, 170], ["OPTI", 2, 2, 120],
+        ["PED", 1, 1, 170], ["PED", 2, 2, 180],
+        ["RTS", 1, 1, 350],
+        # Retail's own Liability Size of Risk shape — different sub-header
+        # text ("Building plus Business Personal Property" vs Auto Service's
+        # "Receipts Range") and widths, so it can't reuse the shared "LS"
+        # key. 2.0 and pre-2.0 use slightly different widths (140/100 vs
+        # 150/125 in the root format methods), matching the LS/LS_CURRENT
+        # split convention.
+        ["LS_RETAIL", 1, 2, 140], ["LS_RETAIL", 3, "REST", 100],
+        ["LS_RETAIL_CURRENT", 1, 2, 150], ["LS_RETAIL_CURRENT", 3, "REST", 125],
     ])
 
     # =======================================================================
@@ -326,6 +347,18 @@ def build():
         # amount, so it prints with a dollar sign but no decimals instead.
         ["SPD", 1, 1, 4, "$#,##0"],
         ["FR", 2, 2, 4, "$#,##0.00"],
+        # Retail-only tables. Literal formats throughout (not the "NoDecimal"/
+        # "Currency" aliases) — those are already known-mislabeled 3-decimal
+        # formats (see the PDLD/LPGE comments above); no reason to introduce
+        # that trap into new keys.
+        ["FL", 1, 1, 4, "#,##0"],
+        ["FL", 2, 2, 4, "$#,##0.00"],
+        ["HE", 2, 2, 4, "$#,##0.00"],
+        ["OPTI", 2, 2, 4, "$#,##0.00"],
+        ["PED", 2, 2, 4, "$#,##0.00"],
+        ["RTS", 1, 1, 4, "$#,##0.00"],
+        ["LS_RETAIL", 1, 2, 5, "#,##0"],
+        ["LS_RETAIL_CURRENT", 1, 2, 5, "#,##0"],
     ])
 
     # =======================================================================
@@ -360,6 +393,10 @@ def build():
         # "Receipts Range" label spanning the Min/Max columns.
         ["LS", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
         ["LS_CURRENT", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
+        # Retail's own Liability Size of Risk — different label text/columns
+        # than Auto Service's LS, see the Table Layout note.
+        ["LS_RETAIL", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
+        ["LS_RETAIL_CURRENT", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
     ])
 
     # =======================================================================

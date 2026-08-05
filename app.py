@@ -125,15 +125,16 @@ st.session_state.setdefault("bop_pdf_final_paths", [])
 st.session_state.setdefault("bop_terr_pdf_status", "idle")
 st.session_state.setdefault("bop_terr_pdf_paths",  [])
 st.session_state.setdefault("bop_terr_pdf_msg",    "")
-# Program selection — All Programs pre-checked to match the old default.
+# Program selection — nothing pre-checked; the user must explicitly pick at
+# least one LOB (see the "Program(s) selected" Readiness row below).
 # The *_store keys are plain session values that mirror the checkbox widgets:
 # widget state is dropped by Streamlit whenever a rerun happens before the
 # checkboxes render (e.g. clicking the Version toggle above them), so the
 # checkboxes are re-seeded from these mirrors every run.
-BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service"]
+BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail"]
 st.session_state.setdefault("bop_sel_all_store",   False)
-st.session_state.setdefault("bop_programs_store",  ["All Programs"])
-st.session_state.setdefault("bop_programs",        ["All Programs"])
+st.session_state.setdefault("bop_programs_store",  [])
+st.session_state.setdefault("bop_programs",        [])
 
 # All Programs consistency-check (audit_all_programs_split.py) — uses the
 # same uploaded ratebooks as rate-page generation above.
@@ -2393,12 +2394,15 @@ elif active_lob == "Business Owners Policy":
         req_sub = f"All {len(BOP_REQUIRED)} required ratebooks uploaded" if all_bop_req() else f"{nr_now} of {len(BOP_REQUIRED)} required ratebooks uploaded"
         sdv = st.session_state.bop_save_dir
         save_sub = (("…"+sdv[-36:]) if len(sdv)>38 else sdv) if save_ok else "Not yet selected"
+        progs_ok = bool(st.session_state.bop_programs)
+        progs_sub = ", ".join(st.session_state.bop_programs) if progs_ok else "Not yet selected"
 
         def rdy(ok, title, sub):
             d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
             return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
 
         st.markdown('<div class="rdy-card">'
+            + rdy(progs_ok, f'Program(s) Selected &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{len(st.session_state.bop_programs)}/{len(BOP_AVAILABLE_PROGRAMS)}</span>', progs_sub)
             + rdy(all_bop_req(), f'Required Ratebooks &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{nr_now}/{len(BOP_REQUIRED)}</span>', req_sub)
             + rdy(save_ok, "Save location", save_sub)
             + '</div>', unsafe_allow_html=True)

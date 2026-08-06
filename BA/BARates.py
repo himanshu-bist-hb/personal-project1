@@ -15,7 +15,7 @@ import re
 import time
 import copy
 
-from config.constants import BA_INPUT_FILE, SM_COMPANIES, MM_COMPANIES, COMPANY_NAMES, COMPANY_NUMBERS, FONT_SIZE
+from config.constants import BA_INPUT_FILE, SM_COMPANIES, MM_COMPANIES, COMPANY_NAMES, COMPANY_NUMBERS
 
 # Define custom warning classes. Makes custom warnings when key functions fail more user friendly.
 # Search up the warning names to see use cases if interested.
@@ -9104,38 +9104,29 @@ class Auto:
         # entries, e.g. once HIC/APCIC are included) silently fell through
         # to the "else" blank-footer case.
         #
-        # Company names run ~40 characters average. Stacking more than 4 of
-        # them as separate lines in a single footer section risks both
-        # Excel's ~255-char-per-section footer limit and running past the
-        # page's footer margin vertically (this file's footer margin is a
-        # fixed 0.25in — nowhere near tall enough for 5+ stacked lines of
-        # 10pt text), which is what was causing header/footer print issues
-        # once a Small Market cluster grew past 4 companies.
-        #
-        # ws.oddFooter.right is already used for the tab name/page number
-        # (set above), so once there are more than 4 companies, split the
-        # list across left AND center instead of stacking everything into
-        # left alone — center is otherwise unused by this method. This
-        # roughly halves both the character count and the stacked-line
-        # count per section (e.g. 8 companies -> 4 lines/section instead of
-        # 8 lines in one section), the same "split across footer sections"
-        # approach ExcelSettingsBA._apply_default_footer already uses for
-        # the individual (non-SM) 2/3/4-company cases.
+        # BA Small Market only: once there are more than 4 companies, one
+        # name per line (even split across left+center, even at a shrunk
+        # font) still ran too many stacked lines to fit the vertical room
+        # between the footer margin and the bottom page margin. Two fixes
+        # combined instead:
+        #   1. Two companies per line ("Company A, Company B") instead of
+        #      one — halves the line count on its own.
+        #   2. Still split across left AND center (right is already used
+        #      for the tab name/page number) — halves it again.
+        # Together: at most 2 stacked lines per section even at the full
+        # 8-company SM roster (8 companies -> 2 per line -> 4 lines -> split
+        # across 2 columns -> 2 lines/column), comfortably inside the normal
+        # font size, so no font-shrinking is needed for this case anymore.
         if len(included_companies) > 4:
+            def _paired_lines(codes):
+                names = [company_names[c] for c in codes]
+                pairs = [", ".join(names[i:i + 2]) for i in range(0, len(names), 2)]
+                return " \n ".join(pairs)
+
             mid = (len(included_companies) + 1) // 2
             left_companies, center_companies = included_companies[:mid], included_companies[mid:]
-            ws.oddFooter.left.text = " \n ".join(company_names[c] for c in left_companies)
-            ws.oddFooter.center.text = " \n ".join(company_names[c] for c in center_companies)
-            # Splitting into two columns alone still wasn't enough — up to 4
-            # stacked lines at the normal FONT_SIZE (10pt) is right at the
-            # edge of (or past) the vertical room between the footer margin
-            # and the bottom page margin, which is what was still corrupting
-            # the print layout. Shrink the footer text itself for this case
-            # only; the <=4-company path above is untouched (still whatever
-            # size _apply_default_footer set at worksheet creation, 10pt).
-            shrunk_size = max(6, FONT_SIZE - 3)
-            ws.oddFooter.left.size = shrunk_size
-            ws.oddFooter.center.size = shrunk_size
+            ws.oddFooter.left.text = _paired_lines(left_companies)
+            ws.oddFooter.center.text = _paired_lines(center_companies)
         else:
             ws.oddFooter.left.text = " \n ".join(company_names[c] for c in included_companies)
 

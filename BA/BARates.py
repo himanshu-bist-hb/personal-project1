@@ -15,7 +15,7 @@ import re
 import time
 import copy
 
-from config.constants import BA_INPUT_FILE, SM_COMPANIES, MM_COMPANIES, COMPANY_NAMES, COMPANY_NUMBERS
+from config.constants import BA_INPUT_FILE, SM_COMPANIES, MM_COMPANIES, COMPANY_NAMES, COMPANY_NUMBERS, FONT_SIZE
 
 # Define custom warning classes. Makes custom warnings when key functions fail more user friendly.
 # Search up the warning names to see use cases if interested.
@@ -9126,6 +9126,16 @@ class Auto:
             left_companies, center_companies = included_companies[:mid], included_companies[mid:]
             ws.oddFooter.left.text = " \n ".join(company_names[c] for c in left_companies)
             ws.oddFooter.center.text = " \n ".join(company_names[c] for c in center_companies)
+            # Splitting into two columns alone still wasn't enough — up to 4
+            # stacked lines at the normal FONT_SIZE (10pt) is right at the
+            # edge of (or past) the vertical room between the footer margin
+            # and the bottom page margin, which is what was still corrupting
+            # the print layout. Shrink the footer text itself for this case
+            # only; the <=4-company path above is untouched (still whatever
+            # size _apply_default_footer set at worksheet creation, 10pt).
+            shrunk_size = max(6, FONT_SIZE - 3)
+            ws.oddFooter.left.size = shrunk_size
+            ws.oddFooter.center.size = shrunk_size
         else:
             ws.oddFooter.left.text = " \n ".join(company_names[c] for c in included_companies)
 

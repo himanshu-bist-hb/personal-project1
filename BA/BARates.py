@@ -9102,8 +9102,32 @@ class Auto:
         # of "== 5 / == 4 / == 3 / == 2 / == 1" branches — capped at 5, so
         # any cluster of 6+ companies (now possible with SM_COMPANIES at 8
         # entries, e.g. once HIC/APCIC are included) silently fell through
-        # to the "else" blank-footer case. Joining generalizes to any count.
-        ws.oddFooter.left.text = " \n ".join(company_names[c] for c in included_companies)
+        # to the "else" blank-footer case.
+        #
+        # Company names run ~40 characters average. Stacking more than 4 of
+        # them as separate lines in a single footer section risks both
+        # Excel's ~255-char-per-section footer limit and running past the
+        # page's footer margin vertically (this file's footer margin is a
+        # fixed 0.25in — nowhere near tall enough for 5+ stacked lines of
+        # 10pt text), which is what was causing header/footer print issues
+        # once a Small Market cluster grew past 4 companies.
+        #
+        # ws.oddFooter.right is already used for the tab name/page number
+        # (set above), so once there are more than 4 companies, split the
+        # list across left AND center instead of stacking everything into
+        # left alone — center is otherwise unused by this method. This
+        # roughly halves both the character count and the stacked-line
+        # count per section (e.g. 8 companies -> 4 lines/section instead of
+        # 8 lines in one section), the same "split across footer sections"
+        # approach ExcelSettingsBA._apply_default_footer already uses for
+        # the individual (non-SM) 2/3/4-company cases.
+        if len(included_companies) > 4:
+            mid = (len(included_companies) + 1) // 2
+            left_companies, center_companies = included_companies[:mid], included_companies[mid:]
+            ws.oddFooter.left.text = " \n ".join(company_names[c] for c in left_companies)
+            ws.oddFooter.center.text = " \n ".join(company_names[c] for c in center_companies)
+        else:
+            ws.oddFooter.left.text = " \n ".join(company_names[c] for c in included_companies)
 
     def overideHeaderFL(self, AutoPages):
         # In FL space is needed within the right sided header for a stamp. This code moves the right header to the left header.

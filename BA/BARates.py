@@ -9117,18 +9117,15 @@ class Auto:
         #
         # Fix: once there are more than 4 companies, abbreviate "Nationwide"
         # -> "NW" within each name (most of these legal names start with
-        # "Nationwide", each occurrence costs 8 characters) and split the
-        # list across left+center (one company per line in each — right is
-        # already used for the tab name/page number). Only the >4 branch is
-        # touched — the <=4 case keeps full legal names unabbreviated.
+        # "Nationwide", each occurrence costs 8 characters). All company
+        # names stay in left only, one per line — company names must never
+        # appear in center for BA Small Market; center is left untouched
+        # (already cleared to "" above). Only the >4 branch is touched — the
+        # <=4 case keeps full legal names unabbreviated, also left-only.
         if len(included_companies) > 4:
-            def _one_per_line(codes):
-                return " \n ".join(company_names[c].replace("Nationwide", "NW") for c in codes)
-
-            mid = (len(included_companies) + 1) // 2
-            left_companies, center_companies = included_companies[:mid], included_companies[mid:]
-            ws.oddFooter.left.text = _one_per_line(left_companies)
-            ws.oddFooter.center.text = _one_per_line(center_companies)
+            ws.oddFooter.left.text = " \n ".join(
+                company_names[c].replace("Nationwide", "NW") for c in included_companies
+            )
         else:
             ws.oddFooter.left.text = " \n ".join(company_names[c] for c in included_companies)
 

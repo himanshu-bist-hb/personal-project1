@@ -9104,22 +9104,25 @@ class Auto:
         # entries, e.g. once HIC/APCIC are included) silently fell through
         # to the "else" blank-footer case.
         #
-        # BA Small Market only: once there are more than 4 companies, one
-        # name per line (even split across left+center, even at a shrunk
-        # font) still ran too many stacked lines to fit the vertical room
-        # between the footer margin and the bottom page margin. Two fixes
-        # combined instead:
-        #   1. Two companies per line ("Company A, Company B") instead of
-        #      one — halves the line count on its own.
-        #   2. Still split across left AND center (right is already used
-        #      for the tab name/page number) — halves it again.
-        # Together: at most 2 stacked lines per section even at the full
-        # 8-company SM roster (8 companies -> 2 per line -> 4 lines -> split
-        # across 2 columns -> 2 lines/column), comfortably inside the normal
-        # font size, so no font-shrinking is needed for this case anymore.
+        # BA Small Market only: the real constraint (confirmed empirically,
+        # not just guessed) is Excel's ~255-character limit on a header/
+        # footer's LEFT+CENTER+RIGHT text COMBINED — not per-section, and
+        # not a line-count/vertical-space limit. ~51 of those 255 characters
+        # are already spent on the &"Arial,Bold"&10 font/size codes prefixed
+        # onto each of the 3 sections before any text is written. At ~40
+        # characters/company average, more than ~4-5 full legal names blows
+        # the remaining ~200-character budget outright — no line-wrapping or
+        # column-splitting changes that total, since it's a character-count
+        # ceiling, not a layout one.
+        #
+        # Fix: once there are more than 4 companies, abbreviate "Nationwide"
+        # -> "NW" within each name (most of these legal names start with
+        # "Nationwide", each occurrence costs 8 characters) on top of the
+        # existing 2-per-line, left+center-split layout. Only the >4 branch
+        # is touched — the <=4 case keeps full legal names unabbreviated.
         if len(included_companies) > 4:
             def _paired_lines(codes):
-                names = [company_names[c] for c in codes]
+                names = [company_names[c].replace("Nationwide", "NW") for c in codes]
                 pairs = [", ".join(names[i:i + 2]) for i in range(0, len(names), 2)]
                 return " \n ".join(pairs)
 

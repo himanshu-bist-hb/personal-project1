@@ -113,7 +113,9 @@
       "Bash(netstat -ano)",
       "Bash(taskkill //F //PID 30360)",
       "Bash(taskkill //F //PID 26260)",
-      "WebSearch"
+      "WebSearch",
+      "Artifact",
+      "Bash(pip install *)"
     ]
   }
 }

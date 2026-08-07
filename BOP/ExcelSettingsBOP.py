@@ -31,6 +31,17 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from config.constants import COMPANY_NAMES
 from .bop_config import load_bop_config
 
+# Peril display names (see the "Peril Conversions" config tab / cat4, liability1-4)
+# whose text after the hyphen is longer than their neighboring peril columns
+# (e.g. "Products", "SlipFall", "OtherPrem" vs. "BINC", "Water", "Wind"). These
+# share a uniform per-table column width with their shorter neighbors, so at
+# that shared width they wrap to 3 lines ("L-" / "Product" / "s") instead of 2
+# ("L-" / "Products"). Enforced as a floor on top of the configured Table
+# Layout width, table-code-agnostic, so it self-applies to every BOP sheet
+# these labels appear on instead of needing a per-table-per-column override.
+_WIDE_PERIL_HEADERS = {"L-Products", "L-SlipFall", "L-Violence", "L-OtherMed", "L-OtherPrem"}
+_WIDE_PERIL_HEADER_MIN_PX = 75
+
 
 class Excel:
     """
@@ -305,6 +316,16 @@ class Excel:
             end = ws.max_column if col_end == "REST" else col_end
             for col in range(col_start, end + 1):
                 ws.column_dimensions[get_column_letter(col)].width = width_px / 7.0
+
+        # Floor width for the long-form peril headers (see _WIDE_PERIL_HEADERS)
+        # regardless of table code — a shared "REST" width sized for their
+        # shorter neighbor perils leaves these wrapping to 3 lines.
+        for col in range(1, max_col + 1):
+            if ws.cell(row=header_row, column=col).value in _WIDE_PERIL_HEADERS:
+                col_letter = get_column_letter(col)
+                current_width_px = (ws.column_dimensions[col_letter].width or 0) * 7.0
+                if current_width_px < _WIDE_PERIL_HEADER_MIN_PX:
+                    ws.column_dimensions[col_letter].width = _WIDE_PERIL_HEADER_MIN_PX / 7.0
 
         for cell_ref, text in self._cfg.footnotes.get(table_code, []):
             c = ws[cell_ref]

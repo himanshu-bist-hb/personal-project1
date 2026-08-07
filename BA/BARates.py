@@ -126,6 +126,20 @@ class Auto:
             self._STATE_LEVEL_COMPANY = "ATA"
             self.createSM()
         else:
+            # Two genuinely different hierarchies both populate MM company
+            # tables from createMM() — the difference is which company plays
+            # Level 2 (self._STATE_LEVEL_COMPANY) in the nesting cascade
+            # (process_ratebook) afterward:
+            #   - Individual-state MM (MM ratebook uploaded alongside NGIC,
+            #     no ATA): MM -> NGIC -> CW. _STATE_LEVEL_COMPANY stays the
+            #     class default ("NGIC").
+            #   - Small & Middle Market tab's MM mode (MM ratebook uploaded
+            #     alongside Applies to All, no NGIC): MM -> ATA -> CW, same
+            #     Level-2 role ATA already plays for SM mode above. ATA is
+            #     never populated in the individual-state flow, so this
+            #     branch can't misfire there.
+            if self.rateTables.get("MM") is not None and self.rateTables.get("ATA") is not None:
+                self._STATE_LEVEL_COMPANY = "ATA"
             self.createMM()
 
     def createMM(self):

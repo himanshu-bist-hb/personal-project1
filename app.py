@@ -145,15 +145,18 @@ st.session_state.setdefault("bop_audit_detail",        None)    # pd.DataFrame
 st.session_state.setdefault("bop_audit_completeness",  None)    # pd.DataFrame
 st.session_state.setdefault("bop_audit_report_bytes",  None)
 
-# ─── Small Market session state ────────────────────────────────────────────
+# ─── Small & Middle Market session state ───────────────────────────────────
 st.session_state.setdefault("file_SM",          None)
+st.session_state.setdefault("file_MM",          None)
 st.session_state.setdefault("file_ATA",         None)
 st.session_state.setdefault("sm_save_dir",      "")
 st.session_state.setdefault("sm_sched_mod",     0)
 st.session_state.setdefault("sm_run_status",    "idle")
 st.session_state.setdefault("sm_run_msg",       "")
-st.session_state.setdefault("sm_xlsx_path",     "")
-st.session_state.setdefault("sm_pdf_path",      "")
+# One entry per market actually built this run (SM and/or MM, each a fully
+# separate xlsx/pdf) — {"market": "SM"|"MM", "xlsx": path, "pdf_target": path,
+# "pdf": path|None, "pdf_status": "idle"|"success"}.
+st.session_state.setdefault("sm_build_results", [])
 st.session_state.setdefault("sm_pdf_status",    "idle")
 st.session_state.setdefault("sm_confirm_step",  "idle")
 st.session_state.setdefault("sm_upload_reset",  0)
@@ -968,7 +971,7 @@ elif active_lob == "Business Auto":
                 st.session_state.multi_step = "idle"
                 st.rerun()
     with tc3:
-        if st.button("Small Market", key="btn_sm", use_container_width=True,
+        if st.button("Small & Middle Market", key="btn_sm", use_container_width=True,
                      type="primary" if mode == "small_market" else "secondary"):
             if mode != "small_market":
                 st.session_state.mode = "small_market"
@@ -1480,14 +1483,14 @@ elif active_lob == "Business Auto":
             st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BA Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
 
     # ══════════════════════════════════════════════════════════════════════════
-    # SMALL MARKET MODE
+    # SMALL & MIDDLE MARKET MODE
     # ══════════════════════════════════════════════════════════════════════════
     elif mode == "small_market":
         L, R = st.columns([13, 7], gap="large")
 
         with L:
-            st.markdown('<div class="sec-label">&#128194; &nbsp;Small Market Ratebooks</div>', unsafe_allow_html=True)
-            st.markdown('<p class="f-hint">Upload the <b>Small Market</b> ratebook and the <b>Applies to All</b> ratebook. Individual company ratebooks are created from the SM Company Deviation sheet. The Applies to All ratebook acts as the state-level fallback.</p>', unsafe_allow_html=True)
+            st.markdown('<div class="sec-label">&#128194; &nbsp;Small &amp; Middle Market Ratebooks</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Upload the <b>Small Market</b> and/or <b>Middle Market</b> ratebook, plus the <b>Applies to All</b> ratebook (always required). Uploading SM builds Small Market rate pages; uploading MM builds Middle Market rate pages; uploading both builds both, as two separate files. Individual company ratebooks are created from each ratebook\'s own Company Deviation sheet — Applies to All is the state-level fallback for both (Middle Market here nests MM &rarr; Applies to All &rarr; CW, not the MM &rarr; NGIC &rarr; CW hierarchy used on the Individual State tab).</p>', unsafe_allow_html=True)
             spacer(4)
 
             uploaded_sm = st.file_uploader(
@@ -1500,6 +1503,16 @@ elif active_lob == "Business Auto":
                 st.session_state["file_SM"] = {"name": uploaded_sm.name, "bytes": uploaded_sm.read()}
 
             spacer(4)
+            uploaded_mm = st.file_uploader(
+                "Select the Middle Market ratebook file",
+                type=["xlsx", "xlsm", "xls"],
+                accept_multiple_files=False,
+                key=f"mm_upload_{st.session_state.sm_upload_reset}",
+            )
+            if uploaded_mm:
+                st.session_state["file_MM"] = {"name": uploaded_mm.name, "bytes": uploaded_mm.read()}
+
+            spacer(4)
             uploaded_ata = st.file_uploader(
                 "Select the Applies to All ratebook file",
                 type=["xlsx", "xlsm", "xls"],
@@ -1510,8 +1523,9 @@ elif active_lob == "Business Auto":
                 st.session_state["file_ATA"] = {"name": uploaded_ata.name, "bytes": uploaded_ata.read()}
 
             sm_val  = st.session_state.get("file_SM")
+            mm_val  = st.session_state.get("file_MM")
             ata_val = st.session_state.get("file_ATA")
-            n_ok_sm = sum(1 for v in [sm_val, ata_val] if v and "error" not in v)
+            n_ok_sm = sum(1 for v in [sm_val, mm_val, ata_val] if v and "error" not in v)
 
             def _sm_row(label, val, required=True):
                 badge = '<span class="ab-req">Required</span>' if required else ''
@@ -1520,18 +1534,21 @@ elif active_lob == "Business Auto":
                 return f'<div class="arow arow-empty"><span class="aco">{label} {badge}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
 
             st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{n_ok_sm} assigned</span></div>'
-                + _sm_row("SM", sm_val) + _sm_row("Applies to All", ata_val)
+                + _sm_row("SM", sm_val, required=False) + _sm_row("MM", mm_val, required=False) + _sm_row("Applies to All", ata_val)
                 + '</div>', unsafe_allow_html=True)
 
-            if sm_val or ata_val:
+            if sm_val or mm_val or ata_val:
                 spacer(8)
                 _, clr = st.columns([5, 1])
                 with clr:
                     if st.button("Clear all", type="secondary", key="sm_clear"):
                         st.session_state["file_SM"] = None
+                        st.session_state["file_MM"] = None
                         st.session_state["file_ATA"] = None
                         st.session_state.sm_upload_reset += 1
                         st.session_state.sm_run_status = "idle"
+                        st.session_state.sm_pdf_status = "idle"
+                        st.session_state.sm_build_results = []
                         st.rerun()
 
         with R:
@@ -1564,17 +1581,20 @@ elif active_lob == "Business Auto":
             spacer(6)
             st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
             sm_file_ok  = st.session_state.get("file_SM") is not None
+            mm_file_ok  = st.session_state.get("file_MM") is not None
             ata_file_ok = st.session_state.get("file_ATA") is not None
             sm_save_ok  = bool(st.session_state.sm_save_dir)
-            sm_ready    = sm_file_ok and ata_file_ok and sm_save_ok
+            markets_ok  = sm_file_ok or mm_file_ok
+            sm_ready    = markets_ok and ata_file_ok and sm_save_ok
 
             def rdy(ok, title, sub):
                 d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
                 return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
 
+            markets_sub = ", ".join(m for m, ok in (("SM", sm_file_ok), ("MM", mm_file_ok)) if ok) or "Upload the SM and/or MM ratebook"
             sm_sdv = st.session_state.sm_save_dir
             st.markdown('<div class="rdy-card">'
-                + rdy(sm_file_ok, 'SM Ratebook <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', "Uploaded" if sm_file_ok else "Required — please upload SM ratebook")
+                + rdy(markets_ok, 'Market Ratebook(s) <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED — SM and/or MM</span>', markets_sub)
                 + rdy(ata_file_ok, 'Applies to All <span style="font-size:10px;color:#C8102E;font-weight:600;">REQUIRED</span>', "Uploaded" if ata_file_ok else "Required — please upload Applies to All ratebook")
                 + rdy(sm_save_ok, "Save location", (("…"+sm_sdv[-36:]) if len(sm_sdv)>38 else sm_sdv) if sm_save_ok else "Not yet selected")
                 + rdy(True, f'Schedule Mod &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{st.session_state.sm_sched_mod}%</span>', "Rule 417 threshold")
@@ -1587,7 +1607,7 @@ elif active_lob == "Business Auto":
                         st.session_state.sm_confirm_step = "confirm"; st.session_state.sm_run_status = "idle"; st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
-                    missing = (["SM ratebook"] if not sm_file_ok else []) + (["Applies to All ratebook"] if not ata_file_ok else []) + (["save location"] if not sm_save_ok else [])
+                    missing = (["SM and/or MM ratebook"] if not markets_ok else []) + (["Applies to All ratebook"] if not ata_file_ok else []) + (["save location"] if not sm_save_ok else [])
                     st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
                     st.button(f"Waiting — {', '.join(missing)}", key="sm_run_dis", use_container_width=True, disabled=True)
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -1616,19 +1636,37 @@ elif active_lob == "Business Auto":
                 update_progress("Please wait while the workbooks are processed.")
                 from BA.BARatePages import run as run_rate_pages
                 try:
-                    f = st.session_state.get("file_SM")
-                    sm_bytes = io.BytesIO(f["bytes"]) if f and "error" not in f else None
+                    # Applies to All is shared across both markets' calls — read
+                    # its raw bytes once, then wrap in a FRESH BytesIO per call
+                    # (a stream is exhausted after being read once).
                     a = st.session_state.get("file_ATA")
-                    ata_bytes = io.BytesIO(a["bytes"]) if a and "error" not in a else None
-                    xlsx_out, pdf_out = run_rate_pages(
-                        NGICRatebook=None, MMRatebook=None, NACORatebook=None,
-                        NAFFRatebook=None, NICOFRatebook=None, HICNJRatebook=None,
-                        CCMICRatebook=None, NWAGRatebook=None, CWRatebook=None,
-                        SMRatebook=sm_bytes, ATARatebook=ata_bytes,
-                        folder_selected=st.session_state.sm_save_dir,
-                        SchedRatingMod=int(st.session_state.sm_sched_mod) or None,
-                        progress_callback=update_progress, skip_pdf=True)
-                    st.session_state.sm_xlsx_path = xlsx_out; st.session_state.sm_pdf_path = pdf_out
+                    ata_raw = a["bytes"] if a and "error" not in a else None
+
+                    markets_to_build = []
+                    if st.session_state.get("file_SM"):
+                        markets_to_build.append("SM")
+                    if st.session_state.get("file_MM"):
+                        markets_to_build.append("MM")
+
+                    results = []
+                    for i, market in enumerate(markets_to_build, start=1):
+                        def _cb(msg, _i=i, _n=len(markets_to_build), _m=market):
+                            update_progress(f"[{_m} {_i}/{_n}] {msg}" if _n > 1 else msg)
+                        f = st.session_state.get("file_SM") if market == "SM" else st.session_state.get("file_MM")
+                        market_bytes = io.BytesIO(f["bytes"]) if f and "error" not in f else None
+                        ata_bytes = io.BytesIO(ata_raw) if ata_raw is not None else None
+                        xlsx_out, pdf_target = run_rate_pages(
+                            NGICRatebook=None, MMRatebook=(market_bytes if market == "MM" else None),
+                            NACORatebook=None, NAFFRatebook=None, NICOFRatebook=None, HICNJRatebook=None,
+                            CCMICRatebook=None, NWAGRatebook=None, CWRatebook=None,
+                            SMRatebook=(market_bytes if market == "SM" else None), ATARatebook=ata_bytes,
+                            folder_selected=st.session_state.sm_save_dir,
+                            SchedRatingMod=int(st.session_state.sm_sched_mod) or None,
+                            progress_callback=_cb, skip_pdf=True)
+                        results.append({"market": market, "xlsx": xlsx_out, "pdf_target": pdf_target,
+                                         "pdf": None, "pdf_status": "idle"})
+
+                    st.session_state.sm_build_results = results
                     st.session_state.sm_run_status = "success"; st.session_state.sm_pdf_status = "idle"
                 except Exception as e:
                     import traceback; traceback.print_exc()
@@ -1644,7 +1682,15 @@ elif active_lob == "Business Auto":
                     loader_ph2.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting to PDF…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
                 from BA.BARatePages import generate_pdf_only
                 try:
-                    generate_pdf_only(st.session_state.sm_xlsx_path, st.session_state.sm_pdf_path, progress_callback=update_pdf_progress)
+                    results = st.session_state.sm_build_results
+                    n = len(results)
+                    for i, r in enumerate(results, start=1):
+                        if r["pdf_status"] == "success":
+                            continue
+                        def _cb(msg, _i=i, _n=n, _m=r["market"]):
+                            update_pdf_progress(f"[{_m} {_i}/{_n}] {msg}" if _n > 1 else msg)
+                        generate_pdf_only(r["xlsx"], r["pdf_target"], progress_callback=_cb)
+                        r["pdf"] = r["pdf_target"]; r["pdf_status"] = "success"
                     st.session_state.sm_pdf_status = "success"
                 except Exception as e:
                     import traceback; traceback.print_exc()
@@ -1653,16 +1699,20 @@ elif active_lob == "Business Auto":
 
             if st.session_state.sm_run_status == "success":
                 spacer(10)
-                st.success(f"&#10003;  Excel created: {Path(st.session_state.sm_xlsx_path).name}")
+                results = st.session_state.sm_build_results
+                for r in results:
+                    st.success(f"&#10003;  {r['market']} Excel created: {Path(r['xlsx']).name}")
                 if st.session_state.sm_pdf_status != "success":
                     st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                    if st.button("Generate PDF Document", key="sm_gen_pdf_btn", use_container_width=True):
+                    pdf_label = "Generate PDF Documents" if len(results) > 1 else "Generate PDF Document"
+                    if st.button(pdf_label, key="sm_gen_pdf_btn", use_container_width=True):
                         st.session_state.sm_confirm_step = "pdf_processing"; st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                     if st.session_state.sm_pdf_status == "error":
                         st.error(f"PDF Error: {st.session_state.sm_run_msg}")
                 else:
-                    st.success(f"&#10003;  PDF created: {Path(st.session_state.sm_pdf_path).name}")
+                    for r in results:
+                        st.success(f"&#10003;  {r['market']} PDF created: {Path(r['pdf']).name}")
             elif st.session_state.sm_run_status == "error":
                 spacer(10); st.error(st.session_state.sm_run_msg)
 

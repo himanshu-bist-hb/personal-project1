@@ -409,8 +409,14 @@ def run(
         "ATARatebook":   load_ratebook(ATARatebook),
     }
 
-    if ratebooks["NGICRatebook"] == "Not found" and ratebooks["SMRatebook"] == "Not found":
-        raise ValueError("NGIC or SM ratebook is required.")
+    # MM + Applies to All (no NGIC, no SM) is a valid combination too — the
+    # Small & Middle Market tab's Middle Market mode. See Auto.__init__'s
+    # _STATE_LEVEL_COMPANY branching in BA/BARates.py for the MM -> ATA -> CW
+    # hierarchy that combination triggers (distinct from the individual-state
+    # MM -> NGIC -> CW hierarchy).
+    mm_via_ata = ratebooks["MMRatebook"] != "Not found" and ratebooks["ATARatebook"] != "Not found"
+    if ratebooks["NGICRatebook"] == "Not found" and ratebooks["SMRatebook"] == "Not found" and not mm_via_ata:
+        raise ValueError("NGIC, SM, or MM + Applies to All ratebook is required.")
 
     # ── 2. Extract state / date metadata ──────────────────────────────────────
     info = get_rate_book_info(

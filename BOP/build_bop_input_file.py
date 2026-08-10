@@ -247,6 +247,23 @@ def build():
         # split convention.
         ["LS_RETAIL", 1, 2, 140], ["LS_RETAIL", 3, "REST", 100],
         ["LS_RETAIL_CURRENT", 1, 2, 150], ["LS_RETAIL_CURRENT", 3, "REST", 125],
+        # Service-only tables — see BOP/ServicePage.py's module docstring for
+        # which codes above (CBG/CPP/YBBG/YBPP/EBB/PDLD/LL/DO/DONM/ERP/PLUS/
+        # FR/AS_BR/ET/GLO/DC/DCEQ/LS_RETAIL) Service reuses as-is (widths
+        # transcribed from the root ServicePage.py format*() methods matched
+        # exactly).
+        ["FU", 1, "REST", 150],
+        ["BB", 1, "REST", 170],
+        # Repair Services (RSS) and the base-premium block of Pet Services
+        # Specialized (PSS) are both a single value visually widened to span
+        # 3 columns (A3:C3/A4:C4 merge in postFormat) — same 120px width on
+        # all 3 columns either way, so they share one key.
+        ["RSS", 1, 3, 120],
+        ["PSS", 1, 3, 120],
+        ["PSPL", 1, 1, 205], ["PSPL", 2, 2, 54],
+        # MPVS only sets A/B (matching the root tool, which never sets a
+        # width for column C either — see ServicePage.py's _formatMPVS).
+        ["MPVS", 1, 2, 150],
     ])
 
     # =======================================================================
@@ -359,6 +376,11 @@ def build():
         ["RTS", 1, 1, 4, "$#,##0.00"],
         ["LS_RETAIL", 1, 2, 5, "#,##0"],
         ["LS_RETAIL_CURRENT", 1, 2, 5, "#,##0"],
+        # Service-only tables. Literal formats throughout (not the
+        # "NoDecimal"/"Currency" aliases), same reasoning as the Retail-only
+        # rows above.
+        ["FUMP", 1, 1, 4, "$#,##0"],
+        ["BB", 2, "REST", 4, "$#,##0.00"],
     ])
 
     # =======================================================================

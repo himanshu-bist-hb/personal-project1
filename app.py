@@ -131,7 +131,7 @@ st.session_state.setdefault("bop_terr_pdf_msg",    "")
 # widget state is dropped by Streamlit whenever a rerun happens before the
 # checkboxes render (e.g. clicking the Version toggle above them), so the
 # checkboxes are re-seeded from these mirrors every run.
-BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail"]
+BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service"]
 st.session_state.setdefault("bop_sel_all_store",   False)
 st.session_state.setdefault("bop_programs_store",  [])
 st.session_state.setdefault("bop_programs",        [])
@@ -1603,7 +1603,7 @@ elif active_lob == "Business Auto":
             if st.session_state.sm_confirm_step == "idle":
                 if sm_ready:
                     st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                    if st.button("&#129413;  Create Rate Pages", key="sm_run_btn", use_container_width=True):
+                    if st.button("Create Rate Pages", key="sm_run_btn", use_container_width=True):
                         st.session_state.sm_confirm_step = "confirm"; st.session_state.sm_run_status = "idle"; st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
@@ -1614,7 +1614,7 @@ elif active_lob == "Business Auto":
 
             elif st.session_state.sm_confirm_step == "confirm":
                 st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                st.button("&#129413;  Create Rate Pages", key="sm_run_cfm", use_container_width=True, disabled=True)
+                st.button("Create Rate Pages", key="sm_run_cfm", use_container_width=True, disabled=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
                 spacer(8)
@@ -1875,7 +1875,7 @@ elif active_lob == "Farm Auto":
             if st.session_state.fa_confirm_step == "idle":
                 if ready:
                     st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                    if st.button("&#129413;  Create Rate Pages", key="fa_run_btn", use_container_width=True):
+                    if st.button("Create Rate Pages", key="fa_run_btn", use_container_width=True):
                         st.session_state.fa_confirm_step = "confirm"; st.session_state.fa_run_status = "idle"; st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
@@ -1886,7 +1886,7 @@ elif active_lob == "Farm Auto":
 
             elif st.session_state.fa_confirm_step == "confirm":
                 st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                st.button("&#129413;  Create Rate Pages", key="fa_run_btn_cfm", use_container_width=True, disabled=True)
+                st.button("Create Rate Pages", key="fa_run_btn_cfm", use_container_width=True, disabled=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
                 spacer(8)
@@ -2179,7 +2179,7 @@ elif active_lob == "Farm Auto":
             if st.session_state.fa_multi_step == "idle":
                 if ready_m:
                     st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                    if st.button(f"&#129413;  Create Rate Pages for {n_ready_m} State{'s' if n_ready_m!=1 else ''}", key="fa_multi_run_btn", use_container_width=True):
+                    if st.button(f"Create Rate Pages for {n_ready_m} State{'s' if n_ready_m!=1 else ''}", key="fa_multi_run_btn", use_container_width=True):
                         st.session_state.fa_multi_step = "confirm"; st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
@@ -2190,7 +2190,7 @@ elif active_lob == "Farm Auto":
 
             elif st.session_state.fa_multi_step == "confirm":
                 st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                st.button(f"&#129413;  Create Rate Pages for {n_ready_m} State{'s' if n_ready_m!=1 else ''}", key="fa_multi_run_cfm", use_container_width=True, disabled=True)
+                st.button(f"Create Rate Pages for {n_ready_m} State{'s' if n_ready_m!=1 else ''}", key="fa_multi_run_cfm", use_container_width=True, disabled=True)
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to all workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
                 spacer(8)
@@ -2394,8 +2394,8 @@ elif active_lob == "Business Owners Policy":
             ("Auto Service",         True,  "Available"),
             ("Food Service",         False, "Coming soon"),
             ("Office",               False, "Coming soon"),
-            ("Retail",               False, "Coming soon"),
-            ("Service",              False, "Coming soon"),
+            ("Retail",               True,  "Available"),
+            ("Service",              True,  "Available"),
             ("Wholesale",            False, "Coming soon"),
             ("Class",                False, "Coming soon"),
             ("Rating Plans",         False, "Coming soon"),
@@ -2462,7 +2462,7 @@ elif active_lob == "Business Owners Policy":
         if st.session_state.bop_confirm_step == "idle":
             if ready:
                 st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                if st.button("&#129413;  Create Rate Pages", key="bop_run_btn", use_container_width=True):
+                if st.button("Create Rate Pages", key="bop_run_btn", use_container_width=True):
                     st.session_state.bop_confirm_step = "confirm"; st.session_state.bop_run_status = "idle"; st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
@@ -2475,7 +2475,7 @@ elif active_lob == "Business Owners Policy":
 
         elif st.session_state.bop_confirm_step == "confirm":
             st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-            st.button("&#129413;  Create Rate Pages", key="bop_run_btn_cfm", use_container_width=True, disabled=True)
+            st.button("Create Rate Pages", key="bop_run_btn_cfm", use_container_width=True, disabled=True)
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
             spacer(8)

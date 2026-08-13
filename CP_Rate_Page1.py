@@ -270,20 +270,20 @@ def borderfnct(wkstname):
                 cell.font = fontBoldUnderline
             elif col >= 1:
                 cell.font = font
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
             if col == 1 and row == 2:
                 cell.alignment = Alignment(horizontal='left',vertical = 'bottom',wrap_text=False)
-        for col in wkstname.iter_cols(min_row=3):
-            max_length = 0
-            column = col[0].column_letter  # Get the column name
-            for cell in col:
-                try:  # Necessary to avoid error on empty cells
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = (max_length + 2) * 1.2
-            wkstname.column_dimensions[column].width = adjusted_width
+    for col in wkstname.iter_cols(min_row=3):
+        max_length = 0
+        column = col[0].column_letter  # Get the column name
+        for cell in col:
+            try:  # Necessary to avoid error on empty cells 
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = (max_length + 2) * 1.2
+        wkstname.column_dimensions[column].width = adjusted_width
     wkstname.print_area = 'A1:'+ get_column_letter(wkstname.max_column) + str(wkstname.max_row+1)
     wkstname.page_setup.fitToPage = True
     if wkstname.max_row > 30:
@@ -532,41 +532,30 @@ CWRatebook = pd.ExcelFile('\\\\Urbdat01.allied.nwie.net\\Actuary\\Actshare\\Com\
 
 # <editor-fold desc="Create LCM Dataframes">
 if NAFFRatebook != "Not found":
-    NAFFLCM = pd.read_excel(NAFFRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3,
-        4, 5, 6, 7, 8, 9, 10])
+    NAFFLCM = pd.read_excel(NAFFRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NAFFLCM = NAFFLCM.iloc[0, 1]
-    NAFFCRIMELCM = pd.read_excel(NAFFRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    NAFFCRIMELCM = pd.read_excel(NAFFRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NAFFCRIMELCM = NAFFCRIMELCM.iloc[0, 1]
 if NACORatebook != "Not found":
-    NACOLCM = pd.read_excel(NACORatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3,
-        4, 5, 6, 7, 8, 9, 10])
+    NACOLCM = pd.read_excel(NACORatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NACOLCM = NACOLCM.iloc[0, 1]
-    NACOCRIMELCM = pd.read_excel(NACORatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    NACOCRIMELCM = pd.read_excel(NACORatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NACOCRIMELCM = NACOCRIMELCM.iloc[0, 1]
 if NICOFRatebook != "Not found":
-    NICOFLCM = pd.read_excel(NICOFRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3,
-        4, 5, 6, 7, 8, 9, 10])
+    NICOFLCM = pd.read_excel(NICOFRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NICOFLCM = NICOFLCM.iloc[0, 1]
-    NICOFCRIMELCM = pd.read_excel(NICOFRatebook, sheet_name='CrimeLossCostMultiplier_Ext',
-        skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    NICOFCRIMELCM = pd.read_excel(NICOFRatebook, sheet_name='CrimeLossCostMultiplier_Ext',skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NICOFCRIMELCM = NICOFCRIMELCM.iloc[0, 1]
 if NGICRatebook != "Not found":
-    NGICLCM = pd.read_excel(NGICRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3,
-        4, 5, 6, 7, 8, 9, 10])
+    NGICLCM = pd.read_excel(NGICRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NGICLCM = NGICLCM.iloc[0, 1]
-    NGICCRIMELCM = pd.read_excel(NGICRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    NGICCRIMELCM = pd.read_excel(NGICRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NGICCRIMELCM = NGICCRIMELCM.iloc[0, 1]
 if MMRatebook != "Not found":
     if StateAbb != "WI":
-        MMLCM = pd.read_excel(MMRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3,
-            4, 5, 6, 7, 8, 9, 10])
-        MMCRIMELCM = pd.read_excel(MMRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        MMCompDev = pd.read_excel(MMRatebook, sheet_name='Company Deviation Factor_Ext', skiprows=
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMLCM = pd.read_excel(MMRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMCRIMELCM = pd.read_excel(MMRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMCompDev = pd.read_excel(MMRatebook, sheet_name='Company Deviation Factor_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         NWMLCM = MMLCM.iloc[0, 1]
         NWMCRIMELCM = MMCRIMELCM.iloc[0, 1]
         AICOA = ['aicoa_ext']
@@ -588,12 +577,9 @@ if MMRatebook != "Not found":
         NICOACRIMELCM = round_half_up(NWMCRIMELCM * NICOACompDev, 3)
         NWPCCRIMELCM = round_half_up(NWMCRIMELCM * NWPCCompDev, 3)
     else:
-        MMLCM = pd.read_excel(MMRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3,
-            4, 5, 6, 7, 8, 9, 10])
-        MMCRIMELCM = pd.read_excel(MMRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-        MMCompDev = pd.read_excel(MMRatebook, sheet_name='Company Deviation Factor_Ext', skiprows=
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMLCM = pd.read_excel(MMRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMCRIMELCM = pd.read_excel(MMRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMCompDev = pd.read_excel(MMRatebook, sheet_name='Company Deviation Factor_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         NWMLCM = MMLCM.iloc[0, 1]
         NWMCRIMELCM = MMCRIMELCM.iloc[0, 1]
         NICOA = ['nicoa_ext']
@@ -602,47 +588,43 @@ if MMRatebook != "Not found":
         NICOACompDev = NICOACompDev.iloc[0, 2]
         NICOALCM = round_half_up(NWMLCM * NICOACompDev, 3)
         NICOACRIMELCM = round_half_up(NWMCRIMELCM * NICOACompDev, 3)
-    if NICOFRatebook != "Not found":
-        SMLCMs = [['Nationwide Affinity Insurance Company of America', NAFFLCM], ['Nationwide Assurance Company', NACOLCM],
-            ['Nationwide Insurance Company of Florida', NICOFLCM], ['Nationwide General Insurance Company', NGICLCM]]
-        SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
-        SMCRIMELCMs = [['Nationwide Affinity Insurance Company of America', NAFFCRIMELCM],
-            ['Nationwide Assurance Company', NACOCRIMELCM],
-            ['Nationwide Insurance Company of Florida', NICOFCRIMELCM], ['Nationwide General Insurance Company', NGICCRIMELCM]]
-        SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
-    if NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        SMLCMs = [['Nationwide Affinity Insurance Company of America', NAFFLCM], ['Nationwide Assurance Company', NACOLCM],
-            ['Nationwide General Insurance Company', NGICLCM]]
-        SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
-        SMCRIMELCMs = [['Nationwide Affinity Insurance Company of America', NAFFCRIMELCM],
-            ['Nationwide Assurance Company', NACOCRIMELCM],
-            ['Nationwide General Insurance Company', NGICCRIMELCM]]
-        SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
-    if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
-        SMLCMs = [['Nationwide Assurance Company', NACOLCM], ['Nationwide General Insurance Company', NGICLCM]]
-        SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
-        SMCRIMELCMs = [['Nationwide Assurance Company', NACOCRIMELCM], ['Nationwide General Insurance
-            Company', NGICCRIMELCM]]
-        SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
-    if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook == "Not found"
-        and NGICRatebook != "Not found":
-        SMLCMs = [['Nationwide General Insurance Company', NGICLCM]]
-        SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
-        SMCRIMELCMs = [['Nationwide General Insurance Company', NGICCRIMELCM]]
-        SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
-    if MMRatebook != "Not found":
-        if StateAbb != "WI":
-            MMLCMs = [['Nationwide Insurance Company of America', NICOALCM], ['Nationwide Mutual Insurance Company', NWMLCM],
-                ['Nationwide Property & Casualty Insurance Company', NWPCLCM], ['Allied Insurance Company of America', AICOALCM]]
-            MMLCMTable = pd.DataFrame(MMLCMs, columns=['Company', 'LCM'])
-            MMCRIMELCMs = [['Nationwide Insurance Company of America', NICOACRIMELCM], ['Nationwide Mutual Insurance Company', NWMCRIMELCM],
-                ['Nationwide Property & Casualty Insurance Company', NWPCCRIMELCM], ['Allied Insurance Company of America', AICOACRIMELCM]]
-            MMCRIMELCMTable = pd.DataFrame(MMCRIMELCMs, columns=['Company', 'LCM'])
-        else:
-            MMLCMs = [['Nationwide Insurance Company of America', NICOALCM], ['Nationwide Mutual Insurance Company', NWMLCM]]
-            MMLCMTable = pd.DataFrame(MMLCMs, columns=['Company', 'LCM'])
-            MMCRIMELCMs = [['Nationwide Insurance Company of America', NICOACRIMELCM], ['Nationwide Mutual Insurance Company', NWMCRIMELCM]]
-            MMCRIMELCMTable = pd.DataFrame(MMCRIMELCMs, columns=['Company', 'LCM'])
+if NICOFRatebook != "Not found":
+    SMLCMs = [['Nationwide Affinity Insurance Company of America', NAFFLCM], ['Nationwide Assurance Company', NACOLCM],
+              ['Nationwide Insurance Company of Florida', NICOFLCM], ['Nationwide General Insurance Company', NGICLCM]]
+    SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
+    SMCRIMELCMs = [['Nationwide Affinity Insurance Company of America', NAFFCRIMELCM], ['Nationwide Assurance Company', NACOCRIMELCM],
+              ['Nationwide Insurance Company of Florida', NICOFCRIMELCM], ['Nationwide General Insurance Company', NGICCRIMELCM]]
+    SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
+if NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
+    SMLCMs = [['Nationwide Affinity Insurance Company of America', NAFFLCM], ['Nationwide Assurance Company', NACOLCM],
+               ['Nationwide General Insurance Company', NGICLCM]]
+    SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
+    SMCRIMELCMs = [['Nationwide Affinity Insurance Company of America', NAFFCRIMELCM], ['Nationwide Assurance Company', NACOCRIMELCM],
+                ['Nationwide General Insurance Company', NGICCRIMELCM]]
+    SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
+if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
+    SMLCMs = [['Nationwide Assurance Company', NACOLCM], ['Nationwide General Insurance Company', NGICLCM]]
+    SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
+    SMCRIMELCMs = [['Nationwide Assurance Company', NACOCRIMELCM], ['Nationwide General Insurance Company', NGICCRIMELCM]]
+    SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
+if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook == "Not found" and NGICRatebook != "Not found":
+    SMLCMs = [['Nationwide General Insurance Company', NGICLCM]]
+    SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
+    SMCRIMELCMs = [['Nationwide General Insurance Company', NGICCRIMELCM]]
+    SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
+if MMRatebook != "Not found":
+    if StateAbb != "WI":
+        MMLCMs = [['Nationwide Insurance Company of America', NICOALCM], ['Nationwide Mutual Insurance Company', NWMLCM],
+                  ['Nationwide Property & Casualty Insurance Company', NWPCLCM], ['Allied Insurance Company of America', AICOALCM]]
+        MMLCMTable = pd.DataFrame(MMLCMs, columns=['Company', 'LCM'])
+        MMCRIMELCMs = [['Nationwide Insurance Company of America', NICOACRIMELCM], ['Nationwide Mutual Insurance Company', NWMCRIMELCM],
+                  ['Nationwide Property & Casualty Insurance Company', NWPCCRIMELCM], ['Allied Insurance Company of America', AICOACRIMELCM]]
+        MMCRIMELCMTable = pd.DataFrame(MMCRIMELCMs, columns=['Company', 'LCM'])
+    else:
+        MMLCMs = [['Nationwide Insurance Company of America', NICOALCM], ['Nationwide Mutual Insurance Company', NWMLCM]]
+        MMLCMTable = pd.DataFrame(MMLCMs, columns=['Company', 'LCM'])
+        MMCRIMELCMs = [['Nationwide Insurance Company of America', NICOACRIMELCM], ['Nationwide Mutual Insurance Company', NWMCRIMELCM]]
+        MMCRIMELCMTable = pd.DataFrame(MMCRIMELCMs, columns=['Company', 'LCM'])
 # </editor-fold>
 
 # <editor-fold desc="Create Territory Adjustment Dataframes">
@@ -689,20 +671,18 @@ if TerrAdjRatebook != "Not found":
     )
 
     GridFac = pd.concat(
-        [
-            bgi[['Grid ID']],
-            bgi[['BGI Factor']],
-            bgii[['BGII Factor']],
-            scol[['SCOL Factor']]
-        ],
-        axis=1
-    )
+         [
+             bgi[['Grid ID']],
+             bgi[['BGI Factor']],
+             bgii[['BGII Factor']],
+             scol[['SCOL Factor']]
+         ],
+         axis=1
+        )
 
     TerrCoord = pd.ExcelFile(
-        '\\\\Urbdat01.allied.nwie.net\\Actuary\\Actshare\\Com\\Property\\Territory Defs (Independent)\\3.0\\Development\\R Shiny Interface\\RShiny Smoothed Relativities\\' +
-        StateAbb + ' Smoothed Relativities.xlsx')
-    Coords = pd.read_excel(TerrCoord,sheet_name='Sheet1',usecols=[1,2,3],names=['Grid ID',
-        'Longitude', 'Latitude']).round(7)
+        '\\\\Urbdat01.allied.nwie.net\\Actuary\\Actshare\\Com\\Property\\Territory Defs (Independent)\\3.0\\Development\\R Shiny Interface\\RShiny Smoothed Relativities\\' + StateAbb + ' Smoothed Relativities.xlsx')
+    Coords = pd.read_excel(TerrCoord,sheet_name='Sheet1',usecols=[1,2,3], names=['Grid ID', 'Longitude', 'Latitude']).round(7)
     GridFac = pd.merge(GridFac, Coords, how='inner', on='Grid ID')
     GridFac = GridFac[['Grid ID','Longitude','Latitude','BGI Factor','BGII Factor','SCOL Factor']]
     GridFac = GridFac.rename(columns={"Grid ID":"Territory"})
@@ -711,7 +691,7 @@ if TerrAdjRatebook != "Not found":
     GridFac1 = GridFac.iloc[:GridLen].reset_index(drop=True)
     GridFac2 = GridFac.iloc[GridLen:2*GridLen].reset_index(drop=True)
     GridFac3 = GridFac.iloc[2*GridLen:].reset_index(drop=True)
-    GridFacXL = pd.concat([GridFac1,GridFac2,GridFac3],axis=1).fillna("  ")
+    GridFacXL = pd.concat([GridFac1,GridFac2,GridFac3],axis=1).fillna("   ")
     GridFacXL.insert(6,'','')
     GridFacXL.insert(13,' ','')
     print("territory set up")
@@ -723,19 +703,16 @@ else:
 if MMRatebook != "Not found":
     MMwb = load_workbook(MMRatebook, read_only=False)
     if 'PackageModifierFactorTable_Ext' in MMwb.sheetnames:
-        MMPMF = pd.read_excel(MMRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMPMF = pd.read_excel(MMRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     else:
-        MMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     MMPMF = MMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
     MMPMF = MMPMF.drop(labels=[0, 9], axis=0)
 else:
     MMwb = Workbook()
 
 if NGICRatebook != "Not found":
-    SMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0,
-        1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    SMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     SMPMF = SMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
     SMPMF = SMPMF.drop(labels=[0, 9], axis=0)
 # </editor-fold>
@@ -745,30 +722,25 @@ if v5.get() == 1 and v4.get() == 1:
     SMMinCap = SMMinCapRange.get()
     SMMaxCap = SMMaxCapRange.get()
     if NICOFRatebook != "Not found":
-        SMCapping = [['Nationwide Affinity Insurance Company of America', SMMinCap, SMMaxCap],
-            ['Nationwide Assurance Company', SMMinCap, SMMaxCap],
-            ['Nationwide Insurance Company of Florida', SMMinCap, SMMaxCap]]
+        SMCapping = [['Nationwide Affinity Insurance Company of America', SMMinCap, SMMaxCap], ['Nationwide Assurance Company', SMMinCap, SMMaxCap],
+                ['Nationwide Insurance Company of Florida', SMMinCap, SMMaxCap]]
         SMCapTable = pd.DataFrame(SMCapping, columns=['Company', 'Minimum', 'Maximum'])
     if NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        SMCapping = [['Nationwide Affinity Insurance Company of America', SMMinCap, SMMaxCap],
-            ['Nationwide Assurance Company', SMMinCap, SMMaxCap]]
+        SMCapping = [['Nationwide Affinity Insurance Company of America', SMMinCap, SMMaxCap], ['Nationwide Assurance Company', SMMinCap, SMMaxCap]]
         SMCapTable = pd.DataFrame(SMCapping, columns=['Company', 'Minimum', 'Maximum'])
     if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
         SMCapping = [['Nationwide Assurance Company', SMMinCap, SMMaxCap]]
         SMCapTable = pd.DataFrame(SMCapping, columns=['Company', 'Minimum', 'Maximum'])
-    if v10.get() == 1 and v11.get() == 1:
-        MMMinCap = MMMinCapRange.get()
-        MMMaxCap = MMMaxCapRange.get()
-        MMCapping = [['Nationwide Insurance Company of America', MMMinCap, MMMaxCap], ['Nationwide
-            Mutual Insurance Company', MMMinCap, MMMaxCap],
-            ['Nationwide Property & Casualty Insurance Company', MMMinCap, MMMaxCap], ['Allied
-                Insurance Company of America', MMMinCap, MMMaxCap]]
-        MMCapTable = pd.DataFrame(MMCapping, columns=['Company', 'Minimum', 'Maximum'])
+if v10.get() == 1 and v11.get() == 1:
+    MMMinCap = MMMinCapRange.get()
+    MMMaxCap = MMMaxCapRange.get()
+    MMCapping = [['Nationwide Insurance Company of America', MMMinCap, MMMaxCap], ['Nationwide Mutual Insurance Company', MMMinCap, MMMaxCap],
+                ['Nationwide Property & Casualty Insurance Company', MMMinCap, MMMaxCap], ['Allied Insurance Company of America', MMMinCap, MMMaxCap]]
+    MMCapTable = pd.DataFrame(MMCapping, columns=['Company', 'Minimum', 'Maximum'])
 # </editor-fold>
 
 # <editor-fold desc="Create Crime Deductible Dataframe">
-CrimeDed = pd.read_excel(CWRatebook, sheet_name='CrimeDeductibleFactor_Ext', skiprows=[0, 1, 2, 3,
-    4, 5, 6, 7, 8, 9, 10])
+CrimeDed = pd.read_excel(CWRatebook, sheet_name='CrimeDeductibleFactor_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
 CrimeDed = CrimeDed.rename(columns={'Deductible': 'Deductible Amount'})
 #CrimeDed = CrimeDed.drop(labels=[0, 14], axis=0)
 
@@ -812,54 +784,45 @@ else:
     BGIIPPLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupIILOIFactorPersProp',skiprows=11)
 
 if 'BroadSpecialLOIFactorPrsnlProp' in NGICwb.sheetnames:
-    SCOLPPLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp',
-        skiprows=11)
+    SCOLPPLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp',skiprows=11)
 
 else:
     SCOLPPLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp',skiprows=11)
 
-BGIBLOI = BGIBLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index
-    (names=['Limit',1,2,3,4,5,6])
+BGIBLOI = BGIBLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index(names=['Limit',1,2,3,4,5,6])
 BGIBLOI = BGIBLOI.drop(columns=[2,3,5,6])
 BGIBLOI = BGIBLOI.drop(BGIBLOI.tail(1).index)
 BGIBLOI['Limit'] = BGIBLOI['Limit'].apply('{:,}'.format)
-BGIBLOI.iloc[-1, BGIBLOI.columns.get_loc('Limit')] = BGIBLOI.iloc[-1,BGIBLOI.columns.get_loc
-    ('Limit')] + "+"
+BGIBLOI.iloc[-1, BGIBLOI.columns.get_loc('Limit')] = BGIBLOI.iloc[-1,BGIBLOI.columns.get_loc('Limit')] + "+"
 BGIBLOI = BGIBLOI.rename(columns={1:"Construction Group 1-3",4:"Construction Group 4-6"})
 BGIBLOI = splitdf(BGIBLOI, 2).fillna('')
 
 BGIIBLOI['Limit'] = BGIIBLOI['Limit'].apply('{:,}'.format)
 BGIIBLOI = BGIIBLOI.drop(BGIIBLOI.tail(1).index)
-BGIIBLOI.iloc[-1, BGIIBLOI.columns.get_loc('Limit')] = BGIIBLOI.iloc[-1, BGIIBLOI.columns.get_loc
-    ('Limit')] + "+"
+BGIIBLOI.iloc[-1, BGIIBLOI.columns.get_loc('Limit')] = BGIIBLOI.iloc[-1, BGIIBLOI.columns.get_loc('Limit')] + "+"
 BGIIBLOI = splitdf(BGIIBLOI,2).fillna('')
 
 SCOLBLOI['Limit'] = SCOLBLOI['Limit'].apply('{:,}'.format)
 SCOLBLOI = SCOLBLOI.drop(SCOLBLOI.tail(1).index)
-SCOLBLOI.iloc[-1, SCOLBLOI.columns.get_loc('Limit')] = SCOLBLOI.iloc[-1, SCOLBLOI.columns.get_loc
-    ('Limit')] + "+"
+SCOLBLOI.iloc[-1, SCOLBLOI.columns.get_loc('Limit')] = SCOLBLOI.iloc[-1, SCOLBLOI.columns.get_loc('Limit')] + "+"
 SCOLBLOI = splitdf(SCOLBLOI,2).fillna('')
 
-BGIPPLOI = BGIPPLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index
-    (names=['Limit',1,2,3,4,5,6])
+BGIPPLOI = BGIPPLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index(names=['Limit',1,2,3,4,5,6])
 BGIPPLOI = BGIPPLOI.drop(columns=[2,3,5,6])
 BGIPPLOI = BGIPPLOI.drop(BGIPPLOI.tail(1).index)
 BGIPPLOI['Limit'] = BGIPPLOI['Limit'].apply('{:,}'.format)
-BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] = BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc
-    ('Limit')] + "+"
+BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] = BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] + "+"
 BGIPPLOI = BGIPPLOI.rename(columns={1:"Construction Group 1-3",4:"Construction Group 4-6"})
 BGIPPLOI = splitdf(BGIPPLOI, 2).fillna('')
 
 BGIIPPLOI['Limit'] = BGIIPPLOI['Limit'].apply('{:,}'.format)
 BGIIPPLOI = BGIIPPLOI.drop(BGIIPPLOI.tail(1).index)
-BGIIPPLOI.iloc[-1, BGIIPPLOI.columns.get_loc('Limit')] = BGIIPPLOI.iloc[-1, BGIIPPLOI.columns.
-    get_loc('Limit')] + "+"
+BGIIPPLOI.iloc[-1, BGIIPPLOI.columns.get_loc('Limit')] = BGIIPPLOI.iloc[-1, BGIIPPLOI.columns.get_loc('Limit')] + "+"
 BGIIPPLOI = splitdf(BGIIPPLOI,2).fillna('')
 
 SCOLPPLOI['Limit'] = SCOLPPLOI['Limit'].apply('{:,}'.format)
 SCOLPPLOI = SCOLPPLOI.drop(SCOLPPLOI.tail(1).index)
-SCOLPPLOI.iloc[-1, SCOLPPLOI.columns.get_loc('Limit')] = SCOLPPLOI.iloc[-1, SCOLPPLOI.columns.
-    get_loc('Limit')] + "+"
+SCOLPPLOI.iloc[-1, SCOLPPLOI.columns.get_loc('Limit')] = SCOLPPLOI.iloc[-1, SCOLPPLOI.columns.get_loc('Limit')] + "+"
 SCOLPPLOI = splitdf(SCOLPPLOI,2).fillna('')
 
 # </editor-fold>
@@ -878,8 +841,7 @@ else:
     BGIITier = pd.read_excel(CWRatebook, sheet_name='GroupIITierFactor_Ext', skiprows=11)
 
 if 'SpecialCauseofLossTierFactor_Ex' in NGICwb.sheetnames:
-    SCOLTier = pd.read_excel(NGICRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',
-        skiprows=11)
+    SCOLTier = pd.read_excel(NGICRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
 
 else:
     SCOLTier = pd.read_excel(CWRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
@@ -900,8 +862,7 @@ BGIITier.index.name = None
 BGIITier = BGIITier.rename_axis(None, axis=1)
 BGIITier = BGIITier.reset_index(drop=True)
 
-SCOLTier = SCOLTier.pivot(index='TierGradeSpecialCOL', columns='TieringNAICSGroup',
-    values='Factor')
+SCOLTier = SCOLTier.pivot(index='TierGradeSpecialCOL', columns='TieringNAICSGroup',values='Factor')
 SCOLTier = SCOLTier[[col for col in SCOLTier.columns if col != 'All Other'] + ['All Other']]
 SCOLTier['Tier Grade'] = SCOLTier.index
 SCOLTier = SCOLTier[['Tier Grade'] + [col for col in SCOLTier.columns if col != 'Tier Grade']]
@@ -918,19 +879,13 @@ if 'AgeOfBuildingFactor_Ext' in NGICwb.sheetnames:
 else:
     AOB = pd.read_excel(CWRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
 
-AOB = AOB.pivot_table(index='AgeOfBuildingFrom', columns=['CoveredObject', 'CauseOfLossGroup'],
-    values='Factor').reset_index(names='Age')
-AOB.columns = ["Age", "BGITime", "BGIITime", "BroadTime", "EQ1", "SCOLTime", "BGIContents",
-    "BGIIContents",
-                "PPContents", "EQ2", "SCOLContents", "BGIBldg", "BGIIBldg", "STRBldg", "EQ3",
-                "SCOLBldg"]
+AOB = AOB.pivot_table(index='AgeOfBuildingFrom', columns=['CoveredObject', 'CauseOfLossGroup'], values='Factor').reset_index(names='Age')
+AOB.columns = ["Age", "BGITime", "BGIITime", "BroadTime", "EQ1", "SCOLTime", "BGIContents", "BGIIContents",
+                   "PPContents", "EQ2", "SCOLContents", "BGIBldg", "BGIIBldg", "STRBldg", "EQ3", "SCOLBldg"]
 
-BGIAOB = AOB[["Age", "BGIBldg", "BGIContents", "BGITime"]].rename(columns={"BGIBldg":"Building",
-    "BGIContents":"Contents","BGITime":"Time"})
-BGIIAOB = AOB[["Age", "BGIIBldg", "BGIIContents", "BGIITime"]].rename(columns=
-    {"BGIIBldg":"Building","BGIIContents":"Contents","BGIITime":"Time"})
-SCOLAOB = AOB[["Age", "SCOLBldg", "SCOLContents", "SCOLTime"]].rename(columns=
-    {"SCOLBldg":"Building","SCOLContents":"Contents","SCOLTime":"Time"})
+BGIAOB = AOB[["Age", "BGIBldg", "BGIContents", "BGITime"]].rename(columns={"BGIBldg":"Building","BGIContents":"Contents","BGITime":"Time"})
+BGIIAOB = AOB[["Age", "BGIIBldg", "BGIIContents", "BGIITime"]].rename(columns={"BGIIBldg":"Building","BGIIContents":"Contents","BGIITime":"Time"})
+SCOLAOB = AOB[["Age", "SCOLBldg", "SCOLContents", "SCOLTime"]].rename(columns={"SCOLBldg":"Building","SCOLContents":"Contents","SCOLTime":"Time"})
 
 BGIAOB = splitdf(BGIAOB,3)
 BGIIAOB = splitdf(BGIIAOB,3)
@@ -953,8 +908,7 @@ elif 'Deductible250Factor' in NGICwb.sheetnames:
 else:
     DIP2 = pd.read_excel(CWRatebook, sheet_name='Deductible250Factor', skiprows=11)
 
-DIP = DIP1.pivot_table(index=['Deductible','Limit'],columns = 'CauseOfLossDeductible',
-    values='Factor').reset_index(names=['Deductible','Limit'])
+DIP = DIP1.pivot_table(index=['Deductible','Limit'],columns = 'CauseOfLossDeductible',values='Factor').reset_index(names=['Deductible','Limit'])
 # remove pivot_table commas from formatting
 DIP[['Deductible']] = DIP[['Deductible']].replace({',': ''}, regex=True).astype(float)
 # find unique limit values to use for deductible 250 page, transpose to turn into a column value
@@ -974,11 +928,9 @@ DedLim['Factor'] = Ded250F[DedLim.groupby('Limit').cumcount()]
 DedLim = DedLim.assign(Deductible='250')
 DedLim = DedLim[['Deductible','CauseOfLoss','Limit','Factor']]
 # pivot
-DedLim2 = DedLim.pivot_table(index=['Deductible','Limit'],columns = 'CauseOfLoss',values='Factor').
-    reset_index(names=['Deductible','Limit'])
+DedLim2 = DedLim.pivot_table(index=['Deductible','Limit'],columns = 'CauseOfLoss',values='Factor').reset_index(names=['Deductible','Limit'])
 # drop broad
-DedLim2 = DedLim2.drop(['Broad'],axis=1).rename(columns={"Basic":"Basic Group I","All
-Other":"Basic Group II","Special":"Other Cause Of Loss"})
+DedLim2 = DedLim2.drop(['Broad'],axis=1).rename(columns={"Basic":"Basic Group I","All Other":"Basic Group II","Special":"Other Cause Of Loss"})
 DedLim2.columns = DedLim2.columns.str.lower()
 DIP = DIP.sort_values(by=['deductible','limit'])
 
@@ -988,8 +940,7 @@ DIP = pd.concat([DedLim2,DIP],ignore_index=True)
 
 DIPI = DIP[['deductible','limit','basic group i']].rename(columns={"basic group i":"Factor"})
 DIPII = DIP[['deductible','limit','basic group ii']].rename(columns={"basic group ii":"Factor"})
-DIPSCOL = DIP[['deductible','limit','other cause of loss']].rename(columns={"other cause of
-loss":"Factor"})
+DIPSCOL = DIP[['deductible','limit','other cause of loss']].rename(columns={"other cause of loss":"Factor"})
 DIPI.columns = DIPI.columns.map(str.title)
 DIPII.columns = DIPII.columns.map(str.title)
 DIPSCOL.columns = DIPSCOL.columns.map(str.title)
@@ -1000,8 +951,7 @@ DIPSCOLLim = DIPSCOL['Limit'].astype(str)
 
 ##Formatting Limit Column
 for i in range(len(DIPI['Limit'])):
-    if int(DIPI['Limit'][i]) not in [min(DIPI['Limit'].astype(int)),max(DIPI['Limit'].astype(int))]
-    :
+    if int(DIPI['Limit'][i]) not in [min(DIPI['Limit'].astype(int)),max(DIPI['Limit'].astype(int))]:
         DIPILim[i] = str(f"{DIPI['Limit'][i-1]:,}") + ' - ' + str(f"{DIPI['Limit'][i]:,}")
     elif int(DIPI['Limit'][i]) == min(DIPI['Limit'].astype(int)):
         DIPILim[i] = str(f"{DIPI['Limit'][i]:,}") + ' or less'
@@ -1009,8 +959,7 @@ for i in range(len(DIPI['Limit'])):
         DIPILim[i] = 'More than ' + str(f"{DIPI['Limit'][i-1]:,}")
 
 for i in range(len(DIPII['Limit'])):
-    if int(DIPII['Limit'][i]) not in [min(DIPII['Limit'].astype(int)),max(DIPII['Limit'].astype
-    (int))]:
+    if int(DIPII['Limit'][i]) not in [min(DIPII['Limit'].astype(int)),max(DIPII['Limit'].astype(int))]:
         DIPIILim[i] = str(f"{DIPII['Limit'][i-1]:,}") + ' - ' + str(f"{DIPII['Limit'][i]:,}")
     elif int(DIPII['Limit'][i]) == min(DIPII['Limit'].astype(int)):
         DIPIILim[i] = str(f"{DIPII['Limit'][i]:,}") + ' or less'
@@ -1018,8 +967,7 @@ for i in range(len(DIPII['Limit'])):
         DIPIILim[i] = 'More than ' + str(f"{DIPII['Limit'][i-1]:,}")
 
 for i in range(len(DIPSCOL['Limit'])):
-    if int(DIPSCOL['Limit'][i]) not in [min(DIPSCOL['Limit'].astype(int)),max(DIPSCOL['Limit'].
-    astype(int))]:
+    if int(DIPSCOL['Limit'][i]) not in [min(DIPSCOL['Limit'].astype(int)),max(DIPSCOL['Limit'].astype(int))]:
         DIPSCOLLim[i] = str(f"{DIPSCOL['Limit'][i-1]:,}") + ' - ' + str(f"{DIPSCOL['Limit'][i]:,}")
     elif int(DIPSCOL['Limit'][i]) == min(DIPSCOL['Limit'].astype(int)):
         DIPSCOLLim[i] = str(f"{DIPSCOL['Limit'][i]:,}") + ' or less'
@@ -1037,11 +985,9 @@ DIPSCOL = splitdf(DIPSCOL,3)
 
 #<editor-fold desc="Create M&S Dataframe">
 if 'CrimeTerritoryBaseRate_Ext' in NGICwb.sheetnames:
-    CrimeMSDF = pd.read_excel(NGICRatebook, sheet_name='CrimeTerritoryBaseRate_Ext', skiprows=11).
-        rename(columns={"CrimeTerritory":"Territory","Base Premium":"Premium"})
+    CrimeMSDF = pd.read_excel(NGICRatebook, sheet_name='CrimeTerritoryBaseRate_Ext', skiprows=11).rename(columns={"CrimeTerritory":"Territory","Base Premium":"Premium"})
 else:
-    CrimeMSDF = pd.read_excel(CWRatebook, sheet_name='CrimeTerritoryBaseRate_Ext', skiprows=11).
-        rename(columns={"CrimeTerritory":"Territory","Base Premium":"Premium"})
+    CrimeMSDF = pd.read_excel(CWRatebook, sheet_name='CrimeTerritoryBaseRate_Ext', skiprows=11).rename(columns={"CrimeTerritory":"Territory","Base Premium":"Premium"})
 
 if 'MoneyandSecuritiesOccupancyFact' in NGICwb.sheetnames:
     MSDF = pd.read_excel(NGICRatebook, sheet_name='MoneyandSecuritiesOccupancyFact', skiprows=11)
@@ -1057,11 +1003,9 @@ MSDF['Outside Limit'] = MSDF['Outside Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="Create Employee Dishonesty Dataframe">
 if 'EmployeeDishonestyLimitsBaseRat' in NGICwb.sheetnames:
-    EmployeeDF = pd.read_excel(NGICRatebook, sheet_name='EmployeeDishonestyLimitsBaseRat',
-        skiprows=11)
+    EmployeeDF = pd.read_excel(NGICRatebook, sheet_name='EmployeeDishonestyLimitsBaseRat', skiprows=11)
 else:
-    EmployeeDF = pd.read_excel(CWRatebook, sheet_name='EmployeeDishonestyLimitsBaseRat',
-        skiprows=11)
+    EmployeeDF = pd.read_excel(CWRatebook, sheet_name='EmployeeDishonestyLimitsBaseRat', skiprows=11)
 
 if 'EmployeeDishonestyLimitsRateabl' in NGICwb.sheetnames:
     EDLR = pd.read_excel(NGICRatebook, sheet_name='EmployeeDishonestyLimitsRateabl', skiprows=11)
@@ -1075,46 +1019,36 @@ EmployeeDF['Limit'] = EmployeeDF['Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="Create Fraudulent Impersonation DF">
 if 'FraudulentImpersonationEmployee' in NGICwb.sheetnames:
-    Fraudone = pd.read_excel(NGICRatebook, sheet_name='FraudulentImpersonationEmployee',
-        skiprows=11)
+    Fraudone = pd.read_excel(NGICRatebook, sheet_name='FraudulentImpersonationEmployee', skiprows=11)
 else:
     Fraudone = pd.read_excel(CWRatebook, sheet_name='FraudulentImpersonationEmployee', skiprows=11)
 if 'FraudulentImpersonationEmpl (1)' in NGICwb.sheetnames:
-    Fraudtwo = pd.read_excel(NGICRatebook, sheet_name='FraudulentImpersonationEmpl (1)',
-        skiprows=11)
+    Fraudtwo = pd.read_excel(NGICRatebook, sheet_name='FraudulentImpersonationEmpl (1)', skiprows=11)
 else:
     Fraudtwo = pd.read_excel(CWRatebook, sheet_name='FraudulentImpersonationEmpl (1)', skiprows=11)
 
-FraudDF = Fraudtwo.merge(Fraudone, how='inner',on='Limit').rename(columns={"Premium < 5 Rateable
-Employees":"1-5 Rateable Employees","Premium Per Rateable Employee >5":"Each Add'l Rateable
-Employee"})
+FraudDF = Fraudtwo.merge(Fraudone, how='inner',on='Limit').rename(columns={"Premium < 5 Rateable Employees":"1-5 Rateable Employees","Premium Per Rateable Employee >5":"Each Add'l Rateable Employee"})
 FraudDF['Limit'] = FraudDF['Limit'].apply('{:,}'.format)
 
 if 'VerificationFactorEmployeesFact' in NGICwb.sheetnames:
-    FraudDF2 = pd.read_excel(NGICRatebook, sheet_name='VerificationFactorEmployeesFact',
-        skiprows=11)
+    FraudDF2 = pd.read_excel(NGICRatebook, sheet_name='VerificationFactorEmployeesFact', skiprows=11)
 else:
     FraudDF2 = pd.read_excel(CWRatebook, sheet_name='VerificationFactorEmployeesFact', skiprows=11)
 
-FraudDF2['Verification Type'] = FraudDF2['Verification Type'].map
-({'OptionAVerifReqdAllTransInstr':'Verification required for all transfer instructions',
-    'OptionBVerifReqdAllTransInstrExcessSpecifiedAmt':'Verification required for all transfer
-    instructions in excess of an amount',
-    'OptionCVerifTransferInstrNotReqd':'Verification of transfer instructions not required'})
+FraudDF2['Verification Type'] = FraudDF2['Verification Type'].map({'OptionAVerifReqdAllTransInstr':"Verification required for all transfer instructions",
+                                                               'OptionBVerifReqdAllTransInstrExcessSpecifiedAmt':"Verification required for all transfer instructions in excess of an amount",
+                                                               'OptionCVerifTransferInstrNotReqd':"Verification of transfer instructions not required"})
 
 if 'VerificationFactorEmployeesFact' in NGICwb.sheetnames:
-    FraudDF3 = pd.read_excel(NGICRatebook, sheet_name='VerificationFactorCustomerorVen',
-        skiprows=11)
+    FraudDF3 = pd.read_excel(NGICRatebook, sheet_name='VerificationFactorCustomerorVen', skiprows=11)
 else:
     FraudDF3 = pd.read_excel(CWRatebook, sheet_name='VerificationFactorCustomerorVen', skiprows=11)
 
-FraudDF3['Verification Type'] = FraudDF3['Verification Type'].map
-({'OptionAVerifReqdAllTransInstr':'Verification required for all transfer instructions',
-    'OptionBVerifReqdAllTransInstrExcessSpecifiedAmt':'Verification required for all transfer
-    instructions in excess of an amount',
-    'OptionCVerifTransferInstrNotReqd':'Verification of transfer instructions not required'})
+FraudDF3['Verification Type'] = FraudDF3['Verification Type'].map({'OptionAVerifReqdAllTransInstr':"Verification required for all transfer instructions",
+                                                               'OptionBVerifReqdAllTransInstrExcessSpecifiedAmt':"Verification required for all transfer instructions in excess of an amount",
+                                                               'OptionCVerifTransferInstrNotReqd':"Verification of transfer instructions not required"})
 
-#</editor-fold>
+#</editor-fold
 
 #<editor-fold desc="IRPM DF">
 
@@ -1144,11 +1078,9 @@ IRPM.iloc[2,1]=IRPM3.iloc[0,1].astype(str) + "%"
 #<editor-fold desc="Emergency Evacuation DF">
 
 if 'EmergencyEvacuationIncludin (1)' in NGICwb.sheetnames:
-    EmergencyDF = pd.read_excel(NGICRatebook, sheet_name='EmergencyEvacuationIncludin (1)',
-    skiprows=11)
+    EmergencyDF = pd.read_excel(NGICRatebook, sheet_name='EmergencyEvacuationIncludin (1)', skiprows=11)
 else:
-    EmergencyDF = pd.read_excel(CWRatebook, sheet_name='EmergencyEvacuationIncludin (1)',
-    skiprows=11)
+    EmergencyDF = pd.read_excel(CWRatebook, sheet_name='EmergencyEvacuationIncludin (1)', skiprows=11)
 
 EmergencyDF['Limit'] = EmergencyDF['Limit'].apply('{:,}'.format)
 
@@ -1156,29 +1088,23 @@ EmergencyDF['Limit'] = EmergencyDF['Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="Civil Authority DF">
 if 'CivilAuthorityIncreasedRadiusCo' in NGICwb.sheetnames:
-    CivilDF = pd.read_excel(NGICRatebook, sheet_name='CivilAuthorityIncreasedRadiusCo',
-    skiprows=11).rename(columns={"Radius":"Radius In Miles"})
+    CivilDF = pd.read_excel(NGICRatebook, sheet_name='CivilAuthorityIncreasedRadiusCo', skiprows=11).rename(columns={"Radius":"Radius In Miles"})
 else:
-    CivilDF = pd.read_excel(CWRatebook, sheet_name='CivilAuthorityIncreasedRadiusCo', skiprows=11).
-    rename(columns={"Radius":"Radius in Miles"})
+    CivilDF = pd.read_excel(CWRatebook, sheet_name='CivilAuthorityIncreasedRadiusCo', skiprows=11).rename(columns={"Radius":"Radius in Miles"})
 
 #</editor-fold>
 
 #<editor-fold desc="Computer DFs">
 
 if 'ComputerandFundsTransferFraudBa' in NGICwb.sheetnames:
-    ComputerDF = pd.read_excel(NGICRatebook, sheet_name='ComputerandFundsTransferFraudBa',
-    skiprows=11)
+    ComputerDF = pd.read_excel(NGICRatebook, sheet_name='ComputerandFundsTransferFraudBa', skiprows=11)
 else:
-    ComputerDF = pd.read_excel(CWRatebook, sheet_name='ComputerandFundsTransferFraudBa',
-    skiprows=11)
+    ComputerDF = pd.read_excel(CWRatebook, sheet_name='ComputerandFundsTransferFraudBa', skiprows=11)
 
 if 'ComputerandFundsTransferFraudAn' in NGICwb.sheetnames:
-    ComputerAnnualDF = pd.read_excel(NGICRatebook,sheet_name='ComputerandFundsTransferFraudAn',
-    skiprows=11).fillna('0').astype(str)
+    ComputerAnnualDF = pd.read_excel(NGICRatebook,sheet_name='ComputerandFundsTransferFraudAn', skiprows=11).fillna('0').astype(str)
 else:
-    ComputerAnnualDF = pd.read_excel(CWRatebook,sheet_name='ComputerandFundsTransferFraudAn',
-    skiprows=11).fillna('0').astype(str)
+    ComputerAnnualDF = pd.read_excel(CWRatebook,sheet_name='ComputerandFundsTransferFraudAn', skiprows=11).fillna('0').astype(str)
 
 ComputerAnnualDF['Total Sales Min'] = ComputerAnnualDF['Total Sales Min'].apply(lambda x:"{:,}".format(int(float(x))))
 ComputerAnnualDF['Total Sales Max'] = ComputerAnnualDF['Total Sales Max'].apply(lambda x:"{:,}".format(int(float(x))))
@@ -1194,18 +1120,14 @@ ComputerAnnualDF.iloc[4,1] = "2.00 + .10 for each addn'l 10,000,000"
 
 #<editor-fold desc="Forgery or Alteration DF">
 if 'ForgeryOrAlterationLimitsRateab' in NGICwb.sheetnames:
-    ForgeryDF = pd.read_excel(NGICRatebook, sheet_name='ForgeryOrAlterationLimitsRateab',
-    skiprows=11)
+    ForgeryDF = pd.read_excel(NGICRatebook, sheet_name='ForgeryOrAlterationLimitsRateab', skiprows=11)
 else:
-    ForgeryDF = pd.read_excel(CWRatebook, sheet_name='ForgeryOrAlterationLimitsRateab',
-    skiprows=11)
+    ForgeryDF = pd.read_excel(CWRatebook, sheet_name='ForgeryOrAlterationLimitsRateab', skiprows=11)
 
 if 'ForgeryorAlterationLimitsBaseRa' in NGICwb.sheetnames:
-    ForgeryDF2 = pd.read_excel(NGICRatebook, sheet_name='ForgeryorAlterationLimitsBaseRa',
-    skiprows=11)
+    ForgeryDF2 = pd.read_excel(NGICRatebook, sheet_name='ForgeryorAlterationLimitsBaseRa', skiprows=11)
 else:
-    ForgeryDF2 = pd.read_excel(CWRatebook, sheet_name='ForgeryorAlterationLimitsBaseRa',
-    skiprows=11)
+    ForgeryDF2 = pd.read_excel(CWRatebook, sheet_name='ForgeryorAlterationLimitsBaseRa', skiprows=11)
 
 ForgeryDF2["Each Add'l Rateable Employee"] = ForgeryDF2['Premium Per Rateable Employee >5']
 ForgeryDF2.rename(columns={"Premium < 5 Rateable Employees":"1-5 Rateable Employees"},inplace=True)
@@ -1216,13 +1138,9 @@ ForgeryDF2['Limit'] = ForgeryDF2['Limit'].apply('{:,}'.format)
 #<editor-fold desc="LPDP Dataframe DF">
 #Pull in dataframe
 if 'Large Premium Discount Factor_E' in NGICwb.sheetnames:
-    LPDFDF = pd.read_excel(NGICRatebook, sheet_name='Large Premium Discount Factor_E',
-    skiprows=11).rename(columns={"PremiumRangeMinimum":"Premium Range Minimum",
-    "PremiumRangeMaximum":"Premium Range Maximum"})
+    LPDFDF = pd.read_excel(NGICRatebook, sheet_name='Large Premium Discount Factor_E', skiprows=11).rename(columns={"PremiumRangeMinimum":"Premium Range Minimum", "PremiumRangeMaximum":"Premium Range Maximum"})
 else:
-    LPDFDF = pd.read_excel(CWRatebook, sheet_name='Large Premium Discount Factor_E', skiprows=11).
-    rename(columns={"PremiumRangeMinimum":"Premium Range Minimum","PremiumRangeMaximum":"Premium
-    Range Maximum"})
+    LPDFDF = pd.read_excel(CWRatebook, sheet_name='Large Premium Discount Factor_E', skiprows=11).rename(columns={"PremiumRangeMinimum":"Premium Range Minimum","PremiumRangeMaximum":"Premium Range Maximum"})
 #Changing the column label for this dataframe
 LPDFDF['Premium Range Maximum'] = LPDFDF['Premium Range Maximum'].astype(str)
 #Adjusting deductible maximum limit value (iloc)
@@ -1231,8 +1149,7 @@ LPDFDF.iloc[0,1] = "999,999,999"
 
 #<editor-fold desc="Counterfeit Currency 313 DF">
 if 'MoneyOrdersAndCounterfeitLimits' in NGICwb.sheetnames:
-    CFCurrDF = pd.read_excel(NGICRatebook, sheet_name='MoneyOrdersAndCounterfeitLimits',
-    skiprows=11)
+    CFCurrDF = pd.read_excel(NGICRatebook, sheet_name='MoneyOrdersAndCounterfeitLimits', skiprows=11)
 else:
     CFCurrDF = pd.read_excel(CWRatebook, sheet_name='MoneyOrdersAndCounterfeitLimits', skiprows=11)
 #</editor-fold>
@@ -1250,13 +1167,9 @@ MSDF['Outside Limit'] = MSDF['Outside Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="BI ALS DF">
 if 'BusinessIncomeActualLossSus (1)' in NGICwb.sheetnames:
-    BusinessDF = pd.read_excel(NGICRatebook, sheet_name='BusinessIncomeActualLossSus (1)',
-    skiprows=11).rename(columns={"TypeOfRisk":"Type Of Risk","PeriodOfRestoration":"Period of
-    Restoration"})
+    BusinessDF = pd.read_excel(NGICRatebook, sheet_name='BusinessIncomeActualLossSus (1)', skiprows=11).rename(columns={"TypeOfRisk":"Type Of Risk","PeriodOfRestoration":"Period of Restoration"})
 else:
-    BusinessDF = pd.read_excel(CWRatebook, sheet_name='BusinessIncomeActualLossSus (1)',
-    skiprows=11).rename(columns={"TypeOfRisk":"Type Of Risk","PeriodOfRestoration":"Period of
-    Restoration"})
+    BusinessDF = pd.read_excel(CWRatebook, sheet_name='BusinessIncomeActualLossSus (1)', skiprows=11).rename(columns={"TypeOfRisk":"Type Of Risk","PeriodOfRestoration":"Period of Restoration"})
 #</editor-fold>
 
 #<editor-fold desc="All Other DFs">
@@ -1278,88 +1191,62 @@ PolicyMinDF.iloc[0,0] = "All Policies"
 PolicyMinDF['Minimum'] = '$' + PolicyMinDF['Minimum'].astype(str)
 
 if 'Nut Hullers And Processors Cove' in NGICwb.sheetnames:
-    NutHullProcDF = pd.read_excel(NGICRatebook, sheet_name='Nut Hullers And Processors Cove',
-    skiprows=11).drop(columns = 'Constant')
+    NutHullProcDF = pd.read_excel(NGICRatebook, sheet_name='Nut Hullers And Processors Cove', skiprows=11).drop(columns = 'Constant')
 else:
-    NutHullProcDF = pd.read_excel(CWRatebook, sheet_name='Nut Hullers And Processors Cove',
-    skiprows=11).drop(columns = 'Constant')
+    NutHullProcDF = pd.read_excel(CWRatebook, sheet_name='Nut Hullers And Processors Cove', skiprows=11).drop(columns = 'Constant')
 
 if 'NutHullersAndProcessorsCoverage' in NGICwb.sheetnames:
-    NutHullILF = pd.read_excel(NGICRatebook, sheet_name = 'NutHullersAndProcessorsCoverage',
-    skiprows=11).rename(columns={"StockPile Occurrence Limit":"Limit Per Stockpile Per
-    Occurrence"})
+    NutHullILF = pd.read_excel(NGICRatebook, sheet_name = 'NutHullersAndProcessorsCoverage', skiprows=11).rename(columns={"StockPile Occurrence Limit":"Limit Per Stockpile Per Occurrence"})
 else:
-    NutHullILF = pd.read_excel(CWRatebook, sheet_name = 'NutHullersAndProcessorsCoverage',
-    skiprows=11).rename(columns={"StockPile Occurrence Limit":"Limit Per Stockpile Per
-    Occurrence"})
+    NutHullILF = pd.read_excel(CWRatebook, sheet_name = 'NutHullersAndProcessorsCoverage', skiprows=11).rename(columns={"StockPile Occurrence Limit":"Limit Per Stockpile Per Occurrence"})
 
 if 'CosmeticExclusiononCoverageforS' in NGICwb.sheetnames:
-    CosmeticDF = pd.read_excel(NGICRatebook, sheet_name='CosmeticExclusiononCoverageforS',
-    skiprows=11).drop(columns='Constant')
+    CosmeticDF = pd.read_excel(NGICRatebook, sheet_name='CosmeticExclusiononCoverageforS', skiprows=11).drop(columns='Constant')
 else:
-    CosmeticDF = pd.read_excel(CWRatebook, sheet_name='CosmeticExclusiononCoverageforS',
-    skiprows=11).drop(columns='Constant')
+    CosmeticDF = pd.read_excel(CWRatebook, sheet_name='CosmeticExclusiononCoverageforS', skiprows=11).drop(columns='Constant')
 
 if 'TerrsmPrsnlPropBaseRate' in NGICwb.sheetnames:
-    TerrorismDF = pd.read_excel(NGICRatebook, sheet_name='TerrorismLoadFactor_Ext', skiprows=11).
-    rename(columns={"Rate":"Factor"}).drop(columns='Terrorism Territory Tier')
+    TerrorismDF = pd.read_excel(NGICRatebook, sheet_name='TerrorismLoadFactor_Ext', skiprows=11).rename(columns={"Rate":"Factor"}).drop(columns='Terrorism Territory Tier')
 else:
-    TerrorismDF = pd.read_excel(CWRatebook, sheet_name='TerrorismLoadFactor_Ext', skiprows=11).
-    rename(columns={"Rate":"Factor"}).drop(columns='Terrorism Territory Tier')
+    TerrorismDF = pd.read_excel(CWRatebook, sheet_name='TerrorismLoadFactor_Ext', skiprows=11).rename(columns={"Rate":"Factor"}).drop(columns='Terrorism Territory Tier')
 
 if 'Controlled Atmosphere and S (1)' in NGICwb.sheetnames:
-    ControlAtmDF = pd.read_excel(NGICRatebook, sheet_name='Controlled Atmosphere and S (1)',
-    skiprows=11).rename(columns={"Premium": "Base Rate"}).drop(columns='Constant')
+    ControlAtmDF = pd.read_excel(NGICRatebook, sheet_name='Controlled Atmosphere and S (1)',skiprows=11).rename(columns={"Premium": "Base Rate"}).drop(columns='Constant')
 else:
-    ControlAtmDF = pd.read_excel(CWRatebook, sheet_name='Controlled Atmosphere and S (1)',
-    skiprows=11).rename(columns={"Premium": "Base Rate"}).drop(columns='Constant')
+    ControlAtmDF = pd.read_excel(CWRatebook, sheet_name='Controlled Atmosphere and S (1)',skiprows=11).rename(columns={"Premium": "Base Rate"}).drop(columns='Constant')
 
 if 'ControlledAtmosphereStorage (1)' in NGICwb.sheetnames:
-    ControlAtChInjDF = pd.read_excel(NGICRatebook, sheet_name='ControlledAtmosphereStorage (1)',
-    skiprows=11).rename(columns={"Rate": "Base Rate"})
+    ControlAtChInjDF = pd.read_excel(NGICRatebook, sheet_name='ControlledAtmosphereStorage (1)',skiprows=11).rename(columns={"Rate": "Base Rate"})
 else:
-    ControlAtChInjDF = pd.read_excel(CWRatebook, sheet_name='ControlledAtmosphereStorage (1)',
-    skiprows=11).rename(columns={"Rate": "Base Rate"})
+    ControlAtChInjDF = pd.read_excel(CWRatebook, sheet_name='ControlledAtmosphereStorage (1)',skiprows=11).rename(columns={"Rate": "Base Rate"})
 
 if 'Hops Growers Coverage_Ext' in NGICwb.sheetnames:
-    HopsDF = pd.read_excel(NGICRatebook, sheet_name='Hops Growers Coverage_Ext', skiprows=11).
-    rename(columns={"Premium":"Rate"}).drop(columns='Constant')
+    HopsDF = pd.read_excel(NGICRatebook, sheet_name='Hops Growers Coverage_Ext', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 else:
-    HopsDF = pd.read_excel(CWRatebook, sheet_name='Hops Growers Coverage_Ext', skiprows=11).rename
-    (columns={"Premium":"Rate"}).drop(columns='Constant')
+    HopsDF = pd.read_excel(CWRatebook, sheet_name='Hops Growers Coverage_Ext', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 
 if 'Fruit Trees, Trellises, Sta (1)' in NGICwb.sheetnames:
-    FruitDF = pd.read_excel(NGICRatebook, sheet_name='Fruit Trees, Trellises, Sta (1)',
-    skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
+    FruitDF = pd.read_excel(NGICRatebook, sheet_name='Fruit Trees, Trellises, Sta (1)', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 else:
-    FruitDF = pd.read_excel(CWRatebook, sheet_name='Fruit Trees, Trellises, Sta (1)', skiprows=11).
-    rename(columns={"Premium":"Rate"}).drop(columns='Constant')
+    FruitDF = pd.read_excel(CWRatebook, sheet_name='Fruit Trees, Trellises, Sta (1)', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 
 if 'WineryEndorsementPremium_Ext' in NGICwb.sheetnames:
-    WineEndDF = pd.read_excel(NGICRatebook, sheet_name='WineryEndorsementPremium_Ext',
-    skiprows=11).drop(columns='Constant')
+    WineEndDF = pd.read_excel(NGICRatebook, sheet_name='WineryEndorsementPremium_Ext', skiprows=11).drop(columns='Constant')
 else:
-    WineEndDF = pd.read_excel(CWRatebook, sheet_name='WineryEndorsementPremium_Ext', skiprows=11).
-    drop(columns='Constant')
+    WineEndDF = pd.read_excel(CWRatebook, sheet_name='WineryEndorsementPremium_Ext', skiprows=11).drop(columns='Constant')
 
 if 'WineContaminationIncreasedLimit' in NGICwb.sheetnames:
-    WineConDF = pd.read_excel(NGICRatebook, sheet_name='WineContaminationIncreasedLimit',
-    skiprows=11).rename(columns={'Premium':'Rate'})
+    WineConDF = pd.read_excel(NGICRatebook, sheet_name='WineContaminationIncreasedLimit', skiprows=11).rename(columns={'Premium':'Rate'})
 else:
-    WineConDF = pd.read_excel(CWRatebook, sheet_name='WineContaminationIncreasedLimit',
-    skiprows=11).rename(columns={'Premium':'Rate'})
+    WineConDF = pd.read_excel(CWRatebook, sheet_name='WineContaminationIncreasedLimit', skiprows=11).rename(columns={'Premium':'Rate'})
 if 'WineLeakageIncreasedLimits_Ext' in NGICwb.sheetnames:
-    WineLeakDF = pd.read_excel(NGICRatebook, sheet_name='WineLeakageIncreasedLimits_Ext',
-    skiprows=11).rename(columns={'Premium':'Rate'})
+    WineLeakDF = pd.read_excel(NGICRatebook, sheet_name='WineLeakageIncreasedLimits_Ext', skiprows=11).rename(columns={'Premium':'Rate'})
 else:
-    WineLeakDF = pd.read_excel(CWRatebook, sheet_name='WineLeakageIncreasedLimits_Ext',
-    skiprows=11).rename(columns={'Premium':'Rate'})
+    WineLeakDF = pd.read_excel(CWRatebook, sheet_name='WineLeakageIncreasedLimits_Ext', skiprows=11).rename(columns={'Premium':'Rate'})
 if 'WineProcessingErrorsIncreasedLi' in NGICwb.sheetnames:
-    WineProDF = pd.read_excel(NGICRatebook, sheet_name='WineProcessingErrorsIncreasedLi',
-    skiprows=11).rename(columns={'Premium':'Rate'})
+    WineProDF = pd.read_excel(NGICRatebook, sheet_name='WineProcessingErrorsIncreasedLi', skiprows=11).rename(columns={'Premium':'Rate'})
 else:
-    WineProDF = pd.read_excel(CWRatebook, sheet_name='WineProcessingErrorsIncreasedLi',
-    skiprows=11).rename(columns={'Premium':'Rate'})
+    WineProDF = pd.read_excel(CWRatebook, sheet_name='WineProcessingErrorsIncreasedLi', skiprows=11).rename(columns={'Premium':'Rate'})
 
 WineConDF.insert(0, 'Coverage', 'Wine Contamination')
 WineLeakDF.insert(0, 'Coverage', 'Wine Leakage')
@@ -1370,74 +1257,54 @@ WineProDF = WineProDF.tail(3)
 WineryDF = pd.concat([WineConDF,WineLeakDF,WineProDF],ignore_index=True)
 
 if 'WineLeakageEndorsementMinimum_E' in NGICwb.sheetnames:
-    WineLkgDF1 = pd.read_excel(NGICRatebook, sheet_name='WineLeakageEndorsementMinimum_E',
-    skiprows=11)
+    WineLkgDF1 = pd.read_excel(NGICRatebook, sheet_name='WineLeakageEndorsementMinimum_E', skiprows=11)
 else:
-    WineLkgDF1 = pd.read_excel(CWRatebook, sheet_name='WineLeakageEndorsementMinimum_E',
-    skiprows=11)
+    WineLkgDF1 = pd.read_excel(CWRatebook, sheet_name='WineLeakageEndorsementMinimum_E', skiprows=11)
 
 WineLkgDF1.iloc[0,0] = 'Minimum Charge'
 if 'WineLeakageEndorsementRate_Ext' in NGICwb.sheetnames:
-    WineLkgDF2 = pd.read_excel(NGICRatebook, sheet_name='WineLeakageEndorsementRate_Ext',
-    skiprows=11)
+    WineLkgDF2 = pd.read_excel(NGICRatebook, sheet_name='WineLeakageEndorsementRate_Ext', skiprows=11)
 else:
-    WineLkgDF2 = pd.read_excel(CWRatebook, sheet_name='WineLeakageEndorsementRate_Ext',
-    skiprows=11)
+    WineLkgDF2 = pd.read_excel(CWRatebook, sheet_name='WineLeakageEndorsementRate_Ext', skiprows=11)
 
 
 if 'HumanSvcWrkplaceViolncLossofInc' in NGICwb.sheetnames:
-    HumSvcsDF = pd.read_excel(NGICRatebook, sheet_name='HumanSvcWrkplaceViolncLossofInc',
-    skiprows=11).drop(columns='Constant')
+    HumSvcsDF = pd.read_excel(NGICRatebook, sheet_name='HumanSvcWrkplaceViolncLossofInc', skiprows=11).drop(columns='Constant')
 else:
-    HumSvcsDF = pd.read_excel(CWRatebook, sheet_name='HumanSvcWrkplaceViolncLossofInc',
-    skiprows=11).drop(columns='Constant')
+    HumSvcsDF = pd.read_excel(CWRatebook, sheet_name='HumanSvcWrkplaceViolncLossofInc', skiprows=11).drop(columns='Constant')
 
 if 'ClientsPropertyCoverageFactor_E' in NGICwb.sheetnames:
-    ClientsDF = pd.read_excel(NGICRatebook, sheet_name='ClientsPropertyCoverageFactor_E',
-    skiprows=11).drop(columns='Constant')
+    ClientsDF = pd.read_excel(NGICRatebook, sheet_name='ClientsPropertyCoverageFactor_E', skiprows=11).drop(columns='Constant')
 else:
-    ClientsDF = pd.read_excel(CWRatebook, sheet_name='ClientsPropertyCoverageFactor_E',
-    skiprows=11).drop(columns='Constant')
+    ClientsDF = pd.read_excel(CWRatebook, sheet_name='ClientsPropertyCoverageFactor_E', skiprows=11).drop(columns='Constant')
 
 if 'HumanServicesEnhancementCoverag' in NGICwb.sheetnames:
-    HumSvcsEnhDF = pd.read_excel(NGICRatebook, sheet_name='HumanServicesEnhancementCoverag',
-    skiprows=11).drop(columns='Constant')
+    HumSvcsEnhDF = pd.read_excel(NGICRatebook, sheet_name='HumanServicesEnhancementCoverag', skiprows=11).drop(columns='Constant')
 else:
-    HumSvcsEnhDF = pd.read_excel(CWRatebook, sheet_name='HumanServicesEnhancementCoverag',
-    skiprows=11).drop(columns='Constant')
+    HumSvcsEnhDF = pd.read_excel(CWRatebook, sheet_name='HumanServicesEnhancementCoverag', skiprows=11).drop(columns='Constant')
 
 if 'HumanServicesPropertyEndors (1)' in NGICwb.sheetnames:
-    HumSvcsPetDF = pd.read_excel(NGICRatebook, sheet_name='HumanServicesPropertyEndors (1)',
-    skiprows=11).drop(columns='Constant')
+    HumSvcsPetDF = pd.read_excel(NGICRatebook, sheet_name='HumanServicesPropertyEndors (1)', skiprows=11).drop(columns='Constant')
 else:
-    HumSvcsPetDF = pd.read_excel(CWRatebook, sheet_name='HumanServicesPropertyEndors (1)',
-    skiprows=11).drop(columns='Constant')
+    HumSvcsPetDF = pd.read_excel(CWRatebook, sheet_name='HumanServicesPropertyEndors (1)', skiprows=11).drop(columns='Constant')
 
 if 'WaterDamageDeductibleWeight_Ext' in NGICwb.sheetnames:
-    WtrDmgDF = pd.read_excel(NGICRatebook, sheet_name='WaterDamageDeductibleWeight_Ext',
-    skiprows=11).drop(columns='Constant')
+    WtrDmgDF = pd.read_excel(NGICRatebook, sheet_name='WaterDamageDeductibleWeight_Ext', skiprows=11).drop(columns='Constant')
 else:
-    WtrDmgDF = pd.read_excel(CWRatebook, sheet_name='WaterDamageDeductibleWeight_Ext',
-    skiprows=11).drop(columns='Constant')
+    WtrDmgDF = pd.read_excel(CWRatebook, sheet_name='WaterDamageDeductibleWeight_Ext', skiprows=11).drop(columns='Constant')
 
 if 'SeniorLivingCommunitiesProp (1)' in NGICwb.sheetnames:
-    SeniorDF1 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (1)',
-    skiprows=11)
+    SeniorDF1 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (1)', skiprows=11)
 else:
-    SeniorDF1 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (1)',
-    skiprows=11)
+    SeniorDF1 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (1)', skiprows=11)
 if 'SeniorLivingCommunitiesProp (2)' in NGICwb.sheetnames:
-    SeniorDF2 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (2)',
-    skiprows=11)
+    SeniorDF2 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (2)', skiprows=11)
 else:
-    SeniorDF2 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (2)',
-    skiprows=11)
+    SeniorDF2 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (2)', skiprows=11)
 if 'SeniorLivingCommunitiesProp (3)' in NGICwb.sheetnames:
-    SeniorDF3 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (3)',
-    skiprows=11).rename(columns={"Premium":"Minimum"})
+    SeniorDF3 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (3)', skiprows=11).rename(columns={"Premium":"Minimum"})
 else:
-    SeniorDF3 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (3)',
-    skiprows=11).rename(columns={"Premium":"Minimum"})
+    SeniorDF3 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (3)', skiprows=11).rename(columns={"Premium":"Minimum"})
 
 if 'Premium' in SeniorDF1.columns:
     SeniorDFmin = SeniorDF1
@@ -1468,25 +1335,19 @@ SeniorDF = SeniorDFmin.merge(SeniorDFmax,on='Constant')
 SeniorDF = SeniorDF.merge(SeniorDFfac,on='Constant').drop(columns='Constant')
 
 if 'PropertyProtectionPlusEndor (3)' in NGICwb.sheetnames:
-    PropPPDF1 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (3)',
-    skiprows=5, header=None)
+    PropPPDF1 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (3)', skiprows=5, header=None)
 else:
-    PropPPDF1 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (3)',skiprows=5,
-    header=None)
+    PropPPDF1 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (3)', skiprows=5, header=None)
 
 if 'PropertyProtectionPlusEndor (2)' in NGICwb.sheetnames:
-    PropPPDF2 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (2)',
-    skiprows=5, header=None)
+    PropPPDF2 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (2)', skiprows=5, header=None)
 else:
-    PropPPDF2 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (2)',skiprows=5,
-    header=None)
+    PropPPDF2 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (2)', skiprows=5, header=None)
 
 if 'PropertyProtectionPlusEndor (1)' in NGICwb.sheetnames:
-    PropPPDF3 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (1)',
-    skiprows=5, header=None)
+    PropPPDF3 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (1)', skiprows=5, header=None)
 else:
-    PropPPDF3 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (1)',skiprows=5,
-    header=None)
+    PropPPDF3 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (1)',skiprows=5, header=None)
 
 if 'PropertyProtectionPlusEndorsementMinimum_Ext' in PropPPDF1.iloc[0,1]:
     PropPPDFmin = PropPPDF1
@@ -1521,30 +1382,23 @@ PropPPDFmax = PropPPDFmax.rename(columns={"Constant":"Option", "Limit":"Maximum 
 PropPPDFfac = PropPPDFfac.rename(columns={"Constant":"Option", "Limit":"Factor"})
 PropPPDF = PropPPDFmin.merge(PropPPDFmax, on='Option')
 PropPPDF = PropPPDF.merge(PropPPDFfac, on='Option')
-PropPPDF['Option'] = pd.Categorical(PropPPDF['Option'], categories=['Gold','Platinum','Diamond'],
-ordered=True)
+PropPPDF['Option'] = pd.Categorical(PropPPDF['Option'], categories=['Gold','Platinum','Diamond'], ordered=True)
 PropPPDF = PropPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'BreweryProtectionPlusEndors (3)' in NGICwb.sheetnames:
-    BrewPPDF1 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (3)',
-    skiprows=5, header=None)
+    BrewPPDF1 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (3)', skiprows=5, header=None)
 else:
-    BrewPPDF1 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (3)',
-    skiprows=5, header=None)
+    BrewPPDF1 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (3)', skiprows=5, header=None)
 
 if 'BreweryProtectionPlusEndors (2)' in NGICwb.sheetnames:
-    BrewPPDF2 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (2)',
-    skiprows=5, header=None)
+    BrewPPDF2 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (2)', skiprows=5, header=None)
 else:
-    BrewPPDF2 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (2)',skiprows=5,
-    header=None)
+    BrewPPDF2 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (2)', skiprows=5, header=None)
 
 if 'BreweryProtectionPlusEndors (1)' in NGICwb.sheetnames:
-    BrewPPDF3 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (1)',
-    skiprows=5, header=None)
+    BrewPPDF3 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (1)', skiprows=5, header=None)
 else:
-    BrewPPDF3 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (1)',skiprows=5,
-    header=None)
+    BrewPPDF3 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (1)', skiprows=5, header=None)
 
 if 'BreweryProtectionPlusEndorsementMinimum_Ext' in BrewPPDF1.iloc[0,1]:
     BrewPPDFmin = BrewPPDF1
@@ -1579,53 +1433,39 @@ BrewPPDFmax = BrewPPDFmax.rename(columns={"Constant":"Option", "Maximum":"Maximu
 BrewPPDFfac = BrewPPDFfac.rename(columns={"Constant":"Option", "Limit":"Factor"})
 BrewPPDF = BrewPPDFmin.merge(BrewPPDFmax, on='Option')
 BrewPPDF = BrewPPDF.merge(BrewPPDFfac, on='Option')
-BrewPPDF['Option'] = pd.Categorical(BrewPPDF['Option'], categories=['Gold','Platinum','Diamond'],
-ordered=True)
+BrewPPDF['Option'] = pd.Categorical(BrewPPDF['Option'], categories=['Gold','Platinum','Diamond'], ordered=True)
 BrewPPDF = BrewPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'GolfProtectionPlusEndorsementMi' in NGICwb.sheetnames:
-    GolfPPDF1 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementMi',
-    skiprows=11).rename(columns={"Minimum":"Minimum Charge"})
+    GolfPPDF1 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementMi', skiprows=11).rename(columns={"Minimum":"Minimum Charge"})
 else:
-    GolfPPDF1 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementMi',
-    skiprows=11).rename(columns={"Minimum":"Minimum Charge"})
+    GolfPPDF1 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementMi', skiprows=11).rename(columns={"Minimum":"Minimum Charge"})
 if 'GolfProtectionPlusEndorsementMa' in NGICwb.sheetnames:
-    GolfPPDF2 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementMa',
-    skiprows=11).rename(columns={"Maximum":"Maximum Charge"})
+    GolfPPDF2 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementMa', skiprows=11).rename(columns={"Maximum":"Maximum Charge"})
 else:
-    GolfPPDF2 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementMa',
-    skiprows=11).rename(columns={"Maximum":"Maximum Charge"})
+    GolfPPDF2 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementMa', skiprows=11).rename(columns={"Maximum":"Maximum Charge"})
 if 'GolfProtectionPlusEndorsementFa' in NGICwb.sheetnames:
-    GolfPPDF3 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementFa',
-    skiprows=11)
+    GolfPPDF3 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementFa', skiprows=11)
 else:
-    GolfPPDF3 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementFa',
-    skiprows=11)
+    GolfPPDF3 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementFa', skiprows=11)
 
 GolfPPDF = GolfPPDF1.merge(GolfPPDF2,on="Option")
 GolfPPDF = GolfPPDF.merge(GolfPPDF3,on="Option")
-GolfPPDF['Option'] = pd.Categorical(GolfPPDF['Option'], categories=['Gold','Platinum','Diamond'],
-ordered=True)
+GolfPPDF['Option'] = pd.Categorical(GolfPPDF['Option'], categories=['Gold','Platinum','Diamond'], ordered=True)
 GolfPPDF = GolfPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'ManufacturerProtectionPlusE (3)' in NGICwb.sheetnames:
-    ManuPPDF1 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (3)',
-    skiprows=5,header=None)
+    ManuPPDF1 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (3)', skiprows=5,header=None)
 else:
-    ManuPPDF1 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (3)', skiprows=5,
-    header=None)
+    ManuPPDF1 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (3)', skiprows=5, header=None)
 if 'ManufacturerProtectionPlusE (2)' in NGICwb.sheetnames:
-    ManuPPDF2 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (2)',
-    skiprows=5,header=None)
+    ManuPPDF2 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (2)', skiprows=5,header=None)
 else:
-    ManuPPDF2 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (2)', skiprows=5,
-    header=None)
+    ManuPPDF2 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (2)', skiprows=5, header=None)
 if 'ManufacturerProtectionPlusE (1)' in NGICwb.sheetnames:
-    ManuPPDF3 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (1)',
-    skiprows=5,header=None)
+    ManuPPDF3 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (1)', skiprows=5,header=None)
 else:
-    ManuPPDF3 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (1)', skiprows=5,
-    header=None)
+    ManuPPDF3 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (1)', skiprows=5, header=None)
 
 if 'ManufacturerProtectionPlusEndorsementMinimum_Ext' in ManuPPDF1.iloc[0,1]:
     ManuPPDFmin = ManuPPDF1
@@ -1660,28 +1500,21 @@ ManuPPDFmax = ManuPPDFmax.rename(columns={"Constant":"Option", "Maximum":"Maximu
 ManuPPDFfac = ManuPPDFfac.rename(columns={"Constant":"Option", "Limit":"Factor"})
 ManuPPDF = ManuPPDFmin.merge(ManuPPDFmax, on='Option')
 ManuPPDF = ManuPPDF.merge(ManuPPDFfac, on='Option')
-ManuPPDF['Option'] = pd.Categorical(ManuPPDF['Option'], categories=['Gold','Platinum','Diamond'],
-ordered=True)
+ManuPPDF['Option'] = pd.Categorical(ManuPPDF['Option'], categories=['Gold','Platinum','Diamond'], ordered=True)
 ManuPPDF = ManuPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'RestaurantProtectionPlusEnd (3)' in NGICwb.sheetnames:
-    RestPPDF1 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (3)',
-    skiprows=5,header=None)
+    RestPPDF1 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (3)', skiprows=5,header=None)
 else:
-    RestPPDF1 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (3)',
-    skiprows=5,header=None)
+    RestPPDF1 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (3)', skiprows=5,header=None)
 if 'RestaurantProtectionPlusEnd (2)' in NGICwb.sheetnames:
-    RestPPDF2 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (2)',
-    skiprows=5,header=None)
+    RestPPDF2 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (2)', skiprows=5,header=None)
 else:
-    RestPPDF2 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (2)',
-    skiprows=5, header=None)
+    RestPPDF2 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (2)', skiprows=5, header=None)
 if 'RestaurantProtectionPlusEnd (1)' in NGICwb.sheetnames:
-    RestPPDF3 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (1)',
-    skiprows=5, header=None)
+    RestPPDF3 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (1)', skiprows=5, header=None)
 else:
-    RestPPDF3 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (1)',skiprows=5,
-    header=None)
+    RestPPDF3 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (1)',skiprows=5, header=None)
 
 if 'RestaurantProtectionPlusEndorsementMinimum_Ext' in RestPPDF1.iloc[0,1]:
     RestPPDFmin = RestPPDF1
@@ -1716,28 +1549,21 @@ RestPPDFmax = RestPPDFmax.rename(columns={"Constant":"Option", "Maximum":"Maximu
 RestPPDFfac = RestPPDFfac.rename(columns={"Constant":"Option", "Limit":"Factor"})
 RestPPDF = RestPPDFmin.merge(RestPPDFmax, on='Option')
 RestPPDF = RestPPDF.merge(RestPPDFfac, on='Option')
-RestPPDF['Option'] = pd.Categorical(RestPPDF['Option'], categories=['Gold','Platinum','Diamond'],
-ordered=True)
+RestPPDF['Option'] = pd.Categorical(RestPPDF['Option'], categories=['Gold','Platinum','Diamond'], ordered=True)
 RestPPDF = RestPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'WholesalerProtectionPlusEnd (3)' in NGICwb.sheetnames:
-    WholePPDF1 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (3)',
-    skiprows=5,header=None)
+    WholePPDF1 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (3)', skiprows=5,header=None)
 else:
-    WholePPDF1 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (3)',
-    skiprows=5,header=None)
+    WholePPDF1 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (3)', skiprows=5,header=None)
 if 'WholesalerProtectionPlusEnd (2)' in NGICwb.sheetnames:
-    WholePPDF2 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (2)',
-    skiprows=5,header=None)
+    WholePPDF2 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (2)', skiprows=5,header=None)
 else:
-    WholePPDF2 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (2)',
-    skiprows=5,header=None)
+    WholePPDF2 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (2)', skiprows=5,header=None)
 if 'WholesalerProtectionPlusEnd (1)' in NGICwb.sheetnames:
-    WholePPDF3 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (1)',
-    skiprows=5,header=None)
+    WholePPDF3 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (1)', skiprows=5,header=None)
 else:
-    WholePPDF3 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (1)',
-    skiprows=5,header=None)
+    WholePPDF3 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (1)', skiprows=5,header=None)
 
 if 'WholesalerProtectionPlusEndorsementMinimum_Ext' in WholePPDF1.iloc[0,1]:
     WholePPDFmin = WholePPDF1
@@ -1764,39 +1590,29 @@ else:
         WholePPDFmin = WholePPDF3
         WholePPDFmax = WholePPDF2
 
-WholePPDFmin = WholePPDFmin[7:].set_axis(WholePPDFmin.iloc[6],axis='columns').reset_index
-(drop=True)
-WholePPDFmax = WholePPDFmax[7:].set_axis(WholePPDFmax.iloc[6],axis='columns').reset_index
-(drop=True)
-WholePPDFfac = WholePPDFfac[7:].set_axis(WholePPDFfac.iloc[6],axis='columns').reset_index
-(drop=True)
+WholePPDFmin = WholePPDFmin[7:].set_axis(WholePPDFmin.iloc[6],axis='columns').reset_index(drop=True)
+WholePPDFmax = WholePPDFmax[7:].set_axis(WholePPDFmax.iloc[6],axis='columns').reset_index(drop=True)
+WholePPDFfac = WholePPDFfac[7:].set_axis(WholePPDFfac.iloc[6],axis='columns').reset_index(drop=True)
 WholePPDFmin = WholePPDFmin.rename(columns={"Constant":"Option", "Minimum":"Minimum Charge"})
 WholePPDFmax = WholePPDFmax.rename(columns={"Constant":"Option", "Maximum":"Maximum Charge"})
 WholePPDFfac = WholePPDFfac.rename(columns={"Constant":"Option", "Limit":"Factor"})
 WholePPDF = WholePPDFmin.merge(WholePPDFmax, on='Option')
 WholePPDF = WholePPDF.merge(WholePPDFfac, on='Option')
-WholePPDF['Option'] = pd.Categorical(WholePPDF['Option'], categories=['Gold','Platinum','Diamond'],
-ordered=True)
+WholePPDF['Option'] = pd.Categorical(WholePPDF['Option'], categories=['Gold','Platinum','Diamond'], ordered=True)
 WholePPDF = WholePPDF.sort_values('Option').reset_index(drop=True)
 
 if 'HotelProtectionPlusEndorsem (1)' in NGICwb.sheetnames:
-    HotelPPDF1 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsem (1)',
-    skiprows=5,header=None)
+    HotelPPDF1 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsem (1)', skiprows=5,header=None)
 else:
-    HotelPPDF1 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsem (1)',
-    skiprows=5,header=None)
+    HotelPPDF1 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsem (1)', skiprows=5,header=None)
 if 'HotelProtectionPlusEndorsementM' in NGICwb.sheetnames:
-    HotelPPDF2 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsementM',
-    skiprows=5,header=None)
+    HotelPPDF2 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsementM', skiprows=5,header=None)
 else:
-    HotelPPDF2 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsementM',
-    skiprows=5,header=None)
+    HotelPPDF2 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsementM', skiprows=5,header=None)
 if 'HotelProtectionPlusEndorsementF' in NGICwb.sheetnames:
-    HotelPPDF3 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsementF',
-    skiprows=5,header=None)
+    HotelPPDF3 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsementF', skiprows=5,header=None)
 else:
-    HotelPPDF3 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsementF',skiprows=5,
-    header=None)
+    HotelPPDF3 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsementF',skiprows=5, header=None)
 
 if 'HotelProtectionPlusEndorsementMinimum_Ext' in HotelPPDF1.iloc[0,1]:
     HotelPPDFmin = HotelPPDF1
@@ -1823,38 +1639,29 @@ else:
         HotelPPDFmin = HotelPPDF3
         HotelPPDFmax = HotelPPDF2
 
-HotelPPDFmin = HotelPPDFmin[7:].set_axis(HotelPPDFmin.iloc[6],axis='columns').reset_index
-(drop=True)
-HotelPPDFmax = HotelPPDFmax[7:].set_axis(HotelPPDFmax.iloc[6],axis='columns').reset_index
-(drop=True)
-HotelPPDFfac = HotelPPDFfac[7:].set_axis(HotelPPDFfac.iloc[6],axis='columns').reset_index
-(drop=True)
+HotelPPDFmin = HotelPPDFmin[7:].set_axis(HotelPPDFmin.iloc[6],axis='columns').reset_index(drop=True)
+HotelPPDFmax = HotelPPDFmax[7:].set_axis(HotelPPDFmax.iloc[6],axis='columns').reset_index(drop=True)
+HotelPPDFfac = HotelPPDFfac[7:].set_axis(HotelPPDFfac.iloc[6],axis='columns').reset_index(drop=True)
 HotelPPDFmin = HotelPPDFmin.rename(columns={"Constant":"Option", "Minimum":"Minimum Charge"})
 HotelPPDFmax = HotelPPDFmax.rename(columns={"Constant":"Option", "Maximum":"Maximum Charge"})
 HotelPPDFfac = HotelPPDFfac.rename(columns={"Constant":"Option", "Limit":"Factor"})
 HotelPPDF = HotelPPDFmin.merge(HotelPPDFmax, on='Option')
 HotelPPDF = HotelPPDF.merge(HotelPPDFfac, on='Option')
-HotelPPDF['Option'] = pd.Categorical(HotelPPDF['Option'], categories=['Gold','Platinum','Diamond'],
-ordered=True)
+HotelPPDF['Option'] = pd.Categorical(HotelPPDF['Option'], categories=['Gold','Platinum','Diamond'], ordered=True)
 HotelPPDF = HotelPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'FranchiseUpgradeEndorsement_Ext' in NGICwb.sheetnames:
-    FranUpgDF = pd.read_excel(NGICRatebook, sheet_name='FranchiseUpgradeEndorsement_Ext',
-    skiprows=11).rename(columns={"Premium":"Base Rate"}).drop(columns='Constant')
+    FranUpgDF = pd.read_excel(NGICRatebook, sheet_name='FranchiseUpgradeEndorsement_Ext', skiprows=11).rename(columns={"Premium":"Base Rate"}).drop(columns='Constant')
 else:
-    FranUpgDF = pd.read_excel(CWRatebook, sheet_name='FranchiseUpgradeEndorsement_Ext',
-    skiprows=11).rename(columns={"Premium":"Base Rate"}).drop(columns='Constant')
+    FranUpgDF = pd.read_excel(CWRatebook, sheet_name='FranchiseUpgradeEndorsement_Ext', skiprows=11).rename(columns={"Premium":"Base Rate"}).drop(columns='Constant')
 #remember header=False
 
 #</editor-fold>
 
 # <editor-fold desc="Create Segmentation Removal Tiering, LEAF, Age of Building Dataframes">
 if v10.get() == 1 and v12.get() == 1:
-    SegRem = pd.ExcelFile('\\\\Urbdat01.allied.nwie.
-    net\\Actuary\\Actshare\\Com\\Jiang\\Segmentation Removal Pages\\Segmentation Removal Rate
-    Pages.xlsx')
-    SegTier = pd.read_excel(SegRem, sheet_name='Tiering', usecols="E:J,M:R,U:Z",skiprows=range(0,
-    2))
+    SegRem = pd.ExcelFile('\\\\Urbdat01.allied.nwie.net\\Actuary\\Actshare\\Com\\Jiang\\Segmentation Removal Pages\\Segmentation Removal Rate Pages.xlsx')
+    SegTier = pd.read_excel(SegRem, sheet_name='Tiering', usecols="E:J,M:R,U:Z",skiprows=range(0,2))
     SegTier.columns = SegTier.iloc[0]
     SegTier = SegTier[1:]
     SegLeaf = pd.read_excel(SegRem, sheet_name='LEAF', usecols="E,H",skiprows=range(0,4))
@@ -1868,56 +1675,43 @@ if v10.get() == 1 and v12.get() == 1:
     BGIIBLOIMM = pd.read_excel(MMRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
     SCOLBLOIMM = pd.read_excel(MMRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
     BGIPPLOIMM = pd.read_excel(MMRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
-    BGIIPPLOIMM = pd.read_excel(MMRatebook, sheet_name='BasicGroupIILOIFactorPersProp',
-    skiprows=11)
-    SCOLPPLOIMM = pd.read_excel(MMRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp',
-    skiprows=11)
+    BGIIPPLOIMM = pd.read_excel(MMRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
+    SCOLPPLOIMM = pd.read_excel(MMRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
 
-    BGIBLOIMM = BGIBLOIMM.pivot(index='Limit', columns='ConstructionCode', values='Factor').
-    reset_index(
-        names=['Limit', 1, 2, 3, 4, 5, 6])
+    BGIBLOIMM = BGIBLOIMM.pivot(index='Limit', columns='ConstructionCode', values='Factor').reset_index(names=['Limit', 1, 2, 3, 4, 5, 6])
     BGIBLOIMM = BGIBLOIMM.drop(columns=[2, 3, 5, 6])
     BGIBLOIMM = BGIBLOIMM.drop(BGIBLOIMM.tail(1).index)
     BGIBLOIMM['Limit'] = BGIBLOIMM['Limit'].apply('{:,}'.format)
     BGIBLOIMM.iloc[-1, BGIBLOIMM.columns.get_loc('Limit')] = "10,000,000+"
-    BGIBLOIMM = BGIBLOIMM.rename(columns={1: "Construction Group 1-3", 4: "Construction Group
-    4-6"})
+    BGIBLOIMM = BGIBLOIMM.rename(columns={1: "Construction Group 1-3", 4: "Construction Group 4-6"})
     BGIBLOIMM = splitdf(BGIBLOIMM, 2).fillna('')
 
     BGIIBLOIMM['Limit'] = BGIIBLOIMM['Limit'].apply('{:,}'.format)
     BGIIBLOIMM = BGIIBLOIMM.drop(BGIIBLOIMM.tail(1).index)
-    BGIIBLOIMM.iloc[-1, BGIIBLOIMM.columns.get_loc('Limit')] = BGIIBLOIMM.iloc[-1, BGIIBLOIMM.
-    columns.get_loc('Limit')] + "+"
+    BGIIBLOIMM.iloc[-1, BGIIBLOIMM.columns.get_loc('Limit')] = BGIIBLOIMM.iloc[-1, BGIIBLOIMM.columns.get_loc('Limit')] + "+"
     BGIIBLOIMM = splitdf(BGIIBLOIMM, 2).fillna('')
 
     SCOLBLOIMM['Limit'] = SCOLBLOIMM['Limit'].apply('{:,}'.format)
     SCOLBLOIMM = SCOLBLOIMM.drop(SCOLBLOIMM.tail(1).index)
-    SCOLBLOIMM.iloc[-1, SCOLBLOIMM.columns.get_loc('Limit')] = SCOLBLOIMM.iloc[-1, SCOLBLOIMM.
-    columns.get_loc('Limit')] + "+"
+    SCOLBLOIMM.iloc[-1, SCOLBLOIMM.columns.get_loc('Limit')] = SCOLBLOIMM.iloc[-1, SCOLBLOIMM.columns.get_loc('Limit')] + "+"
     SCOLBLOIMM = splitdf(SCOLBLOIMM, 2).fillna('')
 
-    BGIPPLOIMM = BGIPPLOIMM.pivot(index='Limit', columns='ConstructionCode', values='Factor').
-    reset_index(
-        names=['Limit', 1, 2, 3, 4, 5, 6])
+    BGIPPLOIMM = BGIPPLOIMM.pivot(index='Limit', columns='ConstructionCode', values='Factor').reset_index(names=['Limit', 1, 2, 3, 4, 5, 6])
     BGIPPLOIMM = BGIPPLOIMM.drop(columns=[2, 3, 5, 6])
     BGIPPLOIMM = BGIPPLOIMM.drop(BGIPPLOIMM.tail(1).index)
     BGIPPLOIMM['Limit'] = BGIPPLOIMM['Limit'].apply('{:,}'.format)
-    BGIPPLOIMM.iloc[-1, BGIPPLOIMM.columns.get_loc('Limit')] = BGIPPLOIMM.iloc[-1, BGIPPLOIMM.
-    columns.get_loc('Limit')] + "+"
-    BGIPPLOIMM = BGIPPLOIMM.rename(columns={1: "Construction Group 1-3", 4: "Construction Group
-    4-6"})
+    BGIPPLOIMM.iloc[-1, BGIPPLOIMM.columns.get_loc('Limit')] = BGIPPLOIMM.iloc[-1, BGIPPLOIMM.columns.get_loc('Limit')] + "+"
+    BGIPPLOIMM = BGIPPLOIMM.rename(columns={1: "Construction Group 1-3", 4: "Construction Group 4-6"})
     BGIPPLOIMM = splitdf(BGIPPLOIMM, 2).fillna('')
 
     BGIIPPLOIMM['Limit'] = BGIIPPLOIMM['Limit'].apply('{:,}'.format)
     BGIIPPLOIMM = BGIIPPLOIMM.drop(BGIIPPLOIMM.tail(1).index)
-    BGIIPPLOIMM.iloc[-1, BGIIPPLOIMM.columns.get_loc('Limit')] = BGIIPPLOIMM.iloc[-1, BGIIPPLOIMM.
-    columns.get_loc('Limit')] + "+"
+    BGIIPPLOIMM.iloc[-1, BGIIPPLOIMM.columns.get_loc('Limit')] = BGIIPPLOIMM.iloc[-1, BGIIPPLOIMM.columns.get_loc('Limit')] + "+"
     BGIIPPLOIMM = splitdf(BGIIPPLOIMM, 2).fillna('')
 
     SCOLPPLOIMM['Limit'] = SCOLPPLOIMM['Limit'].apply('{:,}'.format)
     SCOLPPLOIMM = SCOLPPLOIMM.drop(SCOLPPLOIMM.tail(1).index)
-    SCOLPPLOIMM.iloc[-1, SCOLPPLOIMM.columns.get_loc('Limit')] = SCOLPPLOIMM.iloc[-1, SCOLPPLOIMM.
-    columns.get_loc('Limit')] + "+"
+    SCOLPPLOIMM.iloc[-1, SCOLPPLOIMM.columns.get_loc('Limit')] = SCOLPPLOIMM.iloc[-1, SCOLPPLOIMM.columns.get_loc('Limit')] + "+"
     SCOLPPLOIMM = splitdf(SCOLPPLOIMM, 2).fillna('')
 
 else:
@@ -1961,20 +1755,18 @@ percentFormat = '0.0%'
 # <editor-fold desc="SM LCM Excel Sheet">
 if v5.get() == 1 and v1.get() == 1:
     ws = wb.create_sheet(title='LCM')
-    formatwkstSM(wkstname=ws,titlerows='3',A1title='BASE RATE CALCULATION',A2title='Loss Cost
-    Multiplier',dfname=SMLCMTable,statename=State,stabb=StateAbb, effdate=EffectiveDate)
+    formatwkstSM(wkstname=ws,titlerows='3',A1title='BASE RATE CALCULATION',A2title='Loss Cost Multiplier',dfname=SMLCMTable,statename=State,stabb=StateAbb, effdate=EffectiveDate)
 
     for row in range(1, ws.max_row + 1):
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col)  # Letter representing the current column
             cell = ws[char + str(row)]
-            ws.column_dimensions[char].bestFit = True  # Using bestfit as the default option for
-            column widths
+            ws.column_dimensions[char].bestFit = True  # Using bestfit as the default option for column widths
             if row > 3 and cell.value is not None:  # Adding a border to the table data
                 cell.border = Border(left=Side(border_style='thin', color='00000000'),
-                                      right=Side(border_style='thin', color='00000000'),
-                                      top=Side(border_style='thin', color='00000000'),
-                                      bottom=Side(border_style='thin', color='00000000'))
+                                     right=Side(border_style='thin', color='00000000'),
+                                     top=Side(border_style='thin', color='00000000'),
+                                     bottom=Side(border_style='thin', color='00000000'))
                 if row < 2:  # Applies bold font to rows 1-3, which are header rows
                     cell.font = fontBoldUnderline
                 elif row == 2:
@@ -1987,28 +1779,23 @@ if v5.get() == 1 and v1.get() == 1:
                     cell.number_format = rateFormat  # Default format for rates
                     cell.font = font
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-        for col in ws.columns:
-            max_length = 0
-            column = col[0].column_letter  # Get the column name
-            for cell in col:
-                try:  # Necessary to avoid error on empty cells
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = (max_length + 2) * 1.2
-            ws.column_dimensions[column].width = adjusted_width
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter  # Get the column name
+        for cell in col:
+            try:  # Necessary to avoid error on empty cells
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = (max_length + 2) * 1.2
+        ws.column_dimensions[column].width = adjusted_width
     if NICOFRatebook != "Not found":
-        ws.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-        Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance
-        Company"
+        ws.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
     elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        ws.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-        Assurance Company \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not
-    found":
-        ws.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance
-        Company"
+        ws.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
+    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
+        ws.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance Company"
     else:
         ws.oddFooter.left.text = "\nNationwide General Insurance Company"
     # Left footer
@@ -2020,148 +1807,21 @@ if v5.get() == 1 and v1.get() == 1:
     ws.oddFooter.center.font = footerFont
     # </editor-fold>
 
-    # <editor-fold desc="SM PMF Excel Sheet">
-    if v5.get() == 1 and v2.get() == 1:
-        ws2 = wb.create_sheet(title='PMF')
-        formatwkstSM(wkstname = ws2, titlerows = '3', A1title = 'PACKAGE MODIFICATION FACTOR', A2title
-        = 'Blank', dfname = SMPMF, statename = State, stabb = StateAbb, effdate = EffectiveDate)
+# <editor-fold desc="SM PMF Excel Sheet">
+if v5.get() == 1 and v2.get() == 1:
+    ws2 = wb.create_sheet(title='PMF')
+    formatwkstSM(wkstname = ws2, titlerows = '3', A1title = 'PACKAGE MODIFICATION FACTOR', A2title = 'Blank', dfname = SMPMF, statename = State, stabb = StateAbb, effdate = EffectiveDate)
 
-        for row in range(1, ws2.max_row + 1):
-            for col in range(1, ws2.max_column + 1):
-                char = get_column_letter(col)  # Letter representing the current column
-                cell = ws2[char + str(row)]
-                ws2.column_dimensions[char].bestFit = True  # Using bestfit as the default option for
-                column widths
-                if row > 2 and cell.value is not None:  # Adding a border to the table data
-                    cell.border = Border(left=Side(border_style='thin', color='00000000'),
-                                          right=Side(border_style='thin', color='00000000'),
-                                          top=Side(border_style='thin', color='00000000'),
-                                          bottom=Side(border_style='thin', color='00000000'))
-                    if row < 2:  # Applies bold font to rows 1-3, which are header rows
-                        cell.font = fontBoldUnderline
-                    elif row == 2:
-                        cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
-                    elif col == 1:
-                        cell.number_format = codeFormat
-                        cell.font = font
-                        cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-                    else:
-                        cell.number_format = rateFormat2
-                        cell.font = font
-                        cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-            for col in ws2.columns:
-                max_length = 0
-                column = col[0].column_letter  # Get the column name
-                for cell in col:
-                    try:  # Necessary to avoid error on empty cells
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = (max_length + 2) * 1.2
-                ws2.column_dimensions[column].width = adjusted_width
-        if NICOFRatebook != "Not found":
-            ws2.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-            Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance
-            Company"
-        elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-            ws2.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-            Assurance Company \nNationwide General Insurance Company"
-        elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not
-        found":
-            ws2.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance
-            Company"
-        else:
-            ws2.oddFooter.left.text = "\nNationwide General Insurance Company"
-        # Left footer
-        ws2.oddFooter.left.size = footerFontSize
-        ws2.oddFooter.left.font = footerFont
-        # Center footer
-        ws2.oddFooter.center.text = StateAbb + " - SRP - &[Tab] - &P"
-        ws2.oddFooter.center.size = footerFontSize
-        ws2.oddFooter.center.font = footerFont
-    # </editor-fold>
-
-    # <editor-fold desc="SM Crime Endorsement Excel Sheet">
-    if v5.get() == 1 and v1.get() == 1:
-        ws3 = wb.create_sheet(title='Crime')
-        ws3['A1'] = 'CRIME ENDORSEMENT'
-        ws3['A2'] = 'Blank'
-        for r in dataframe_to_rows(CrimeDed, False, True):
-            # The header is the first row and the index is the second row, but they need to be on the
-            same row in Excel
-            if False & len(list(r)) == 1:  # Checking to see when the index row is reached since it
-            will contain only the number of the indices that are in the dataframe (currently only
-            works for 1 index)
-                ws3['B4'] = list(r)[0]  # Manually adding the 1 index value to the header row in Excel
-                continue
-            ws3.append(r)
-        ws3['A19'] = 'Blank'
-        ws3['A20'] = 'Blank'
-        ws3['A21'] = 'Blank'
-        for r in dataframe_to_rows(SMCRIMELCMTable, False, True):
-            ws3.append(r)
-
-        ws3.page_setup.orientation = 'portrait'  # Landscape orientation for printing
-        ws3.page_setup.blackAndWhite = False
-        ws3.page_setup.firstPageNumber = 1  # Resetting the page counter for the footer on each
-        worksheet
-        ws3.page_setup.useFirstPageNumber = True
-        ws3.sheet_view.showGridLines = False  # Turning off gridlines
-        ws3.print_title_rows = '1:3'
-        ws3.page_margins.left = leftMargin
-        ws3.page_margins.right = rightMargin
-        ws3.page_margins.top = topMargin
-        ws3.page_margins.bottom = bottomMargin
-        ws3.page_margins.header = headerMargin
-        ws3.page_margins.footer = footerMargin
-        ws3.print_options.horizontalCentered = True
-        # Left Header
-        if State == 'Florida':
-            ws3.oddHeader.left.text = "Commercial Lines Manual: Commercial Property Non-Residential"
-        else:
-            ws3.oddHeader.left.text = "Commercial Lines Manual: Commercial Property"
-        ws3.oddHeader.left.size = headerFontSize
-        ws3.oddHeader.left.font = headerFont
-        # Center header
-        ws3.oddHeader.center.text = "\n\n" + State + " - Rate Pages"
-        ws3.oddHeader.center.size = headerFontSize
-        ws3.oddHeader.center.font = headerFont
-        # Right header
-        ws3.oddHeader.right.text = "Effective Date: " + EffectiveDate
-        ws3.oddHeader.right.size = headerFontSize
-        ws3.oddHeader.right.font = headerFont
-        if NICOFRatebook != "Not found":
-            ws3.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-            Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance
-            Company"
-        elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-            ws3.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-            Assurance Company \nNationwide General Insurance Company"
-        elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not
-        found":
-            ws3.oddFooter.left.text = "Nationwide Assurance Company \nNationwide General Insurance
-            Company"
-        else:
-            ws3.oddFooter.left.text = "\nNationwide General Insurance Company"
-        # Left footer
-        ws3.oddFooter.left.size = footerFontSize
-        ws3.oddFooter.left.font = footerFont
-        # Center footer
-        ws3.oddFooter.center.text = StateAbb + " - SRP - &[Tab] - &P"
-        ws3.oddFooter.center.size = footerFontSize
-        ws3.oddFooter.center.font = footerFont
-        for row in range(1, ws3.max_row + 1):
-            for col in range(1, ws3.max_column + 1):
-                char = get_column_letter(col)  # Letter representing the current column
-                cell = ws3[char + str(row)]
-                ws3.column_dimensions[char].bestFit = True  # Using bestfit as the default option for
-                column widths
-                if 3 < row < 19 and cell.value is not None:  # Adding a border to the table data
-                    cell.border = Border(left=Side(border_style='thin', color='00000000'),
-                                          right=Side(border_style='thin', color='00000000'),
-                                          top=Side(border_style='thin', color='00000000'),
-                                          bottom=Side(border_style='thin', color='00000000'))
+    for row in range(1, ws2.max_row + 1):
+        for col in range(1, ws2.max_column + 1):
+            char = get_column_letter(col)  # Letter representing the current column
+            cell = ws2[char + str(row)]
+            ws2.column_dimensions[char].bestFit = True  # Using bestfit as the default option for column widths
+            if row > 2 and cell.value is not None:  # Adding a border to the table data
+                cell.border = Border(left=Side(border_style='thin', color='00000000'),
+                                        right=Side(border_style='thin', color='00000000'),
+                                        top=Side(border_style='thin', color='00000000'),
+                                        bottom=Side(border_style='thin', color='00000000'))
                 if row < 2:  # Applies bold font to rows 1-3, which are header rows
                     cell.font = fontBoldUnderline
                 elif row == 2:
@@ -2170,94 +1830,199 @@ if v5.get() == 1 and v1.get() == 1:
                     cell.number_format = codeFormat
                     cell.font = font
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-                elif col == 2 and row < 17:
+                else:
                     cell.number_format = rateFormat2
                     cell.font = font
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-                else:
-                    cell.number_format = rateFormat
-                    cell.font = font
-                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-                if 18 < row < 22:
-                    cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
-                elif row > 22 and cell.value is not None:
-                    cell.border = Border(left=Side(border_style='thin', color='00000000'),
-                                          right=Side(border_style='thin', color='00000000'),
-                                          top=Side(border_style='thin', color='00000000'),
-                                          bottom=Side(border_style='thin', color='00000000'))
-            for col in ws3.columns:
-                max_length = 0
-                column = col[0].column_letter  # Get the column name
-                for cell in col:
-                    try:  # Necessary to avoid error on empty cells
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = (max_length + 2) * 1.2
-                ws3.column_dimensions[column].width = adjusted_width
+        for col in ws2.columns:
+            max_length = 0
+            column = col[0].column_letter  # Get the column name
+            for cell in col:
+                try:  # Necessary to avoid error on empty cells
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2) * 1.2
+            ws2.column_dimensions[column].width = adjusted_width
+    if NICOFRatebook != "Not found":
+        ws2.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
+    elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
+        ws2.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
+    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
+        ws2.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance Company"
+    else:
+        ws2.oddFooter.left.text = "\nNationwide General Insurance Company"
+    # Left footer
+    ws2.oddFooter.left.size = footerFontSize
+    ws2.oddFooter.left.font = footerFont
+    # Center footer
+    ws2.oddFooter.center.text = StateAbb + " - SRP - &[Tab] - &P"
+    ws2.oddFooter.center.size = footerFontSize
+    ws2.oddFooter.center.font = footerFont
+# </editor-fold>
+
+# <editor-fold desc="SM Crime Endorsement Excel Sheet">
+if v5.get() == 1 and v1.get() == 1:
+    ws3 = wb.create_sheet(title='Crime')
+    ws3['A1'] = 'CRIME ENDORSEMENT'
+    ws3['A2'] = 'Blank'
+    for r in dataframe_to_rows(CrimeDed, False, True):
+        # The header is the first row and the index is the second row, but they need to be on the same row in Excel
+        if False & len(list(r)) == 1:  # Checking to see when the index row is reached since it will contain only the number of the indices that are in the dataframe (currently only works for 1 index)
+            ws3['B4'] = list(r)[0]  # Manually adding the 1 index value to the header row in Excel
+            continue
+        ws3.append(r)
+    ws3['A19'] = 'Blank'
+    ws3['A20'] = 'Blank'
+    ws3['A21'] = 'Blank'
+    for r in dataframe_to_rows(SMCRIMELCMTable, False, True):
+        ws3.append(r)
+
+    ws3.page_setup.orientation = 'portrait'  # Landscape orientation for printing
+    ws3.page_setup.blackAndWhite = False
+    ws3.page_setup.firstPageNumber = 1  # Resetting the page counter for the footer on each worksheet
+    ws3.page_setup.useFirstPageNumber = True
+    ws3.sheet_view.showGridLines = False  # Turning off gridlines
+    ws3.print_title_rows = '1:3'
+    ws3.page_margins.left = leftMargin
+    ws3.page_margins.right = rightMargin
+    ws3.page_margins.top = topMargin
+    ws3.page_margins.bottom = bottomMargin
+    ws3.page_margins.header = headerMargin
+    ws3.page_margins.footer = footerMargin
+    ws3.print_options.horizontalCentered = True
+    # Left Header
+    if State == 'Florida':
+        ws3.oddHeader.left.text = "Commercial Lines Manual: Commercial Property Non-Residential"
+    else:
+        ws3.oddHeader.left.text = "Commercial Lines Manual: Commercial Property"
+    ws3.oddHeader.left.size = headerFontSize
+    ws3.oddHeader.left.font = headerFont
+    # Center header
+    ws3.oddHeader.center.text = "\n\n" + State + " - Rate Pages"
+    ws3.oddHeader.center.size = headerFontSize
+    ws3.oddHeader.center.font = headerFont
+    # Right header
+    ws3.oddHeader.right.text = "Effective Date: " + EffectiveDate
+    ws3.oddHeader.right.size = headerFontSize
+    ws3.oddHeader.right.font = headerFont
+    if NICOFRatebook != "Not found":
+        ws3.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
+    elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
+        ws3.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
+    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
+        ws3.oddFooter.left.text = "Nationwide Assurance Company \nNationwide General Insurance Company"
+    else:
+        ws3.oddFooter.left.text = "\nNationwide General Insurance Company"
+    # Left footer
+    ws3.oddFooter.left.size = footerFontSize
+    ws3.oddFooter.left.font = footerFont
+    # Center footer
+    ws3.oddFooter.center.text = StateAbb + " - SRP - &[Tab] - &P"
+    ws3.oddFooter.center.size = footerFontSize
+    ws3.oddFooter.center.font = footerFont
+    for row in range(1, ws3.max_row + 1):
+        for col in range(1, ws3.max_column + 1):
+            char = get_column_letter(col)  # Letter representing the current column
+            cell = ws3[char + str(row)]
+            ws3.column_dimensions[char].bestFit = True  # Using bestfit as the default option for column widths
+            if 3 < row < 19 and cell.value is not None:  # Adding a border to the table data
+                cell.border = Border(left=Side(border_style='thin', color='00000000'),
+                                        right=Side(border_style='thin', color='00000000'),
+                                        top=Side(border_style='thin', color='00000000'),
+                                        bottom=Side(border_style='thin', color='00000000'))
+            if row < 2:  # Applies bold font to rows 1-3, which are header rows
+                cell.font = fontBoldUnderline
+            elif row == 2:
+                cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
+            elif col == 1:
+                cell.number_format = codeFormat
+                cell.font = font
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
+            elif col == 2 and row < 17:
+                cell.number_format = rateFormat2
+                cell.font = font
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
+            else:
+                cell.number_format = rateFormat
+                cell.font = font
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
+            if 18 < row < 22:
+                cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
+            elif row > 22 and cell.value is not None:
+                cell.border = Border(left=Side(border_style='thin', color='00000000'),
+                                        right=Side(border_style='thin', color='00000000'),
+                                        top=Side(border_style='thin', color='00000000'),
+                                        bottom=Side(border_style='thin', color='00000000'))
+        for col in ws3.columns:
+            max_length = 0
+            column = col[0].column_letter  # Get the column name
+            for cell in col:
+                try:  # Necessary to avoid error on empty cells
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2) * 1.2
+            ws3.column_dimensions[column].width = adjusted_width
     # </editor-fold>
 
-    # <editor-fold desc="SM Capping Page">
-    if v5.get() == 1 and v4.get() == 1:
-        ws4 = wb.create_sheet(title='Capping')
-        formatwkstSM(wkstname = ws4, titlerows = '3', A1title = 'RATE CAPPING RANGE', A2title =
-        'Blank', dfname = SMCapTable, statename = State, stabb = StateAbb, effdate = EffectiveDate)
+# <editor-fold desc="SM Capping Page">
+if v5.get() == 1 and v4.get() == 1:
+    ws4 = wb.create_sheet(title='Capping')
+    formatwkstSM(wkstname = ws4, titlerows = '3', A1title = 'RATE CAPPING RANGE', A2title =
+    'Blank', dfname = SMCapTable, statename = State, stabb = StateAbb, effdate = EffectiveDate)
 
-        for row in range(1, ws4.max_row + 1):
-            for col in range(1, ws4.max_column + 1):
-                char = get_column_letter(col)  # Letter representing the current column
-                cell = ws4[char + str(row)]
-                ws4.column_dimensions[char].bestFit = True  # Using bestfit as the default option for
-                column widths
-                if row > 2 and cell.value is not None:  # Adding a border to the table data
-                    cell.border = Border(left=Side(border_style='thin', color='00000000'),
-                                          right=Side(border_style='thin', color='00000000'),
-                                          top=Side(border_style='thin', color='00000000'),
-                                          bottom=Side(border_style='thin', color='00000000'))
-                if row < 2:  # Applies bold font to rows 1-3, which are header rows
-                    cell.font = fontBoldUnderline
-                elif row == 2:
-                    cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
-                elif col == 1:
-                    cell.font = font
-                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-                elif col > 1:
-                    cell.number_format = percentFormat
-                    cell.font = font
-                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
-            for col in ws4.columns:
-                max_length = 0
-                column = col[0].column_letter  # Get the column name
-                for cell in col:
-                    try:  # Necessary to avoid error on empty cells
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = (max_length + 2) * 1.2
-                ws4.column_dimensions[column].width = adjusted_width
-        if NICOFRatebook != "Not found":
-            ws4.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-            Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance
-            Company"
-        elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-            ws4.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide
-            Assurance Company \nNationwide General Insurance Company"
-        elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not
-        found":
-            ws4.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance
-            Company"
-        else:
-            ws4.oddFooter.left.text = "\nNationwide General Insurance Company"
-        # Left footer
-        ws4.oddFooter.left.size = footerFontSize
-        ws4.oddFooter.left.font = footerFont
-        # Center footer
-        ws4.oddFooter.center.text = StateAbb + " - SRP - &[Tab] - &P"
-        ws4.oddFooter.center.size = footerFontSize
-        ws4.oddFooter.center.font = footerFont
-    # </editor-fold>
+    for row in range(1, ws4.max_row + 1):
+        for col in range(1, ws4.max_column + 1):
+            char = get_column_letter(col)  # Letter representing the current column
+            cell = ws4[char + str(row)]
+            ws4.column_dimensions[char].bestFit = True  # Using bestfit as the default option for
+            column widths
+            if row > 2 and cell.value is not None:  # Adding a border to the table data
+                cell.border = Border(left=Side(border_style='thin', color='00000000'),
+                                        right=Side(border_style='thin', color='00000000'),
+                                        top=Side(border_style='thin', color='00000000'),
+                                        bottom=Side(border_style='thin', color='00000000'))
+            if row < 2:  # Applies bold font to rows 1-3, which are header rows
+                cell.font = fontBoldUnderline
+            elif row == 2:
+                cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
+            elif col == 1:
+                cell.font = font
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
+            elif col > 1:
+                cell.number_format = percentFormat
+                cell.font = font
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
+        for col in ws4.columns:
+            max_length = 0
+            column = col[0].column_letter  # Get the column name
+            for cell in col:
+                try:  # Necessary to avoid error on empty cells
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2) * 1.2
+            ws4.column_dimensions[column].width = adjusted_width
+    if NICOFRatebook != "Not found":
+        ws4.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
+    elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
+        ws4.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
+    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
+        ws4.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance Company"
+    else:
+        ws4.oddFooter.left.text = "\nNationwide General Insurance Company"
+    # Left footer
+    ws4.oddFooter.left.size = footerFontSize
+    ws4.oddFooter.left.font = footerFont
+    # Center footer
+    ws4.oddFooter.center.text = StateAbb + " - SRP - &[Tab] - &P"
+    ws4.oddFooter.center.size = footerFontSize
+    ws4.oddFooter.center.font = footerFont
+# </editor-fold>
 
     # <editor-fold desc="SM Territory Sheets">
     if v3.get() == 1 and v5.get() == 1:
@@ -2336,16 +2101,13 @@ if v5.get() == 1 and v1.get() == 1:
     # <editor-fold desc="MM LCM Excel Sheet">
     if v10.get() == 1 and v7.get() == 1:
         ws5 = wb2.create_sheet(title='LCM')
-        formatwkstMM(wkstname = ws5, titlerows = '3', A1title = 'BASE RATE CALCULATION', A2title =
-        'Loss Cost Multiplier', dfname = MMLCMTable, statename = State, stabb = StateAbb, effdate =
-        EffectiveDate)
+        formatwkstMM(wkstname = ws5, titlerows = '3', A1title = 'BASE RATE CALCULATION', A2title ='Loss Cost Multiplier', dfname = MMLCMTable, statename = State, stabb = StateAbb, effdate = EffectiveDate)
 
         for row in range(1, ws5.max_row + 1):
             for col in range(1, ws5.max_column + 1):
                 char = get_column_letter(col)  # Letter representing the current column
                 cell = ws5[char + str(row)]
-                ws5.column_dimensions[char].bestFit = True  # Using bestfit as the default option for
-                column widths
+                ws5.column_dimensions[char].bestFit = True  # Using bestfit as the default option for column widths
                 if row > 3 and cell.value is not None:  # Adding a border to the table data
                     cell.border = Border(left=Side(border_style='thin', color='00000000'),
                                           right=Side(border_style='thin', color='00000000'),

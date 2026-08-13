@@ -30,7 +30,7 @@ FinRelNames = ['Territory','BGI Factor','BGII Factor','SCOL Factor']
 
 State = pd.read_excel(HexbookTable, sheet_name='BGI').iloc[3,1]
 HexbookBGIGrid = pd.read_excel(HexbookTable, sheet_name='BGI', skiprows=7, usecols=[0,1],names = ['Territory', 'BGI Factor'])
-HexbookBGIIGrid = pd.read_excel(HexbookTable, sheet_name='BGII', skiprows=7, usecols=[0,1], names = ['Territory','BGI Factor'])
+HexbookBGIIGrid = pd.read_excel(HexbookTable, sheet_name='BGII', skiprows=7, usecols=[0,1], names = ['Territory','BGII Factor'])
 HexbookSCOLGrid = pd.read_excel(HexbookTable, sheet_name='SCOL', skiprows=7, usecols=[0,1], names = ['Territory','SCOL Factor'])
 HexbookGrid = HexbookBGIGrid.merge(HexbookBGIIGrid,on='Territory').merge(HexbookSCOLGrid,on='Territory')
 

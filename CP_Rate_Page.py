@@ -328,16 +328,51 @@ global MMCondition
 global NACOCondition
 global NAFFCondition
 global NICOFCondition
+global SMCondition
+global AppliesToAllCondition
+
+try: SMRatebook
+except:
+    SMRatebook = "Not found"
+    SMCondition = False
+    SMRatebook_path = None
+else:
+    if SMRatebook == '':
+        SMRatebook = "Not found"
+        SMCondition = False
+        SMRatebook_path = None
+    else:
+        SMRatebook_path = SMRatebook
+        SMRatebook = pd.ExcelFile(SMRatebook)
+        SMCondition = True
+
+try: AppliesToAllRatebook
+except:
+    AppliesToAllRatebook = "Not found"
+    AppliesToAllCondition = False
+    AppliesToAllRatebook_path = None
+else:
+    if AppliesToAllRatebook == '':
+        AppliesToAllRatebook = "Not found"
+        AppliesToAllCondition = False
+        AppliesToAllRatebook_path = None
+    else:
+        AppliesToAllRatebook_path = AppliesToAllRatebook
+        AppliesToAllRatebook = pd.ExcelFile(AppliesToAllRatebook)
+        AppliesToAllCondition = True
 
 try: NGICRatebook
 except:
     NGICRatebook = "Not found"
     NGICCondition = False
+    NGICRatebook_path = None
 else:
     if NGICRatebook == '':
         NGICRatebook = "Not found"
         NGICCondition = False
+        NGICRatebook_path = None
     else:
+        NGICRatebook_path = NGICRatebook
         NGICRatebook = pd.ExcelFile(NGICRatebook)
         NGICCondition = True
 
@@ -345,11 +380,14 @@ try: MMRatebook
 except:
     MMRatebook = "Not found"
     MMCondition = False
+    MMRatebook_path = None
 else:
     if MMRatebook == '':
         MMRatebook = "Not found"
         MMCondition = False
+        MMRatebook_path = None
     else:
+        MMRatebook_path = MMRatebook
         MMRatebook = pd.ExcelFile(MMRatebook)
         MMCondition = True
 
@@ -390,14 +428,37 @@ else:
         NICOFCondition = True
 
 
+if SMRatebook != "Not found":
+    SMwb = load_workbook(SMRatebook_path, read_only=True)
+else:
+    SMwb = None
+
+if AppliesToAllRatebook != "Not found":
+    AppliesToAllwb = load_workbook(AppliesToAllRatebook_path, read_only=True)
+else:
+    AppliesToAllwb = None
+
 if NGICRatebook != "Not found":
-    NGICwb = load_workbook(NGICRatebook, read_only=True)
+    NGICwb = load_workbook(NGICRatebook_path, read_only=True)
+else:
+    NGICwb = None
+
+if MMRatebook != "Not found":
+    MMwb = load_workbook(MMRatebook_path, read_only=True)
+else:
+    MMwb = None
+
+if SMRatebook != "Not found":
+    RateBookDetails = pd.read_excel(SMRatebook, sheet_name='Rate Book Details')
+elif AppliesToAllRatebook != "Not found":
+    RateBookDetails = pd.read_excel(AppliesToAllRatebook, sheet_name='Rate Book Details')
+elif NGICRatebook != "Not found":
     RateBookDetails = pd.read_excel(NGICRatebook, sheet_name='Rate Book Details')
 else:
     RateBookDetails = pd.read_excel(MMRatebook, sheet_name='Rate Book Details')
 State = RateBookDetails.iloc[3,4]
 EffectiveDate = RateBookDetails.iloc[7,4]
-EffectiveDate = datetime.date.strftime(EffectiveDate, "%m-%d-%y")
+EffectiveDate = datetime.date.strftime(EffectiveDate, "%m-%d-%Y")
 
 try: TerrAdjRatebook
 except:
@@ -701,20 +762,28 @@ else:
 
 # <editor-fold desc="Create PMF Dataframes">
 if MMRatebook != "Not found":
-    MMwb = load_workbook(MMRatebook, read_only=False)
+    MMwb = load_workbook(MMRatebook_path, read_only=False)
     if 'PackageModifierFactorTable_Ext' in MMwb.sheetnames:
         MMPMF = pd.read_excel(MMRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    else:
+    elif NGICwb is not None and 'PackageModifierFactorTable_Ext' in NGICwb.sheetnames:
         MMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    else:
+        MMPMF = pd.read_excel(CWRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     MMPMF = MMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
     MMPMF = MMPMF.drop(labels=[0, 9], axis=0)
 else:
     MMwb = Workbook()
 
-if NGICRatebook != "Not found":
+if SMwb is not None and 'PackageModifierFactorTable_Ext' in SMwb.sheetnames:
+    SMPMF = pd.read_excel(SMRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+elif AppliesToAllwb is not None and 'PackageModifierFactorTable_Ext' in AppliesToAllwb.sheetnames:
+    SMPMF = pd.read_excel(AppliesToAllRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+elif NGICwb is not None and 'PackageModifierFactorTable_Ext' in NGICwb.sheetnames:
     SMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    SMPMF = SMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
-    SMPMF = SMPMF.drop(labels=[0, 9], axis=0)
+else:
+    SMPMF = pd.read_excel(CWRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+SMPMF = SMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
+SMPMF = SMPMF.drop(labels=[0, 9], axis=0)
 # </editor-fold>
 
 # <editor-fold desc="Create Capping Dataframe">
@@ -750,44 +819,59 @@ CrimeDed = CrimeDed.rename(columns={'Deductible': 'Deductible Amount'})
 
 NGICwb = load_workbook(NGICRatebook, read_only=True)
 
-if 'BasicGroupILOIFactorBldg' in NGICwb.sheetnames:
-    BGIBLOI = pd.read_excel(MMRatebook, sheet_name='BasicGroupILOIFactorBldg',skiprows=11)
-
-elif 'BasicGroupILOIFactorBldg' in NGICwb.sheetnames:
-    BGIBLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupILOIFactorBldg',skiprows=11)
-
+if SMwb is not None and 'BasicGroupILOIFactorBldg' in SMwb.sheetnames:
+    BGIBLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
+elif AppliesToAllwb is not None and 'BasicGroupILOIFactorBldg' in AppliesToAllwb.sheetnames:
+    BGIBLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
+elif NGICwb is not None and 'BasicGroupILOIFactorBldg' in NGICwb.sheetnames:
+    BGIBLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
 else:
-    BGIBLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupILOIFactorBldg',skiprows=11)
+    BGIBLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
 
-if 'BasicGroupIILOIFactorBldg' in NGICwb.sheetnames:
-    BGIIBLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupIILOIFactorBldg',skiprows=11)
-
+if SMwb is not None and 'BasicGroupIILOIFactorBldg' in SMwb.sheetnames:
+    BGIIBLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
+elif AppliesToAllwb is not None and 'BasicGroupIILOIFactorBldg' in AppliesToAllwb.sheetnames:
+    BGIIBLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
+elif NGICwb is not None and 'BasicGroupIILOIFactorBldg' in NGICwb.sheetnames:
+    BGIIBLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
 else:
-    BGIIBLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupIILOIFactorBldg',skiprows=11)
+    BGIIBLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
 
-if 'BroadSpecialLOIFactorBldg' in NGICwb.sheetnames:
-    SCOLBLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorBldg',skiprows=11)
-
+if SMwb is not None and 'BroadSpecialLOIFactorBldg' in SMwb.sheetnames:
+    SCOLBLOI = pd.read_excel(SMRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
+elif AppliesToAllwb is not None and 'BroadSpecialLOIFactorBldg' in AppliesToAllwb.sheetnames:
+    SCOLBLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
+elif NGICwb is not None and 'BroadSpecialLOIFactorBldg' in NGICwb.sheetnames:
+    SCOLBLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
 else:
-    SCOLBLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorBldg',skiprows=11)
+    SCOLBLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
 
-if 'BasicGroupILOIFactorPersProp' in NGICwb.sheetnames:
-    BGIPPLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupILOIFactorPersProp',skiprows=11)
-
+if SMwb is not None and 'BasicGroupILOIFactorPersProp' in SMwb.sheetnames:
+    BGIPPLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
+elif AppliesToAllwb is not None and 'BasicGroupILOIFactorPersProp' in AppliesToAllwb.sheetnames:
+    BGIPPLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
+elif NGICwb is not None and 'BasicGroupILOIFactorPersProp' in NGICwb.sheetnames:
+    BGIPPLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
 else:
-    BGIPPLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupILOIFactorPersProp',skiprows=11)
+    BGIPPLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
 
-if 'BasicGroupIILOIFactorPersProp' in NGICwb.sheetnames:
-    BGIIPPLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupIILOIFactorPersProp',skiprows=11)
-
+if SMwb is not None and 'BasicGroupIILOIFactorPersProp' in SMwb.sheetnames:
+    BGIIPPLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
+elif AppliesToAllwb is not None and 'BasicGroupIILOIFactorPersProp' in AppliesToAllwb.sheetnames:
+    BGIIPPLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
+elif NGICwb is not None and 'BasicGroupIILOIFactorPersProp' in NGICwb.sheetnames:
+    BGIIPPLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
 else:
-    BGIIPPLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupIILOIFactorPersProp',skiprows=11)
+    BGIIPPLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
 
-if 'BroadSpecialLOIFactorPrsnlProp' in NGICwb.sheetnames:
-    SCOLPPLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp',skiprows=11)
-
+if SMwb is not None and 'BroadSpecialLOIFactorPrsnlProp' in SMwb.sheetnames:
+    SCOLPPLOI = pd.read_excel(SMRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
+elif AppliesToAllwb is not None and 'BroadSpecialLOIFactorPrsnlProp' in AppliesToAllwb.sheetnames:
+    SCOLPPLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
+elif NGICwb is not None and 'BroadSpecialLOIFactorPrsnlProp' in NGICwb.sheetnames:
+    SCOLPPLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
 else:
-    SCOLPPLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp',skiprows=11)
+    SCOLPPLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
 
 BGIBLOI = BGIBLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index(names=['Limit',1,2,3,4,5,6])
 BGIBLOI = BGIBLOI.drop(columns=[2,3,5,6])
@@ -811,7 +895,7 @@ BGIPPLOI = BGIPPLOI.pivot(index='Limit',columns='ConstructionCode',values='Facto
 BGIPPLOI = BGIPPLOI.drop(columns=[2,3,5,6])
 BGIPPLOI = BGIPPLOI.drop(BGIPPLOI.tail(1).index)
 BGIPPLOI['Limit'] = BGIPPLOI['Limit'].apply('{:,}'.format)
-BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] = BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] + "+"
+BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] = BGIPPLOI.iloc[-1,BGIPPLOI.columns.get_loc('Limit')] + "+"
 BGIPPLOI = BGIPPLOI.rename(columns={1:"Construction Group 1-3",4:"Construction Group 4-6"})
 BGIPPLOI = splitdf(BGIPPLOI, 2).fillna('')
 
@@ -828,21 +912,30 @@ SCOLPPLOI = splitdf(SCOLPPLOI,2).fillna('')
 # </editor-fold>
 
 # <editor-fold desc="Create Tiering Grade Dataframes">
-if 'GroupITierFactor_Ext' in NGICwb.sheetnames:
+if SMwb is not None and 'GroupITierFactor_Ext' in SMwb.sheetnames:
+    BGITier = pd.read_excel(SMRatebook, sheet_name='GroupITierFactor_Ext', skiprows=11)
+elif AppliesToAllwb is not None and 'GroupITierFactor_Ext' in AppliesToAllwb.sheetnames:
+    BGITier = pd.read_excel(AppliesToAllRatebook, sheet_name='GroupITierFactor_Ext', skiprows=11)
+elif NGICwb is not None and 'GroupITierFactor_Ext' in NGICwb.sheetnames:
     BGITier = pd.read_excel(NGICRatebook, sheet_name='GroupITierFactor_Ext', skiprows=11)
-
 else:
     BGITier = pd.read_excel(CWRatebook,sheet_name='GroupITierFactor_Ext', skiprows=11)
 
-if 'GroupIITierFactor_Ext' in NGICwb.sheetnames:
+if SMwb is not None and 'GroupIITierFactor_Ext' in SMwb.sheetnames:
+    BGIITier = pd.read_excel(SMRatebook, sheet_name='GroupIITierFactor_Ext',skiprows=11)
+elif AppliesToAllwb is not None and 'GroupIITierFactor_Ext' in AppliesToAllwb.sheetnames:
+    BGIITier = pd.read_excel(AppliesToAllRatebook, sheet_name='GroupIITierFactor_Ext',skiprows=11)
+elif NGICwb is not None and 'GroupIITierFactor_Ext' in NGICwb.sheetnames:
     BGIITier = pd.read_excel(NGICRatebook, sheet_name='GroupIITierFactor_Ext',skiprows=11)
-
 else:
     BGIITier = pd.read_excel(CWRatebook, sheet_name='GroupIITierFactor_Ext', skiprows=11)
 
-if 'SpecialCauseofLossTierFactor_Ex' in NGICwb.sheetnames:
+if SMwb is not None and 'SpecialCauseofLossTierFactor_Ex' in SMwb.sheetnames:
+    SCOLTier = pd.read_excel(SMRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
+elif AppliesToAllwb is not None and 'SpecialCauseofLossTierFactor_Ex' in AppliesToAllwb.sheetnames:
+    SCOLTier = pd.read_excel(AppliesToAllRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
+elif NGICwb is not None and 'SpecialCauseofLossTierFactor_Ex' in NGICwb.sheetnames:
     SCOLTier = pd.read_excel(NGICRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
-
 else:
     SCOLTier = pd.read_excel(CWRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
 
@@ -874,8 +967,12 @@ SCOLTier = SCOLTier.reset_index(drop=True)
 
 # <editor-fold desc="Create AOB Dataframes">
 
-if 'AgeOfBuildingFactor_Ext' in NGICwb.sheetnames:
-    AOB = pd.read_excel(NGICRatebook, sheet_name='AgeOfBuildingFactor_Ext',skiprows=11)
+if SMwb is not None and 'AgeOfBuildingFactor_Ext' in SMwb.sheetnames:
+    AOB = pd.read_excel(SMRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
+elif AppliesToAllwb is not None and 'AgeOfBuildingFactor_Ext' in AppliesToAllwb.sheetnames:
+    AOB = pd.read_excel(AppliesToAllRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
+elif NGICwb is not None and 'AgeOfBuildingFactor_Ext' in NGICwb.sheetnames:
+    AOB = pd.read_excel(NGICRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
 else:
     AOB = pd.read_excel(CWRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
 
@@ -896,14 +993,22 @@ SCOLAOB = splitdf(SCOLAOB,3)
 # <editor-fold desc="Create Deductible Factor Dataframe">
 if 'DeductibleFactor' in MMwb.sheetnames:
     DIP1 = pd.read_excel(MMRatebook, sheet_name='DeductibleFactor',skiprows=11)
-elif 'DeductibleFactor' in NGICwb.sheetnames:
+elif SMwb is not None and 'DeductibleFactor' in SMwb.sheetnames:
+    DIP1 = pd.read_excel(SMRatebook, sheet_name='DeductibleFactor', skiprows=11)
+elif AppliesToAllwb is not None and 'DeductibleFactor' in AppliesToAllwb.sheetnames:
+    DIP1 = pd.read_excel(AppliesToAllRatebook, sheet_name='DeductibleFactor', skiprows=11)
+elif NGICwb is not None and 'DeductibleFactor' in NGICwb.sheetnames:
     DIP1 = pd.read_excel(NGICRatebook, sheet_name='DeductibleFactor', skiprows=11)
 else:
     DIP1 = pd.read_excel(CWRatebook, sheet_name='DeductibleFactor', skiprows=11)
 
 if 'Deductible250Factor' in MMwb.sheetnames:
     DIP2 = pd.read_excel(MMRatebook, sheet_name='Deductible250Factor',skiprows=11)
-elif 'Deductible250Factor' in NGICwb.sheetnames:
+elif SMwb is not None and 'Deductible250Factor' in SMwb.sheetnames:
+    DIP2 = pd.read_excel(SMRatebook, sheet_name='Deductible250Factor', skiprows=11)
+elif AppliesToAllwb is not None and 'Deductible250Factor' in AppliesToAllwb.sheetnames:
+    DIP2 = pd.read_excel(AppliesToAllRatebook, sheet_name='Deductible250Factor', skiprows=11)
+elif NGICwb is not None and 'Deductible250Factor' in NGICwb.sheetnames:
     DIP2 = pd.read_excel(NGICRatebook, sheet_name='Deductible250Factor', skiprows=11)
 else:
     DIP2 = pd.read_excel(CWRatebook, sheet_name='Deductible250Factor', skiprows=11)
@@ -2144,8 +2249,7 @@ if v10.get() == 1 and v8.get() == 1:
         for col in range(1, ws6.max_column + 1):
             char = get_column_letter(col)  # Letter representing the current column
             cell = ws6[char + str(row)]
-            ws6.column_dimensions[char].bestFit = True  # Using bestfit as the default option for
-            column widths
+            ws6.column_dimensions[char].bestFit = True  # Using bestfit as the default option for column widths
             if row > 2 and cell.value is not None:  # Adding a border to the table data
                 cell.border = Border(left=Side(border_style='thin', color='00000000'),
                                         right=Side(border_style='thin', color='00000000'),
@@ -3917,8 +4021,8 @@ if v5.get() == 1:
             wb["Index"]['A' + str(i)].hyperlink = (f"#'{sheetNames[i]}'!A1")
             wb["Index"]['A' + str(i)].value = wb[sheetNames[i]]['A1'].value
             wb["Index"]['A' + str(i)].font = fontBlue
-    wb.save(os.path.join(folder_selected, State + ' ' + EffectiveDate + ' Small Market Rate Pages.xlsx'))
-    wb = xw.Book(os.path.join(folder_selected, State + ' ' + EffectiveDate + ' Small Market Rate Pages.xlsx'))
+    wb.save(os.path.join(folder_selected, StateAbb + ' ' + EffectiveDate + ' Small Market Rate Pages.xlsx'))
+    wb = xw.Book(os.path.join(folder_selected, StateAbb + ' ' + EffectiveDate + ' Small Market Rate Pages.xlsx'))
     current_label = wb.api.SensitivityLabel.GetLabel()
     if current_label.LabelName == "":
         labelinfo = wb.api.SensitivityLabel.CreateLabelInfo()
@@ -3942,8 +4046,8 @@ if v10.get() == 1:
             wb2["Index"]['A' + str(i)].hyperlink = (f"#'{sheetNames2[i]}'!A1")
             wb2["Index"]['A' + str(i)].value = wb2[sheetNames2[i]]['A1'].value
             wb2["Index"]['A' + str(i)].font = fontBlue
-    wb2.save(os.path.join(folder_selected, State + ' ' + EffectiveDate + ' Middle Market Rate Pages.xlsx'))
-    wb2 = xw.Book(os.path.join(folder_selected, State + ' ' + EffectiveDate + ' Middle Market Rate Pages.xlsx'))
+    wb2.save(os.path.join(folder_selected, StateAbb + ' ' + EffectiveDate + ' Middle Market Rate Pages.xlsx'))
+    wb2 = xw.Book(os.path.join(folder_selected, StateAbb + ' ' + EffectiveDate + ' Middle Market Rate Pages.xlsx'))
     current_label = wb2.api.SensitivityLabel.GetLabel()
     if current_label.LabelName == "":
         labelinfo = wb2.api.SensitivityLabel.CreateLabelInfo()

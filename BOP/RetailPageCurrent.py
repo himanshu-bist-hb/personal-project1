@@ -342,7 +342,7 @@ class Retail:
             ('CW', 'R Table 3.C.4.b. Car Wash Factor', self.buildCarWashFactor, False, True, None, None),
             ('PDLD', 'R Table 3.C.4.c. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, None, None),
             ('LL', 'R Table 3.C.4.e. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, None, None),
-            ('LPGE', 'R Table 3.C.4.f. Liquefied Petroleum Gas (LPG) Exposures', self.buildLPGExposure, False, True, None, None),
+            ('LPGE', 'R Table 3.C.4.f. Liquefied Petroleum Gas (LPG) Exposures', self.buildLPGExposure, False, True, 'LPGE_RETAIL', None),
             ('LS', 'R Table 3.C.4.g. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, 'LS_RETAIL_CURRENT', None),
             ('GLO', 'R Table 3.D.1.c. General Liability Occupancy Modifiers', self.buildGeneralOccupancyMod, False, True, None, None),
             ('DO', 'R Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, None, self._formatDirsOfficersLiabIns),

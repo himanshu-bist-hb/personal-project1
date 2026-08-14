@@ -118,7 +118,11 @@
       "Bash(pip install *)",
       "Bash(grep -n \"title_block\\(\\\\s*$\" -A 8 \"/c/Users/HIMANS~1/AppData/Local/Temp/claude/C--Users-Himanshu-Bist-OneDrive-Desktop-Projects-BA-RatePages/a9bb6a29-a691-4d02-a459-dd9a4bc31760/scratchpad/build_deck.py\")",
       "Bash(tasklist *)",
-      "Bash(taskkill *)"
+      "Bash(taskkill *)",
+      "Bash(py --version)",
+      "Bash(\"./venv/Scripts/python\" -)",
+      "Bash(\"./venv/Scripts/python\" -c \"import ast; ast.parse\\(open\\('BOP/build_bop_input_file.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/RetailPage.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/RetailPageCurrent.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(\"../venv/Scripts/python\" -)"
     ]
   }
 }

@@ -222,6 +222,11 @@ def build():
         # (2 columns) instead of by peril, giving its data columns more room.
         ["LS_CURRENT", 1, 2, 95], ["LS_CURRENT", 3, "REST", 195],
         ["LPGE", 1, 1, 205], ["LPGE", 2, 2, 200],
+        # Retail's own LPGE profile — same widths as Auto Service's shared
+        # "LPGE" key, but split out so Retail's Premium column can get its
+        # own Number Formats row (2 decimals) without affecting Auto
+        # Service's, same PDLD_HAB precedent.
+        ["LPGE_RETAIL", 1, 1, 205], ["LPGE_RETAIL", 2, 2, 200],
         ["AIGO", 1, 1, 480],
         ["BGL", 1, 1, 100],
         ["SPD", 1, 1, 90], ["SPD", 2, 2, 54],
@@ -359,6 +364,11 @@ def build():
         # are whole-number, so literal formats without decimals instead.
         ["LPGE", 1, 1, 4, "#,##0"],
         ["LPGE", 2, 2, 4, "$#,##0"],
+        # Retail's LPGE Premium column wants 2 decimals (user request,
+        # 2026-08-14) — kept separate from Auto Service's "LPGE" row above
+        # via the LPGE_RETAIL layout key so Auto Service's stays 0-decimal.
+        ["LPGE_RETAIL", 1, 1, 4, "#,##0"],
+        ["LPGE_RETAIL", 2, 2, 4, "$#,##0.00"],
         # Special Property Damage Deductible (Auto Service) — "Currency" is
         # $#,##0.000 (3 decimals); the Deductible column is a whole-dollar
         # amount, so it prints with a dollar sign but no decimals instead.

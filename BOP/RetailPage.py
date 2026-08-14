@@ -342,14 +342,18 @@ class Retail:
             ws[f'D{start}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
 
     # Appends the Pet Services - Business Income table below the base
-    # premium table on the same sheet, with its own bolded section label.
-    # There's no direct BOP equivalent of the root tool's
-    # generateWorksheet2tables (that module isn't present in this repo), so
-    # this reconstructs the same two-block layout by hand: the first table
-    # (buildPSSplzdEndo, written normally by generateWorksheet) occupies
-    # rows 3-4; this appends a bolded "Pet Services - Business Income" label
-    # plus the second table's header/data rows below it.
+    # premium table on the same sheet, with its own bolded section label,
+    # and widens the base premium table's header/data rows to span columns
+    # A-C (matching the ["PSS", 1, 3, 120] width config and RSS's identical
+    # merge in ServicePage.py). There's no direct BOP equivalent of the root
+    # tool's generateWorksheet2tables (that module isn't present in this
+    # repo), so this reconstructs the same two-block layout by hand: the
+    # first table (buildPSSplzdEndo, written normally by generateWorksheet)
+    # occupies rows 3-4; this appends a bolded "Pet Services - Business
+    # Income" label plus the second table's header/data rows below it.
     def _formatPSSplzdEndo(self, ws, boldFont, biDf):
+        ws.merge_cells('A3:C3')
+        ws.merge_cells('A4:C4')
         start_row = ws.max_row + 2
         ws.cell(row=start_row, column=1, value="Pet Services - Business Income")
         for col in range(1, len(biDf.columns) + 1):

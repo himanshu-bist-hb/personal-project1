@@ -162,9 +162,9 @@ class Retail:
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + '+',
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + ' - ' + filteredYearBuiltModifier['Year_Built_Max'])
         if coverage.casefold() == 'building':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop('L-Products', axis=1)
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop('L-Products', axis=1).drop(columns=['WF', 'NC-BINC'], errors='ignore')
         elif coverage.casefold() == 'bpp':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop('L-Products', axis=1)
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop('L-Products', axis=1).drop(columns=['WF', 'NC-BINC'], errors='ignore')
 
     # Builds the equipment breakdown base rate table
     # Returns a dataframe

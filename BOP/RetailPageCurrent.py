@@ -133,6 +133,7 @@ class Retail:
         theftOptions = self.buildDataFrame("BP7_Peril_BPP_Theft_Options_Factor")
         filteredTheftOptions = theftOptions.query(f'Class_Code_Min == {self.retailProgramCode} & `Peril TypeCode` in {self.perils} & `Theft Option` != "Full Theft"'). \
                 replace({'Peril TypeCode': self.perilsConversions})
+        filteredTheftOptions = filteredTheftOptions.drop(filteredTheftOptions[filteredTheftOptions['Peril TypeCode'].isin(['NC-BINC', 'WF'])].index)
         return filteredTheftOptions.pivot(index='Peril TypeCode', columns='Theft Option', values='BPP Theft Options Factor').reset_index('Peril TypeCode'). \
                 rename(columns={'Peril TypeCode': 'Peril', 'Excluded Theft': 'Excluded', 'Limited Theft': 'Limited'})
 

@@ -134,9 +134,11 @@ class Retail:
         filteredConstructionType = constructionType.query(f'Class_Code_Min == {self.retailProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}). \
                 rename(columns={'ConstructionClassDisplay Name': 'Construction'})
         if coverage.casefold() == 'building':
-            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction').drop('L-Products', axis=1).drop(columns=['WF', 'NC-BINC'], errors='ignore')
+            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction'). \
+                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
         elif coverage.casefold() == 'bpp':
-            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction').drop('L-Products', axis=1).drop(columns=['WF', 'NC-BINC'], errors='ignore')
+            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction'). \
+                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
 
     # Builds the exclude theft options table
     # Returns a dataframe

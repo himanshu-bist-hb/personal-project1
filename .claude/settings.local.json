@@ -123,7 +123,9 @@
       "Bash(\"./venv/Scripts/python\" -)",
       "Bash(\"./venv/Scripts/python\" -c \"import ast; ast.parse\\(open\\('BOP/build_bop_input_file.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/RetailPage.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/RetailPageCurrent.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(\"../venv/Scripts/python\" -)",
-      "Bash(\"./venv/Scripts/python\" -c \"import ast; ast.parse\\(open\\('BOP/RetailPage.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/RetailPageCurrent.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
+      "Bash(\"./venv/Scripts/python\" -c \"import ast; ast.parse\\(open\\('BOP/RetailPage.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/RetailPageCurrent.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(\"./venv/Scripts/python\" -c \"import ast; ast.parse\\(open\\('BOP/ServicePage.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/ServicePageCurrent.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(\"./venv/Scripts/python\" -c \"import ast; ast.parse\\(open\\('BOP/HabPage.py'\\).read\\(\\)\\); ast.parse\\(open\\('BOP/HabPageCurrent.py'\\).read\\(\\)\\); print\\('OK'\\)\")"
     ]
   }
 }

@@ -277,7 +277,8 @@ class Retail:
     # Builds the table for Retail Trade Specialized Endorsement
     # Returns a dataframe
     def buildRTSplzdEndo(self):
-        return pd.DataFrame({"Base premium for each Retail Premises": ["$325.00"]})
+        endorsementCharge = self.buildDataFrame("BP7_PlusEndorsementCharge")
+        return endorsementCharge.query(f'ClassCodeMIn == {self.retailProgramCode}').filter(items=['PlusEndorsementCharge']).rename(columns={'PlusEndorsementCharge': 'Base premium for each Retail Premises'})
 
     # Builds the franchise upgrade endorsement table for the given program
     # Returns a dataframe

@@ -123,9 +123,9 @@ class Retail:
         filteredConstructionType = constructionType.query(f'Class_Code_Min == {self.retailProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}). \
                 rename(columns={'ConstructionClassDisplay Name': 'Construction'})
         if coverage.casefold() == 'building':
-            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction')
+            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction').drop(columns=['WF', 'NC-BINC'], errors='ignore')
         elif coverage.casefold() == 'bpp':
-            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction')
+            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction').drop(columns=['WF', 'NC-BINC'], errors='ignore')
 
     # Builds the exclude theft options table
     # Returns a dataframe

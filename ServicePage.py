@@ -70,12 +70,12 @@ class Service:
     # Returns a dataframe
     def buildFuneralHomeEndorsement(self):
         funeralHomeEndorsement = self.buildDataFrame("BP7_FuneralExtraBaseRate")
-        funeralHomeEndorsement['Occurence'] = funeralHomeEndorsement['LiabilityLimitOccurence'].apply(lambda x: "${0:,.0f}".format(x))
+        funeralHomeEndorsement['Occurrence'] = funeralHomeEndorsement['LiabilityLimitOccurence'].apply(lambda x: "${0:,.0f}".format(x))
         funeralHomeEndorsement['Aggregate'] = funeralHomeEndorsement['LiabilityLimtAggregate'].apply(lambda x: "${0:,.0f}".format(x))
-        funeralHomeEndorsement['Occurence / Aggregate'] = funeralHomeEndorsement['Occurence'] + ' / ' + funeralHomeEndorsement['Aggregate']
-        pivotedFuneralHome = funeralHomeEndorsement.pivot(index=['LiabilityLimitOccurence', 'Occurence / Aggregate'], columns='IncrementalDescedents', values='FuneralExtraBaseRate'). \
+        funeralHomeEndorsement['Occurrence / Aggregate'] = funeralHomeEndorsement['Occurrence'] + ' / ' + funeralHomeEndorsement['Aggregate']
+        pivotedFuneralHome = funeralHomeEndorsement.pivot(index=['LiabilityLimitOccurence', 'Occurrence / Aggregate'], columns='IncrementalDescedents', values='FuneralExtraBaseRate'). \
                 rename(columns={100: 'First 100 decedents', 200: 'Next 200 decedents', 300: 'Next 300 decedents', 400: 'Next 400 decedents', 1000: 'Over 1,000 decedents'}). \
-                reset_index(['LiabilityLimitOccurence', 'Occurence / Aggregate']).sort_values(by=['LiabilityLimitOccurence'])
+                reset_index(['LiabilityLimitOccurence', 'Occurrence / Aggregate']).sort_values(by=['LiabilityLimitOccurence'])
         del pivotedFuneralHome['LiabilityLimitOccurence'] # Remvoing the extra column used for sorting
         return pivotedFuneralHome
     
@@ -218,10 +218,10 @@ class Service:
     # Returns a dataframe
     def buildBarberProfLiab(self):
         barberProfLiab = self.buildDataFrame("BP7_ProfLiabarbersBeauticians_Rate")
-        barberProfLiab['Occurence'] = barberProfLiab['LiabilityLimit'].apply(lambda x: "${0:,.0f}".format(x))
+        barberProfLiab['Occurrence'] = barberProfLiab['LiabilityLimit'].apply(lambda x: "${0:,.0f}".format(x))
         barberProfLiab['Aggregate'] = barberProfLiab['AggregateLimit'].apply(lambda x: "${0:,.0f}".format(x))
-        barberProfLiab['Occurence / Aggregate'] = barberProfLiab['Occurence'] + ' / ' + barberProfLiab['Aggregate']
-        pivotedBarberProf = barberProfLiab.pivot(index=['LiabilityLimit', 'Occurence / Aggregate'], columns='ProfessionType', values='BaseRate').reset_index(['LiabilityLimit', 'Occurence / Aggregate']). \
+        barberProfLiab['Occurrence / Aggregate'] = barberProfLiab['Occurrence'] + ' / ' + barberProfLiab['Aggregate']
+        pivotedBarberProf = barberProfLiab.pivot(index=['LiabilityLimit', 'Occurrence / Aggregate'], columns='ProfessionType', values='BaseRate').reset_index(['LiabilityLimit', 'Occurrence / Aggregate']). \
                 rename(columns={'Barber': 'Each Barber', 'Beautician': 'Each Beautician', 'Manicurist': 'Each Manicurist'}).sort_values(by=['LiabilityLimit'])
         del pivotedBarberProf['LiabilityLimit'] # Removing the extra column used for sorting
         return pivotedBarberProf

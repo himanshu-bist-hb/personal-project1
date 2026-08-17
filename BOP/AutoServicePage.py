@@ -182,16 +182,16 @@ class Auto:
     def buildEmpPortToolsAndEquipment(self, equalLimits):
         empPortToolsAndEquipment = self.buildDataFrame("BP7_EmployeePortableToolsAndEquipmentCov_Rate")
         empPortToolsAndEquipment['OptionalLimitsPerEmployee'] = empPortToolsAndEquipment['Optional_IncreasedLimits'].str.replace(',', '').str.split('/').str[0]
-        empPortToolsAndEquipment['OptionalLimitsPerOccurence'] = empPortToolsAndEquipment['Optional_IncreasedLimits'].str.replace(',', '').str.split('/').str[1]
+        empPortToolsAndEquipment['OptionalLimitsPerOccurrence'] = empPortToolsAndEquipment['Optional_IncreasedLimits'].str.replace(',', '').str.split('/').str[1]
         empPortToolsAndEquipment['TotalLimitsPerEmployee'] = empPortToolsAndEquipment['TotalLimits'].str.replace(',', '').str.split('/').str[0]
-        empPortToolsAndEquipment['TotalLimitsPerOccurence'] = empPortToolsAndEquipment['TotalLimits'].str.replace(',', '').str.split('/').str[1]
-        filteredEmpPortToolsAndEquipment = empPortToolsAndEquipment.filter(items=['OptionalLimitsPerEmployee', 'OptionalLimitsPerOccurence', 'TotalLimitsPerEmployee', 'TotalLimitsPerOccurence', 'Additional_Premium']). \
+        empPortToolsAndEquipment['TotalLimitsPerOccurrence'] = empPortToolsAndEquipment['TotalLimits'].str.replace(',', '').str.split('/').str[1]
+        filteredEmpPortToolsAndEquipment = empPortToolsAndEquipment.filter(items=['OptionalLimitsPerEmployee', 'OptionalLimitsPerOccurrence', 'TotalLimitsPerEmployee', 'TotalLimitsPerOccurrence', 'Additional_Premium']). \
                 rename(columns={'Additional_Premium': 'Additional Premium'})
         if equalLimits:
-            return filteredEmpPortToolsAndEquipment.query(f'TotalLimitsPerEmployee == TotalLimitsPerOccurence'). \
-                    astype({'OptionalLimitsPerEmployee': 'int32', 'OptionalLimitsPerOccurence': 'int32', 'TotalLimitsPerEmployee': 'int32', 'TotalLimitsPerOccurence': 'int32'}).sort_values(by=['TotalLimitsPerEmployee'])
-        return filteredEmpPortToolsAndEquipment.query(f'TotalLimitsPerEmployee != TotalLimitsPerOccurence'). \
-                astype({'OptionalLimitsPerEmployee': 'int32', 'OptionalLimitsPerOccurence': 'int32', 'TotalLimitsPerEmployee': 'int32', 'TotalLimitsPerOccurence': 'int32'}).sort_values(by=['TotalLimitsPerEmployee'])
+            return filteredEmpPortToolsAndEquipment.query(f'TotalLimitsPerEmployee == TotalLimitsPerOccurrence'). \
+                    astype({'OptionalLimitsPerEmployee': 'int32', 'OptionalLimitsPerOccurrence': 'int32', 'TotalLimitsPerEmployee': 'int32', 'TotalLimitsPerOccurrence': 'int32'}).sort_values(by=['TotalLimitsPerEmployee'])
+        return filteredEmpPortToolsAndEquipment.query(f'TotalLimitsPerEmployee != TotalLimitsPerOccurrence'). \
+                astype({'OptionalLimitsPerEmployee': 'int32', 'OptionalLimitsPerOccurrence': 'int32', 'TotalLimitsPerEmployee': 'int32', 'TotalLimitsPerOccurrence': 'int32'}).sort_values(by=['TotalLimitsPerEmployee'])
 
     # Builds the broadened garage liability – defective products and faulty work coverage endorsement base rate table
     # Returns a dataframe
@@ -304,9 +304,9 @@ class Auto:
             ('LPGE', 'AS Table 3.C.4.h. Liquefied Petroleum Gas (LPG) Exposures', self.buildLPGExposure, False, True, None, None),
             ('AIGO', 'AS Table 4.A. Additional Insured - Garage Operations', self.buildGarageOperations, False, True, None, None),
             ('PLUS', 'AS Table 4.B.1. Auto Service PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
-            ('OILN', 'AS Table 4.B.2. Optional Increased Limits - Employee Portable Tools and Equipment - Employee Limit is not equal to the Occurence Limit', lambda: self.buildEmpPortToolsAndEquipment(False), False, True, None,
+            ('OILN', 'AS Table 4.B.2. Optional Increased Limits - Employee Portable Tools and Equipment - Employee Limit is not equal to the Occurrence Limit', lambda: self.buildEmpPortToolsAndEquipment(False), False, True, None,
              lambda ws: self._formatEmpPortToolsAndEquipment(ws, AutoService.fontBold)),
-            ('OILE', 'AS Table 4.B.2. Optional Increased Limits - Employee Portable Tools and Equipment - Employee Limit is equal to the Occurence Limit', lambda: self.buildEmpPortToolsAndEquipment(True), False, True, None,
+            ('OILE', 'AS Table 4.B.2. Optional Increased Limits - Employee Portable Tools and Equipment - Employee Limit is equal to the Occurrence Limit', lambda: self.buildEmpPortToolsAndEquipment(True), False, True, None,
              lambda ws: self._formatEmpPortToolsAndEquipment(ws, AutoService.fontBold)),
             ('BGL', 'AS Table 4.C.1. Broadened Garage Liability – Defective Products and Faulty Work Coverage Endorsement Base Rate', self.buildBroadenedGarageLiab, False, True, None, None),
             ('SPD', 'AS Table 4.C.2. Special Property Damage Deductible', self.buildSpecialPropertyDeductible, False, True, None, None),

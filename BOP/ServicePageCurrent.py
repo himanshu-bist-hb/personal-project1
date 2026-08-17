@@ -94,12 +94,12 @@ class Service:
     # Returns a dataframe
     def buildFuneralHomeEndorsement(self):
         funeralHomeEndorsement = self.buildDataFrame("BP7_FuneralExtraBaseRate")
-        funeralHomeEndorsement['Occurence'] = funeralHomeEndorsement['LiabilityLimitOccurence'].apply(lambda x: "${0:,.0f}".format(x))
+        funeralHomeEndorsement['Occurrence'] = funeralHomeEndorsement['LiabilityLimitOccurence'].apply(lambda x: "${0:,.0f}".format(x))
         funeralHomeEndorsement['Aggregate'] = funeralHomeEndorsement['LiabilityLimtAggregate'].apply(lambda x: "${0:,.0f}".format(x))
-        funeralHomeEndorsement['Occurence / Aggregate'] = funeralHomeEndorsement['Occurence'] + ' / ' + funeralHomeEndorsement['Aggregate']
-        pivotedFuneralHome = funeralHomeEndorsement.pivot(index=['LiabilityLimitOccurence', 'Occurence / Aggregate'], columns='IncrementalDescedents', values='FuneralExtraBaseRate'). \
+        funeralHomeEndorsement['Occurrence / Aggregate'] = funeralHomeEndorsement['Occurrence'] + ' / ' + funeralHomeEndorsement['Aggregate']
+        pivotedFuneralHome = funeralHomeEndorsement.pivot(index=['LiabilityLimitOccurence', 'Occurrence / Aggregate'], columns='IncrementalDescedents', values='FuneralExtraBaseRate'). \
                 rename(columns={100: 'First 100 decedents', 200: 'Next 200 decedents', 300: 'Next 300 decedents', 400: 'Next 400 decedents', 1000: 'Over 1,000 decedents'}). \
-                reset_index(['LiabilityLimitOccurence', 'Occurence / Aggregate']).sort_values(by=['LiabilityLimitOccurence'])
+                reset_index(['LiabilityLimitOccurence', 'Occurrence / Aggregate']).sort_values(by=['LiabilityLimitOccurence'])
         del pivotedFuneralHome['LiabilityLimitOccurence']
         return pivotedFuneralHome
 
@@ -132,13 +132,13 @@ class Service:
         filteredTerritorialFactor = territorialFactor.query(f'Class_Code_Min == {self.serviceProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}).rename(columns={'TerritoryCode': 'Territory'})
         if coverage.casefold() == 'building':
             return filteredTerritorialFactor.pivot(index='Territory', columns='Peril TypeCode', values='BldgTerritoryFactor').reset_index('Territory'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other', 'L-Products': 'LIAB-Other'})
         elif coverage.casefold() == 'bpp':
             return filteredTerritorialFactor.pivot(index='Territory', columns='Peril TypeCode', values='BPPTerritoryFactor').reset_index('Territory'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other', 'L-Products': 'LIAB-Other'})
         elif coverage.casefold() == 'liability':
             return filteredTerritorialFactor.pivot(index='Territory', columns='Peril TypeCode', values='LiabilityTerritoryFactor').reset_index('Territory'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other', 'L-Products': 'LIAB-Other'})
 
     # Builds the construction type table for the given coverage (either building or bpp)
     # Returns a dataframe
@@ -148,18 +148,18 @@ class Service:
                 rename(columns={'ConstructionClassDisplay Name': 'Construction'})
         if coverage.casefold() == 'building':
             return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other', 'L-Products': 'LIAB-Other'})
         elif coverage.casefold() == 'bpp':
             return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other', 'L-Products': 'LIAB-Other'})
 
     # Builds the exclude theft options table
     # Returns a dataframe
     def buildTheftOptions(self):
         theftOptions = self.buildDataFrame("BP7_Peril_BPP_Theft_Options_Factor")
         filteredTheftOptions = theftOptions.query(f'Class_Code_Min == {self.serviceProgramCode} & `Peril TypeCode` in {self.perils} & `Theft Option` != "Full Theft"'). \
-                replace({'Peril TypeCode': self.perilsConversions})
-        filteredTheftOptions = filteredTheftOptions.drop(filteredTheftOptions[filteredTheftOptions['Peril TypeCode'].isin(['L-Products', 'NC-BINC', 'WF'])].index)
+                replace({'Peril TypeCode': self.perilsConversions}).replace({'Peril TypeCode': {'L-Products': 'LIAB-Other'}})
+        filteredTheftOptions = filteredTheftOptions.drop(filteredTheftOptions[filteredTheftOptions['Peril TypeCode'].isin(['NC-BINC', 'WF'])].index)
         return filteredTheftOptions.pivot(index='Peril TypeCode', columns='Theft Option', values='BPP Theft Options Factor').reset_index('Peril TypeCode'). \
                 rename(columns={'Peril TypeCode': 'Peril', 'Excluded Theft': 'Excluded', 'Limited Theft': 'Limited'})
 
@@ -177,9 +177,9 @@ class Service:
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + '+',
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + ' - ' + filteredYearBuiltModifier['Year_Built_Max'])
         if coverage.casefold() == 'building':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products', 'WF', 'NC-BINC'], errors='ignore')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['WF', 'NC-BINC'], errors='ignore').rename(columns={'L-Products': 'LIAB-Other'})
         elif coverage.casefold() == 'bpp':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products', 'WF', 'NC-BINC'], errors='ignore')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['WF', 'NC-BINC'], errors='ignore').rename(columns={'L-Products': 'LIAB-Other'})
 
     # Builds the equipment breakdown base rate table
     # Returns a dataframe
@@ -247,10 +247,10 @@ class Service:
     # Returns a dataframe
     def buildBarberProfLiab(self):
         barberProfLiab = self.buildDataFrame("BP7_ProfLiabarbersBeauticians_Rate")
-        barberProfLiab['Occurence'] = barberProfLiab['LiabilityLimit'].apply(lambda x: "${0:,.0f}".format(x))
+        barberProfLiab['Occurrence'] = barberProfLiab['LiabilityLimit'].apply(lambda x: "${0:,.0f}".format(x))
         barberProfLiab['Aggregate'] = barberProfLiab['AggregateLimit'].apply(lambda x: "${0:,.0f}".format(x))
-        barberProfLiab['Occurence / Aggregate'] = barberProfLiab['Occurence'] + ' / ' + barberProfLiab['Aggregate']
-        pivotedBarberProf = barberProfLiab.pivot(index=['LiabilityLimit', 'Occurence / Aggregate'], columns='ProfessionType', values='BaseRate').reset_index(['LiabilityLimit', 'Occurence / Aggregate']). \
+        barberProfLiab['Occurrence / Aggregate'] = barberProfLiab['Occurrence'] + ' / ' + barberProfLiab['Aggregate']
+        pivotedBarberProf = barberProfLiab.pivot(index=['LiabilityLimit', 'Occurrence / Aggregate'], columns='ProfessionType', values='BaseRate').reset_index(['LiabilityLimit', 'Occurrence / Aggregate']). \
                 rename(columns={'Barber': 'Each Barber', 'Beautician': 'Each Beautician', 'Manicurist': 'Each Manicurist'}).sort_values(by=['LiabilityLimit'])
         del pivotedBarberProf['LiabilityLimit']
         return pivotedBarberProf

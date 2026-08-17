@@ -171,8 +171,8 @@ class Office:
         optometristsProfessionalLiab = self.buildDataFrame("BP7_ProfLiabOptical_Rate")
         optometristsProfessionalLiab['LiabilityAmount'] = optometristsProfessionalLiab['LiabilityAmount'].apply(lambda x: "${0:,.0f}".format(x))
         optometristsProfessionalLiab['AggregateLimit'] = optometristsProfessionalLiab['AggregateLimit'].apply(lambda x: "${0:,.0f}".format(x))
-        optometristsProfessionalLiab['Occurence / Aggregate'] = optometristsProfessionalLiab['LiabilityAmount'] + ' / ' + optometristsProfessionalLiab['AggregateLimit']
-        return optometristsProfessionalLiab.rename(columns={'OptometristRate': 'Each Optometrist', 'OpticianRate': 'Each Optician'}).filter(items=['Occurence / Aggregate', 'Each Optometrist', 'Each Optician'])
+        optometristsProfessionalLiab['Occurrence / Aggregate'] = optometristsProfessionalLiab['LiabilityAmount'] + ' / ' + optometristsProfessionalLiab['AggregateLimit']
+        return optometristsProfessionalLiab.rename(columns={'OptometristRate': 'Each Optometrist', 'OpticianRate': 'Each Optician'}).filter(items=['Occurrence / Aggregate', 'Each Optometrist', 'Each Optician'])
 
     def buildVetSpecializedLiab(self):
         data = [
@@ -188,9 +188,9 @@ class Office:
         vetProfessionalLiab = self.buildDataFrame("BP7_Pol_VeterinariansExtraCov_Rate")
         vetProfessionalLiab['LiabLimitPerOcc'] = vetProfessionalLiab['LiabLimitPerOcc'].apply(lambda x: "${0:,.0f}".format(x))
         vetProfessionalLiab['LiabLimitPerAgg'] = vetProfessionalLiab['LiabLimitPerAgg'].apply(lambda x: "${0:,.0f}".format(x))
-        vetProfessionalLiab['Occurence / Aggregate'] = vetProfessionalLiab['LiabLimitPerOcc'] + ' / ' + vetProfessionalLiab['LiabLimitPerAgg']
+        vetProfessionalLiab['Occurrence / Aggregate'] = vetProfessionalLiab['LiabLimitPerOcc'] + ' / ' + vetProfessionalLiab['LiabLimitPerAgg']
         return vetProfessionalLiab.rename(columns={'Otherthanhouseholdanimals': 'Other than household animals', 'HouseholdAnimalsOnly': 'Household animals only'}). \
-                filter(items=['Occurence / Aggregate', 'Other than household animals', 'Household animals only'])
+                filter(items=['Occurrence / Aggregate', 'Other than household animals', 'Household animals only'])
 
     # Builds the endorsement charge table
     # Returns a dataframe

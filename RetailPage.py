@@ -217,8 +217,8 @@ class Retail:
         hearingAidStoresLiab = self.buildDataFrame("BP7_ProfLiabHearingAidEstablishments")
         hearingAidStoresLiab['Limit'] = hearingAidStoresLiab['Limit'].apply(lambda x: "${0:,.0f}".format(x))
         hearingAidStoresLiab['AggregateLimit'] = hearingAidStoresLiab['AggregateLimit'].apply(lambda x: "${0:,.0f}".format(x))
-        hearingAidStoresLiab['Occurence / Aggregate'] = hearingAidStoresLiab['Limit'] + ' / ' + hearingAidStoresLiab['AggregateLimit']
-        return hearingAidStoresLiab.filter(items=['Occurence / Aggregate', 'Hearing Aid Prof Liab Charge']).rename(columns={'Hearing Aid Prof Liab Charge': 'Each Hearing Aid Specialist'})
+        hearingAidStoresLiab['Occurrence / Aggregate'] = hearingAidStoresLiab['Limit'] + ' / ' + hearingAidStoresLiab['AggregateLimit']
+        return hearingAidStoresLiab.filter(items=['Occurrence / Aggregate', 'Hearing Aid Prof Liab Charge']).rename(columns={'Hearing Aid Prof Liab Charge': 'Each Hearing Aid Specialist'})
     
     # Builds the Optical Goods Stores Professional Liability table
     # Returns a dataframe
@@ -226,8 +226,8 @@ class Retail:
         opticalGoodsStoresLiab = self.buildDataFrame("BP7_ProfLiabOptical_Rate")
         opticalGoodsStoresLiab['LiabilityAmount'] = opticalGoodsStoresLiab['LiabilityAmount'].apply(lambda x: "${0:,.0f}".format(x))
         opticalGoodsStoresLiab['AggregateLimit'] = opticalGoodsStoresLiab['AggregateLimit'].apply(lambda x: "${0:,.0f}".format(x))
-        opticalGoodsStoresLiab['Occurence / Aggregate'] = opticalGoodsStoresLiab['LiabilityAmount'] + ' / ' + opticalGoodsStoresLiab['AggregateLimit']
-        return opticalGoodsStoresLiab.filter(items=['Occurence / Aggregate', 'OpticianRate']).rename(columns={'OpticianRate': 'Each Optician'})
+        opticalGoodsStoresLiab['Occurrence / Aggregate'] = opticalGoodsStoresLiab['LiabilityAmount'] + ' / ' + opticalGoodsStoresLiab['AggregateLimit']
+        return opticalGoodsStoresLiab.filter(items=['Occurrence / Aggregate', 'OpticianRate']).rename(columns={'OpticianRate': 'Each Optician'})
     
     # Builds the pedorthists professional liability table
     # Returns a dataframe
@@ -235,8 +235,8 @@ class Retail:
         pedorthistsLiab = self.buildDataFrame("BP7_ProfLiabPedorthistsBaseRate")
         pedorthistsLiab['Liability Limit Occurrence'] = pedorthistsLiab['Liability Limit Occurrence'].apply(lambda x: "${0:,.0f}".format(x))
         pedorthistsLiab['LiabilityLimitAggregate'] = pedorthistsLiab['LiabilityLimitAggregate'].apply(lambda x: "${0:,.0f}".format(x))
-        pedorthistsLiab['Occurence / Aggregate'] = pedorthistsLiab['Liability Limit Occurrence'] + ' / ' + pedorthistsLiab['LiabilityLimitAggregate']
-        return pedorthistsLiab.filter(items=['Occurence / Aggregate', 'BaseRate']).rename(columns={'BaseRate': 'Each Certified Pedorthist'})
+        pedorthistsLiab['Occurrence / Aggregate'] = pedorthistsLiab['Liability Limit Occurrence'] + ' / ' + pedorthistsLiab['LiabilityLimitAggregate']
+        return pedorthistsLiab.filter(items=['Occurrence / Aggregate', 'BaseRate']).rename(columns={'BaseRate': 'Each Certified Pedorthist'})
 
     # Builds the endorsement charge table
     # Returns a dataframe

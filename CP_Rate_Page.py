@@ -817,8 +817,6 @@ CrimeDed = CrimeDed.rename(columns={'Deductible': 'Deductible Amount'})
 
 # <editor-fold desc="Create AOI Factor Dataframe">
 
-NGICwb = load_workbook(NGICRatebook, read_only=True)
-
 if SMwb is not None and 'BasicGroupILOIFactorBldg' in SMwb.sheetnames:
     BGIBLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
 elif AppliesToAllwb is not None and 'BasicGroupILOIFactorBldg' in AppliesToAllwb.sheetnames:

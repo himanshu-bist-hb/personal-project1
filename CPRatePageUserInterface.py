@@ -29,7 +29,10 @@ from tkinter import filedialog as fd
 
 
 def callbackRatePages():
-    exec(open("CP_Rate_Pages.py").read())
+    try:
+        exec(open("CP_Rate_Pages.py").read())
+    except FileNotFoundError:
+        exec(open("CP_Rate_Page.py").read())
 
 def callbackHexValidate():
     exec(open("CP_Hex_Validate.py").read())

@@ -341,7 +341,7 @@ class Service:
             ('DO', 'S Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, None, self._formatDirsOfficersLiabIns),
             ('DONM', 'S Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, None, None),
             ('ERP', 'S Table 4.A.3. Directors and Officers Liability Insurance - Extended Reporting Periods', self.buildDirsOfficersReportingPeriods, False, True, None, None),
-            ('BB', 'S Table 4.B.1.e.(1). Barber or Beauty Shops Professional Liability', self.buildBarberProfLiab, False, True, None, None),
+            ('BB', 'S Table 4.B.1.e.(1). Barber, Beauty, or Spa Professional Liability', self.buildBarberProfLiab, False, True, None, None),
             ('PLUS', 'S Table 4.C. Service PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
             ('FR', 'S Table 4.D. Franchise Upgrade Endorsement', self.buildFranchiseUpgradeEndorsement, False, True, None, None),
         ]

@@ -382,32 +382,85 @@ class Service:
         ws.merge_cells('A3:C3')
         ws.merge_cells('A4:C4')
 
-    # Appends the Pet Services - Business Income table below the base
-    # premium table on the same sheet, with its own bolded section label,
-    # and widens the base premium table's header/data rows to span columns
-    # A-C (same merge as _formatRepairSpecializedEndorsement). There's no
-    # direct BOP equivalent of the root tool's generateWorksheet2tables (that
-    # module isn't present in this repo), so this reconstructs the same
-    # two-block layout by hand, same pattern as [[bop_retail_port]]'s PSS
-    # sheet: the first table (buildPetSpecializedEndorsement, written
-    # normally by generateWorksheet) occupies rows 3-4; this appends a
-    # bolded "Pet Services - Business Income" label plus the second table's
-    # header/data rows below it.
-    def _formatPSSplzdEndo(self, ws, boldFont, biDf):
+    # Appends a series of (label, dataframe) blocks below ws's current
+    # content, each as a bolded section label row + bolded, bordered
+    # column-header row + bordered plain data rows, with one blank separator
+    # row between blocks (and, if blank_before_first, before the first block
+    # too — used by _formatPSSplzdEndo to separate the first block from the
+    # merged base premium table above it). Shared by _formatPSSplzdEndo and
+    # _formatMPVS, which reconstruct the root tool's
+    # generateWorksheet2tables/6tables (not present in this repo) by hand.
+    #
+    # Each row is only bordered/aligned across its OWN block's column count
+    # (n_cols), not the sheet's running max column — otherwise a narrower
+    # block following a wider one (e.g. MPVS's 2-column "Veterinarian" block
+    # after the 3-column "Pet Services - Business Income" block) would pick
+    # up a stray bordered empty cell on its right, and bestFit below would
+    # size that column from blank cells instead of its real content.
+    #
+    # Data rows previously got no font/border/alignment at all (only the
+    # label and header rows did), which is what made the printed PDF look
+    # inconsistent — boxed headers sitting over plain, unbordered data — and
+    # column widths were never set for the appended columns, leaving them at
+    # Excel's default width. Both are fixed here: data rows get the same
+    # thin border/center alignment as the header row (in the regular, not
+    # bold, font), and bestFit is turned on for every column touched by any
+    # block so the columns size to their content like the rest of the sheet.
+    def _appendLabeledBlocks(self, ws, boldFont, font, blocks, blank_before_first=False):
+        row = ws.max_row + 1
+        max_col = 1
+        for i, (label, df) in enumerate(blocks):
+            if i > 0 or blank_before_first:
+                row += 1  # blank separator row, left untouched (no border)
+            label_row = row
+            header_row = label_row + 1
+            n_cols = len(df.columns)
+            ws.cell(row=label_row, column=1, value=label)
+            for col, name in enumerate(df.columns, start=1):
+                ws.cell(row=header_row, column=col, value=name)
+            for r_off, (_, data_row) in enumerate(df.iterrows()):
+                for col, val in enumerate(data_row, start=1):
+                    ws.cell(row=header_row + 1 + r_off, column=col, value=val)
+            for r in (label_row, header_row):
+                for col in range(1, n_cols + 1):
+                    cell = ws.cell(row=r, column=col)
+                    cell.font = boldFont
+                    cell.border = _THIN_BORDER
+                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+            for r_off in range(len(df)):
+                for col in range(1, n_cols + 1):
+                    cell = ws.cell(row=header_row + 1 + r_off, column=col)
+                    cell.font = font
+                    cell.border = _THIN_BORDER
+                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+            max_col = max(max_col, n_cols)
+            row = header_row + len(df)
+        for col in range(1, max_col + 1):
+            ws.column_dimensions[get_column_letter(col)].bestFit = True
+
+    # Appends the Mobile Equipment, Business Income (BI) per Customized
+    # Vehicle, and Business Income (BI) per Worker tables below the base
+    # premium table on the same sheet (widened to span columns A-C, same
+    # merge as _formatRepairSpecializedEndorsement) — feedback fix: the PSS
+    # sheet was previously only appending the per-Worker table (mislabeled
+    # "Pet Services - Business Income", with "Limit"/"Each Addl" headers
+    # instead of "Limits (BI)"/"Each Additional"), dropping the Mobile
+    # Equipment and per-Customized-Vehicle tables entirely. The underlying
+    # data for those two matches buildPetServices()/buildPetServicesCustomized
+    # (the same MPVS/S Table 4.H blocks) exactly, just under PSS-specific
+    # column headers, so those are reused here rather than duplicated.
+    def _formatPSSplzdEndo(self, ws, boldFont, font):
         ws.merge_cells('A3:C3')
         ws.merge_cells('A4:C4')
-        start_row = ws.max_row + 2
-        ws.cell(row=start_row, column=1, value="Pet Services - Business Income")
-        for col in range(1, len(biDf.columns) + 1):
-            ws.cell(row=start_row + 1, column=col, value=biDf.columns[col - 1])
-        for r, (_, row) in enumerate(biDf.iterrows(), start=start_row + 2):
-            for col, val in enumerate(row, start=1):
-                ws.cell(row=r, column=col, value=val)
-        for row in (start_row, start_row + 1):
-            for cell in ws[row]:
-                cell.font = boldFont
-                cell.border = _THIN_BORDER
-                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        mobileDf = self.buildPetServices().rename(columns={"Limit": "Limits", "Mobile Equipment": "Rate"})
+        vehicleDf = self.buildPetServicesCustomized().rename(columns={"Limit": "Limits (BI)", "Each Addl": "Each Additional"})
+        workerDf = self.buildServiceBusinessIncome().rename(columns={"Limit": "Limits (BI)", "Each Addl": "Each Additional"})
+        blocks = [
+            ("Mobile Equipment", mobileDf),
+            ("Business Income (BI) per Customized Vehicle", vehicleDf),
+            ("Business Income (BI) per Worker", workerDf),
+        ]
+        self._appendLabeledBlocks(ws, boldFont, font, blocks, blank_before_first=True)
 
     # Mobile Pet and Veterinarian Services Endorsement (MPVS) — a SIX-table
     # sheet, the largest reconstruction of this kind in the BOP module.
@@ -429,10 +482,12 @@ class Service:
     # "no real ratebook to test against" caveat; this one is unverified
     # against a real reference even more than that one was, given its size,
     # so flag to the user to check the actual PDF output for S Table 4.H.
-    # the first time real data is available. Column C's width is also left
-    # unset, same as the root tool (it only ever sets A and B) — a likely
-    # cosmetic gap in the original tool, kept as-is for fidelity.
-    def _formatMPVS(self, ws, boldFont):
+    # the first time real data is available. Column widths (A-C) are now set
+    # via bestFit in _appendLabeledBlocks, rather than left at Excel's
+    # default — the root tool only ever set A and B explicitly, but that gap
+    # (and the missing data-row borders) was confirmed as a real formatting
+    # bug against a live ratebook rather than fidelity to keep.
+    def _formatMPVS(self, ws, boldFont, font):
         blocks = [
             ("Pet Services", self.buildPetServices()),
             ("Pet Services per Customized Vehicle", self.buildPetServicesCustomized()),
@@ -441,24 +496,7 @@ class Service:
             ("Veterinarian Services per Customized Vehicle", self.buildVetCustom()),
             ("Veterinarian Services - Business Income", self.buildVetBusinessIncome()),
         ]
-        row = ws.max_row + 1
-        for i, (label, df) in enumerate(blocks):
-            if i > 0:
-                row += 1  # blank separator row, left untouched (no border)
-            label_row = row
-            header_row = label_row + 1
-            ws.cell(row=label_row, column=1, value=label)
-            for col, name in enumerate(df.columns, start=1):
-                ws.cell(row=header_row, column=col, value=name)
-            for r_off, (_, data_row) in enumerate(df.iterrows()):
-                for col, val in enumerate(data_row, start=1):
-                    ws.cell(row=header_row + 1 + r_off, column=col, value=val)
-            for r in (label_row, header_row):
-                for cell in ws[r]:
-                    cell.font = boldFont
-                    cell.border = _THIN_BORDER
-                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-            row = header_row + len(df)
+        self._appendLabeledBlocks(ws, boldFont, font, blocks)
 
     # Sets up the Service Excel file and creates a separate worksheet for
     # each of the given dataframes. progress_callback (optional) is called
@@ -499,15 +537,15 @@ class Service:
             ('DO', 'S Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, None, self._formatDirsOfficersLiabIns),
             ('DONM', 'S Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, None, None),
             ('ERP', 'S Table 4.A.3. Directors and Officers Liability Insurance - Extended Reporting Periods', self.buildDirsOfficersReportingPeriods, False, True, None, None),
-            ('BB', 'S Table 4.B.1.e.(1). Barber or Beauty Shops Professional Liability', self.buildBarberProfLiab, False, True, None, None),
+            ('BB', 'S Table 4.B.1.e.(1). Barber, Beauty, or Spa Professional Liability', self.buildBarberProfLiab, False, True, None, None),
             ('PLUS', 'S Table 4.C. Service PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
             ('FR', 'S Table 4.D. Franchise Upgrade Endorsement', self.buildFranchiseUpgradeEndorsement, False, True, None, None),
             ('RSS', 'S Table 4.E. Repair Services Specialized Endorsement', self.buildRepairSpecializedEndorsement, False, True, None, self._formatRepairSpecializedEndorsement),
             ('PSS', 'S Table 4.F. Pet Services Specialized Endorsement', self.buildPetSpecializedEndorsement, False, True, None,
-             lambda ws: self._formatPSSplzdEndo(ws, Service.fontBold, self.buildServiceBusinessIncome())),
+             lambda ws: self._formatPSSplzdEndo(ws, Service.fontBold, Service.font)),
             ('PSPL', 'S Table 4.G. Pet Services Professional Liability', self.buildPetServicePL, False, True, None, lambda ws: ws.insert_rows(3)),
             ('MPVS', 'S Table 4.H. Mobile Pet and Veterinarian Services Endorsement', lambda: pd.DataFrame(), False, False, None,
-             lambda ws: self._formatMPVS(ws, Service.fontBold)),
+             lambda ws: self._formatMPVS(ws, Service.fontBold, Service.font)),
         ]
 
         total = len(sheetSpecs)

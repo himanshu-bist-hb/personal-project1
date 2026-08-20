@@ -345,33 +345,52 @@ class Retail:
             ws[f'D{start}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
 
     # Appends the Pet Services - Business Income table below the base
-    # premium table on the same sheet, with its own bolded section label,
-    # and widens the base premium table's header/data rows to span columns
-    # A-C (matching the ["PSS", 1, 3, 120] width config and RSS's identical
-    # merge in ServicePage.py). There's no direct BOP equivalent of the root
-    # tool's generateWorksheet2tables (that module isn't present in this
-    # repo), so this reconstructs the same two-block layout by hand: the
+    # premium table on the same sheet. There's no direct BOP equivalent of
+    # the root tool's generateWorksheet2tables (that module isn't present in
+    # this repo), so this reconstructs the same two-block layout by hand: the
     # first table (buildPSSplzdEndo, written normally by generateWorksheet)
-    # occupies rows 3-4; this appends a bolded "Pet Services - Business
-    # Income" label plus the second table's header/data rows below it.
-    def _formatPSSplzdEndo(self, ws, boldFont, biDf):
+    # occupies rows 3-4 (merged A3:C3/A4:C4 to span columns A-C, matching the
+    # ["PSS", 1, 3, 120] width config and RSS's identical merge in
+    # ServicePage.py); this appends a plain, unboxed "Pet Services - Business
+    # Income" section label plus the second table's header/data rows below
+    # it.
+    #
+    # Feedback fix: the header row previously got font/border/alignment but
+    # the DATA rows didn't (only the label+header got styled, and the label
+    # picked up a border it shouldn't have), leaving a boxed header floating
+    # over plain, unbordered data and a stray tight box around the label —
+    # see [[bop_service_port]]'s _appendLabeledBlocks for the analogous
+    # Service-side bug. Data rows now get the same thin border/center
+    # alignment as the header (in the regular, not bold, font), the label
+    # stays unboxed, and the hardcoded 120px width override — which squeezed
+    # both this header row and the merged base-premium title above it into a
+    # multi-line wrap — is replaced with bestFit so columns size to their
+    # actual content.
+    def _formatPSSplzdEndo(self, ws, boldFont, font, biDf):
         ws.merge_cells('A3:C3')
         ws.merge_cells('A4:C4')
-        start_row = ws.max_row + 2
-        ws.cell(row=start_row, column=1, value="Pet Services - Business Income")
-        for col in range(1, len(biDf.columns) + 1):
-            ws.cell(row=start_row + 1, column=col, value=biDf.columns[col - 1])
-        for r, (_, row) in enumerate(biDf.iterrows(), start=start_row + 2):
+        label_row = ws.max_row + 2
+        header_row = label_row + 1
+        label_cell = ws.cell(row=label_row, column=1, value="Pet Services - Business Income")
+        label_cell.font = boldFont
+        for col, name in enumerate(biDf.columns, start=1):
+            ws.cell(row=header_row, column=col, value=name)
+        for r_off, (_, row) in enumerate(biDf.iterrows()):
             for col, val in enumerate(row, start=1):
-                ws.cell(row=r, column=col, value=val)
-        for row in (start_row, start_row + 1):
-            for cell in ws[row]:
-                cell.font = boldFont
+                ws.cell(row=header_row + 1 + r_off, column=col, value=val)
+        for col in range(1, len(biDf.columns) + 1):
+            header_cell = ws.cell(row=header_row, column=col)
+            header_cell.font = boldFont
+            header_cell.border = _THIN_BORDER
+            header_cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        for r_off in range(len(biDf)):
+            for col in range(1, len(biDf.columns) + 1):
+                cell = ws.cell(row=header_row + 1 + r_off, column=col)
+                cell.font = font
                 cell.border = _THIN_BORDER
                 cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
         for col in range(1, len(biDf.columns) + 1):
-            char = get_column_letter(col)
-            ws.column_dimensions[char].width = 120 / 7.0
+            ws.column_dimensions[get_column_letter(col)].bestFit = True
 
     # Sets up the Retail Excel file and creates a separate worksheet for
     # each of the given dataframes. progress_callback (optional) is called
@@ -419,7 +438,7 @@ class Retail:
             ('RTS', 'R Table 4.C. Retail Trade Specialized Endorsement', self.buildRTSplzdEndo, False, True, None, None),
             ('FR', 'R Table 4.D. Franchise Upgrade Endorsement', self.buildFranchiseUpgradeEndorsement, False, True, None, None),
             ('PSS', 'R Table 4.E. Pet Services Specialized Endorsement', self.buildPSSplzdEndo, False, True, None,
-             lambda ws: self._formatPSSplzdEndo(ws, Retail.fontBold, self.buildPSSBIncome())),
+             lambda ws: self._formatPSSplzdEndo(ws, Retail.fontBold, Retail.font, self.buildPSSBIncome())),
             ('PSPL', 'R Table 4.F. Pet Services Professional Liability', self.buildPSProfLiab, False, True, 'PED', None),
         ]
 

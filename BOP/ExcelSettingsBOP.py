@@ -57,12 +57,17 @@ class Excel:
 
     # Short section code for the {section} footer token, keyed by the exact
     # programName each page module passes in (see the ExcelSettingsBOP.Excel(...)
-    # call in AllProgramsPage.py / AllPerilPage.py / HabPage.py / AutoServicePage.py).
+    # call in AllProgramsPage.py / AllPerilPage.py / HabPage.py / AutoServicePage.py /
+    # ServicePage.py). A programName missing from this map falls back to
+    # printing itself in full in the footer (that's what happened to Service
+    # before it was added here).
     _SECTION_CODES = {
         "All Programs": "PG",
         "All Peril": "AP",
         "Habitational": "H",
         "Auto Service": "AS",
+        "Service": "S",
+        "Office": "O",
     }
 
     def __init__(self, state, programName, nEffective, rEffective, companyList) -> None:

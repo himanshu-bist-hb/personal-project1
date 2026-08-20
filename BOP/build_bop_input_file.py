@@ -257,7 +257,7 @@ def build():
         # FR/AS_BR/ET/GLO/DC/DCEQ/LS_RETAIL) Service reuses as-is (widths
         # transcribed from the root ServicePage.py format*() methods matched
         # exactly).
-        ["FU", 1, "REST", 150],
+        ["FU", 1, "REST", 170],
         ["BB", 1, "REST", 170],
         # Repair Services (RSS) and the base-premium block of Pet Services
         # Specialized (PSS) are both a single value visually widened to span
@@ -269,6 +269,23 @@ def build():
         # MPVS only sets A/B (matching the root tool, which never sets a
         # width for column C either — see ServicePage.py's _formatMPVS).
         ["MPVS", 1, 2, 150],
+        # Office-only tables — see BOP/OfficePage.py's module docstring for
+        # which codes above (CBG/CPP/YBBG/YBPP/EBB/PDLD/LL/DO/DONM/ERP/PLUS/
+        # FR/AS_BR/LS_RETAIL/LS_RETAIL_CURRENT/PROGRAM_TR/PSS/MPVS) Office
+        # reuses as-is (widths transcribed from the root OfficePage*.py
+        # format*() methods matched exactly). VSPL and VS also reuse "PSS"
+        # directly (same 120px-per-column shape); CS/PFSS/ACS/ATS/HCS reuse
+        # "AES" directly (same single 300px column shape).
+        ["OPTO", 1, "REST", 170],
+        ["VET", 1, "REST", 205],
+        ["AES", 1, "REST", 300],
+        ["VPL", 1, 1, 150], ["VPL", 2, "REST", 100],
+        # A stale, unused "PSPL" row (205/54) already exists above from
+        # Retail/Service's PSPL sheets, which both pass an explicit
+        # layout_key ("PED") instead of using it — Office's own PSPL table
+        # is a genuinely different shape (145/100), so it gets a distinct
+        # key rather than colliding with that orphaned row.
+        ["PSPL_OFFICE", 1, 1, 145], ["PSPL_OFFICE", 2, "REST", 100],
     ])
 
     # =======================================================================
@@ -391,6 +408,11 @@ def build():
         # rows above.
         ["FUMP", 1, 1, 4, "$#,##0"],
         ["BB", 2, "REST", 4, "$#,##0.00"],
+        # Office-only tables. Raw numeric Rate columns (unlike VSPL/VS/VPL/
+        # MPVS/PSS/PSPL/AES/CS/PFSS/ACS/ATS/HCS, whose dollar amounts are
+        # already baked into the string data itself).
+        ["OPTO", 2, "REST", 4, "$#,##0.00"],
+        ["VET", 2, "REST", 4, "$#,##0.00"],
     ])
 
     # =======================================================================

@@ -131,7 +131,7 @@ st.session_state.setdefault("bop_terr_pdf_msg",    "")
 # widget state is dropped by Streamlit whenever a rerun happens before the
 # checkboxes render (e.g. clicking the Version toggle above them), so the
 # checkboxes are re-seeded from these mirrors every run.
-BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office"]
+BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale"]
 st.session_state.setdefault("bop_sel_all_store",   False)
 st.session_state.setdefault("bop_programs_store",  [])
 st.session_state.setdefault("bop_programs",        [])
@@ -1103,7 +1103,8 @@ elif active_lob == "Business Auto":
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
                 spacer(8)
-                bc1, bc2 = st.columns(2                with bc1:
+                bc1, bc2 = st.columns(2)
+                with bc1:
                     if st.button("Cancel", key="cancel_btn", use_container_width=True, type="secondary"):
                         st.session_state.confirm_step = "idle"; st.rerun()
                 with bc2:
@@ -2395,7 +2396,7 @@ elif active_lob == "Business Owners Policy":
             ("Office",               True,  "Available"),
             ("Retail",               True,  "Available"),
             ("Service",              True,  "Available"),
-            ("Wholesale",            False, "Coming soon"),
+            ("Wholesale",            True,  "Available"),
             ("Class",                False, "Coming soon"),
             ("Rating Plans",         False, "Coming soon"),
             ("Common Rules",         False, "Coming soon"),

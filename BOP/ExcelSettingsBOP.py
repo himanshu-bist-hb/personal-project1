@@ -68,6 +68,7 @@ class Excel:
         "Auto Service": "AS",
         "Service": "S",
         "Office": "O",
+        "Wholesale": "W",
     }
 
     def __init__(self, state, programName, nEffective, rEffective, companyList) -> None:

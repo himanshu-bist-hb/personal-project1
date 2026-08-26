@@ -1103,8 +1103,7 @@ elif active_lob == "Business Auto":
                 st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
                 spacer(8)
-                bc1, bc2 = st.columns(2)
-                with bc1:
+                bc1, bc2 = st.columns(2                with bc1:
                     if st.button("Cancel", key="cancel_btn", use_container_width=True, type="secondary"):
                         st.session_state.confirm_step = "idle"; st.rerun()
                 with bc2:

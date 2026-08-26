@@ -15,9 +15,10 @@ class Wholesale:
         self.perilsConversions = perilsConversions
         self.nEffective = nEffective # New business effective date
         self.rEffective = rEffective # Renewal business effective date
+
         self.wholesaleProgramCode = 80000
+        self.currencyFormat = '$#,##0'
         self.noDecimalFormat = '#,##0'
-        self.currencyFormat = '\$#,##0*'
 
     # Builds a dataframe for the given table code
     # The hierarchy is as follows: NGIC > Migration > CW
@@ -44,10 +45,12 @@ class Wholesale:
         liabilityBaseRates = pd.DataFrame(data=self.rateTables[company]['BP7_Peril_Liability_Base_Rates'][1:], index=None, columns=self.rateTables[company]['BP7_Peril_Liability_Base_Rates'][0])
         filteredBuilingBaseRates = buildingBaseRates.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils}').filter(items=['Peril TypeCode', 'BuildingBaseRate'])
         filteredBPPBaseRates = bppBaseRates.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils}').filter(items=['Peril TypeCode', 'BPPBaseRate'])
-        filteredLiabilityBaseRates = liabilityBaseRates.query(f'ClassCode_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils} & Occupany Type != "tenant"').pivot(index='Peril TypeCode', columns='Occupany Type', values='LiabilityFactor').reset_index().rename_axis(None, axis=1)
+        filteredLiabilityBaseRates = liabilityBaseRates.query(f'ClassCode_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils} & OccupanyType != "tenant"'). \
+                pivot(index='Peril TypeCode', columns='OccupanyType', values='LiabilityFactor').reset_index().rename_axis(None, axis=1)
         baseRates = pd.merge(filteredBuilingBaseRates, filteredBPPBaseRates, how='inner', on='Peril TypeCode')
         finalBaseRates = pd.merge(baseRates, filteredLiabilityBaseRates, how='outer', on='Peril TypeCode')
-        return finalBaseRates.replace({'Peril TypeCode': self.perilsConversions}).rename(columns={"Peril TypeCode": "Peril", "BuildingBaseRate": "Building", "BPPBaseRate": "BPP", "buildingOwnerLessorsrisk": "Liability Lessor's Risk", "buildingOwnerOccupant": "Liability Occupant"}).sort_values(by='Peril')
+        return finalBaseRates.replace({'Peril TypeCode': self.perilsConversions}).rename(columns={"Peril TypeCode": "Peril", "BuildingBaseRate": "Building", 
+                "BPPBaseRate": "BPP", "buildingOwnerLessorsrisk": "Liability Lessor's Risk", "buildingOwnerOccupant": "Liability Occupant"}).sort_values(by='Peril')
 
     # Builds the territory multiplier table for the given coverage (either building, bpp, or liability)
     # Returns a dataframe
@@ -64,8 +67,9 @@ class Wholesale:
     # Builds the construction type table for the given coverage (either building or bpp)
     # Returns a dataframe
     def buildConstructionType(self, coverage):
-        constructionType = self.buildDataFrame("BP7_Peril_Construction_Type")
-        filteredConstructionType = constructionType.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}).rename(columns={'ConstructionClassDisplay Name': 'Construction'})
+        constructionType = self.buildDataFrame("BP7 Peril Construction_Type")
+        filteredConstructionType = constructionType.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}). \
+                rename(columns={'ConstructionClassDisplay Name': 'Construction'})
         if coverage.casefold() == 'building': # Case-insensitive comparison
             return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction')
         elif coverage.casefold() == 'bpp': # Case-insensitive comparison
@@ -75,26 +79,31 @@ class Wholesale:
     # Returns a dataframe
     def buildTheftOptions(self):
         theftOptions = self.buildDataFrame("BP7_Peril_BPP_Theft_Options_Factor")
-        filteredTheftOptions = theftOptions.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils} & `Theft Option` == "Full Theft"').replace({'Peril TypeCode': self.perilsConversions})
-        return filteredTheftOptions.pivot(index='Peril TypeCode', columns='Theft Option', values='BPP Theft Options Factor').reset_index('Peril TypeCode').rename(columns={'Peril TypeCode': 'Peril', 'Excluded Theft': 'Excluded', 'Limited Theft': 'Limited'})
+        filteredTheftOptions = theftOptions.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils} & `Theft Option` != "Full Theft"'). \
+                replace({'Peril TypeCode': self.perilsConversions})
+        return filteredTheftOptions.pivot(index='Peril TypeCode', columns='Theft Option', values='BPP Theft Options Factor').reset_index('Peril TypeCode'). \
+                rename(columns={'Peril TypeCode': 'Peril', 'Excluded Theft': 'Excluded', 'Limited Theft': 'Limited'})
 
     # Builds the year built modifier table for the given coverage (either building or bpp)
     # Returns a dataframe
     def buildYearBuiltModifier(self, coverage):
         yearBuiltModifier = pd.DataFrame()
         if coverage.casefold() == 'building': # Case-insensitive comparison
-            yearBuiltModifier = self.buildDataFrame("BP7_Peril_Building_Year_Built_Modifier")
+            yearBuiltModifier = self.buildDataFrame("BP7 Peril_Building_Year_Built_Modifier")
         elif coverage.casefold() == 'bpp': # Case-insensitive comparison
-            yearBuiltModifier = self.buildDataFrame("BP7_Peril_BPP_Year_Built_Modifier")
-        filteredYearBuiltModifier = yearBuiltModifier.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}).fillna({'Year_Built_Max': 0}).astype({'Year_Built_Min': 'int64', 'Year_Built_Max': 'int64'}).astype({'Year_Built_Min': 'string', 'Year_Built_Max': 'string'}) # Converting to int first to get rid of decimal places
-        filteredYearBuiltModifier['Year Built Range'] = np.where(filteredYearBuiltModifier['Year_Built_Max'] == '0', filteredYearBuiltModifier['Year_Built_Min'] + '+', filteredYearBuiltModifier['Year_Built_Min'] + '-' + filteredYearBuiltModifier['Year_Built_Max'])
+            yearBuiltModifier = self.buildDataFrame("BP7 Peril_BPP_Year_Built_Modifier")
+        filteredYearBuiltModifier = yearBuiltModifier.query(f'Class_Code_Min == {self.wholesaleProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}). \
+                fillna({'Year_Built_Max': 0}).astype({'Year_Built_Min': 'int64', 'Year_Built_Max': 'int64'}).astype({'Year_Built_Min': 'string', 'Year_Built_Max': 'string'}) # Converting to int first to get rid of decimal places
+        filteredYearBuiltModifier['Year Built Range'] = np.where(filteredYearBuiltModifier['Year_Built_Max'] == '0', 
+                                                                 filteredYearBuiltModifier['Year_Built_Min'] + '+',
+                                                                 filteredYearBuiltModifier['Year_Built_Min'] + ' - ' + filteredYearBuiltModifier['Year_Built_Max'])
         if coverage.casefold() == 'building': # Case-insensitive comparison
             return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range')
         elif coverage.casefold() == 'bpp': # Case-insensitive comparison
             return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range')
 
     # Builds the equipment breakdown base rate table
-    # Returns a dataframe
+    # Returns a dataframe    
     def buildEBBaseRate(self):
         ebBaseRate = self.buildDataFrame("BP7_EBBaseRate")
         return ebBaseRate.query(f'Class_Code_Min == {self.wholesaleProgramCode}').rename(columns={'BaseRate': 'Rate'}).filter(items=['Rate'])
@@ -103,19 +112,22 @@ class Wholesale:
     # Returns a dataframe
     def buildPDDeductibleAmount(self):
         pdDeductibleAmount = self.buildDataFrame("BP7_Peril_Property_Damage_Liability_Factor")
-        return pdDeductibleAmount.query(f'ClassCode_Min == {self.wholesaleProgramCode} & `Peril TypeCode` == "liability1"').rename(columns={'PDDeductibleAmount': 'P.D. Deductible Amount', 'PDDeductibleFactor': 'Factor'}).replace({'P.D. Deductible Amount': {'NoDeductible': '0'}}).astype({'P.D. Deductible Amount': 'int64'}).sort_values(by=['P.D. Deductible Amount']).replace({'P.D. Deductible Amount': {0: 'No Deductible'}}).filter(items=['P.D. Deductible Amount', 'Factor'])
+        return pdDeductibleAmount.query(f'ClassCode_Min == {self.wholesaleProgramCode} & `Peril TypeCode` == "liability1"').rename(columns={'PDDeductibleAmount': 'P.D. Deductible Amount', 'PDDeductibleFactor': 'Factor'}). \
+                replace({'P.D. Deductible Amount': {'NoDeductible': '0'}}).astype({'P.D. Deductible Amount': 'int64'}).sort_values(by=['P.D. Deductible Amount']). \
+                replace({'P.D. Deductible Amount': {0: 'No Deductible'}}).filter(items=['P.D. Deductible Amount', 'Factor'])
 
     # Builds the liability limit factor table
     # Returns a dataframe
     def buildLiabilityLimitFactor(self):
         liabilityLimitFactor = self.buildDataFrame("BP7_Peril_ILF_Factor")
-        return liabilityLimitFactor.query(f'ClassCode_Min == {self.wholesaleProgramCode} & `Peril TypeCode` == "liability1"').filter(items=['LiabilityLimit', 'LiabilityFactor']).rename(columns={'LiabilityLimit': 'Liability Limit of Insurance', 'LiabilityFactor': 'Factor'}).astype({'Liability Limit of Insurance': 'int32'})
+        return liabilityLimitFactor.query(f'ClassCode_Min == {self.wholesaleProgramCode} & `Peril TypeCode` == "liability1"').filter(items=['LiabilityLimit', 'LiabilityFactor']). \
+                rename(columns={'LiabilityLimit': 'Liability Limit of Insurance', 'LiabilityFactor': 'Factor'}).astype({'Liability Limit of Insurance' : 'int32'})
 
     # Builds the liquified petroleum gas (LPG) exposures table
     # Returns a dataframe
     def buildLPGExposure(self):
         lpgExposure = self.buildDataFrame("BP7_LPG_Premium")
-        return lpgExposure.rename(columns={'LiabilityLimitofInsurance': 'Liability Limit of Insurance', 'LPGPremium': 'Premium (each premises)'})
+        return lpgExposure.rename(columns={'LiabilityLimitOfInsurance': 'Liability Limit of Insurance', 'LPGPremium': 'Premium (each premises)'})
 
     # Builds the liability size of risk modifier table
     # Returns a dataframe
@@ -142,16 +154,16 @@ class Wholesale:
         for col in range(2, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             ws.column_dimensions[char].width = self.pixelsToInches(159)
-        for row in range(4, ws.max_row + 1):
-            cell = ws[char + str(row)]
-            cell.number_format = '#,##0.0000' # 4 values after the decimal point for the base rates
+            for row in range(4, ws.max_row + 1):
+                cell = ws[char + str(row)]
+                cell.number_format = '#,##0.0000' # 4 values after the decimal point for the base rates
 
     # Applies manual formatting to the territory multiplier worksheet
     def formatTerritoryMultiplier(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(70)
         for col in range(2, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
-            ws.column_dimensions[char].width = self.pixelsToInches(54)
+            ws.column_dimensions[char].width = self.pixelsToInches(54)  
 
     # Applies manual formatting to the construction factor worksheet
     def formatConstructionFactor(self, ws):
@@ -179,7 +191,7 @@ class Wholesale:
 
     # Applies manual formatting to the equipment breakdown base rate worksheet
     def formatEBBaseRate(self, ws):
-        ws['A4'].number_format = '\$#,##0.00'
+        ws['A4'].number_format = '$#,##0.00'
 
     # Applies manual formatting to the property damage deductible worksheet
     def formatPropertyDamageDeductible(self, ws):
@@ -208,7 +220,10 @@ class Wholesale:
         ws.insert_rows(3)
         ws['A3'] = 'Receipts Range'
         for cell in ws['3:3']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), right=Side(border_style='thin', color='C1C1C1'), top=Side(border_style='thin', color='C1C1C1'), bottom=Side(border_style='thin', color='C1C1C1'))
+            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
+                                right=Side(border_style='thin', color='C1C1C1'), 
+                                top=Side(border_style='thin', color='C1C1C1'), 
+                                bottom=Side(border_style='thin', color='C1C1C1'))
             cell.font = boldFont
             cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
         ws.merge_cells('A3:B3')
@@ -223,11 +238,11 @@ class Wholesale:
                     cell.number_format = self.noDecimalFormat
             else:
                 ws.column_dimensions[char].width = self.pixelsToInches(195)
-
+       
     # Applies manual formatting to the endorsement charge worksheet
     def formatEndorsementCharge(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(350)
-        ws['A4'].number_format = '\$#,##0.00'
+        ws['A4'].number_format = '$#,##0.00'
 
     # Sets up the Wholesale Excel file using the Excel class
     # A separate worksheet is generated for each table, and most worksheets are manually formatted afterwards
@@ -238,9 +253,12 @@ class Wholesale:
             if company == 'CW': # country-wide is not a company, so ignoring it
                 continue
             companies.append(company)
+
         Wholesale = ExcelSettingsCurrent.Excel(state=self.state, programName='Wholesale', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
         fontName = Wholesale.getFontName()
         fontSize = Wholesale.getFontSize()
+
         if 'NACO' in self.rateTables.keys():
             Wholesale.generateWorksheet('BRNACO', 'W Table 3.B.1. NW Assurance State Base Rates', self.buildBaseRates('NACO'), False, True)
         if 'NAFF' in self.rateTables.keys():
@@ -263,8 +281,10 @@ class Wholesale:
         Wholesale.generateWorksheet('LPGE', 'W Table 3.C.4.e. Liquefied Petroleum Gas (LPG) Exposures', self.buildLPGExposure(), False, True)
         Wholesale.generateWorksheet('LS', 'W Table 3.C.4.f. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk(), False, True)
         Wholesale.generateWorksheet('PLUS', 'W Table 4.A. Wholesale PLUS Endorsement', self.buildEndorsementCharge(), False, True)
+
         Wholesale.createIndex()
         WholesalePages = Wholesale.getWB()
+
         if 'NACO' in self.rateTables.keys():
             self.formatBaseRates(WholesalePages['BRNACO'])
         if 'NAFF' in self.rateTables.keys():
@@ -274,17 +294,18 @@ class Wholesale:
         if 'NICOF' in self.rateTables.keys():
             self.formatBaseRates(WholesalePages['BRNICOF'])
         self.formatTerritoryMultiplier(WholesalePages['TRBG'])
-        self.formatTerritoryMultiplier(WholesalePages['TRPP'])
+        self.formatTerritoryMultiplier(WholesalePages['TRPP']) 
         self.formatTerritoryMultiplier(WholesalePages['TRLB'])
-        self.formatConstructionFactor(WholesalePages['CBG'])
-        self.formatConstructionFactor(WholesalePages['CPP'])
+        self.formatConstructionFactor(WholesalePages['CBG'])  
+        self.formatConstructionFactor(WholesalePages['CPP'])  
         self.formatTheftOptions(WholesalePages['ET'])
         self.formatYearBuiltModifier(WholesalePages['YBBG'])
-        self.formatYearBuiltModifier(WholesalePages['YBPP'])
+        self.formatYearBuiltModifier(WholesalePages['YBPP'])  
         self.formatEBBaseRate(WholesalePages['EBB'])
         self.formatPropertyDamageDeductible(WholesalePages['PDLD'])
         self.formatLiabilityLimitFactor(WholesalePages['LL'])
         self.formatLPGExposures(WholesalePages['LPGE'])
         self.formatLiabilitySizeRisk(WholesalePages['LS'], Font(name=fontName, size=fontSize, bold=True))
         self.formatEndorsementCharge(WholesalePages['PLUS'])
+
         return WholesalePages

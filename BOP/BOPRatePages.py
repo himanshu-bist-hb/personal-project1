@@ -35,6 +35,8 @@ from . import OfficePage
 from . import OfficePageCurrent
 from . import WholesalePage
 from . import WholesalePageCurrent
+from . import FoodServicePage
+from . import FoodServicePageCurrent
 from .bop_config import load_bop_config
 from .BOPpagebreaks import (
     process_pagebreaks, export_to_pdf, export_single_sheet_pdf, split_pdf_by_size,
@@ -54,7 +56,7 @@ VALID_VERSIONS = ("2.0", "pre2.0")
 #   Multiplier table at all (dropped when the All Programs Territory page
 #   took over); pre2.0 versions build theirs straight from each ratebook's
 #   own BP7_Peril_TerritorialFactor table.
-VALID_PROGRAMS = ("All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale")
+VALID_PROGRAMS = ("All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale", "Food Service")
 
 # The 2.0 "All Programs" workbook's last sheet — its 82k-row Territory
 # Definitions table dominates PDF export time, so the main PDF export
@@ -246,6 +248,13 @@ def run(
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildWholesalePage(progress_callback=cb)
+        elif prog == "Food Service":
+            food_cls = FoodServicePage.Food if version == "2.0" else FoodServicePageCurrent.Food
+            rate_pages_obj = food_cls(
+                info.state_abb, rate_tables, perils, cfg.peril_conversions,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildFoodPage(progress_callback=cb)
         elif version == "2.0":
             rate_pages_obj = AllProgramsPage.AllPrograms(
                 info.state_abb, rate_tables, perils,

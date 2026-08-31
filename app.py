@@ -131,7 +131,7 @@ st.session_state.setdefault("bop_terr_pdf_msg",    "")
 # widget state is dropped by Streamlit whenever a rerun happens before the
 # checkboxes render (e.g. clicking the Version toggle above them), so the
 # checkboxes are re-seeded from these mirrors every run.
-BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale"]
+BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale", "Food Service"]
 st.session_state.setdefault("bop_sel_all_store",   False)
 st.session_state.setdefault("bop_programs_store",  [])
 st.session_state.setdefault("bop_programs",        [])
@@ -2392,7 +2392,7 @@ elif active_lob == "Business Owners Policy":
             ("All Peril",            True,  "Available"),
             ("Hab",                  True,  "Available"),
             ("Auto Service",         True,  "Available"),
-            ("Food Service",         False, "Coming soon"),
+            ("Food Service",         True,  "Available"),
             ("Office",               True,  "Available"),
             ("Retail",               True,  "Available"),
             ("Service",              True,  "Available"),

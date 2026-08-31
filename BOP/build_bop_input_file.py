@@ -286,6 +286,16 @@ def build():
         # is a genuinely different shape (145/100), so it gets a distinct
         # key rather than colliding with that orphaned row.
         ["PSPL_OFFICE", 1, 1, 145], ["PSPL_OFFICE", 2, "REST", 100],
+        # Food Service-only tables — see BOP/FoodServicePage.py's module
+        # docstring for which codes above (CBG/CPP/YBBG/YBPP/EBB/PDLD/LL/LS/
+        # PLUS/FR/AS_BR/PROGRAM_TR) Food Service reuses as-is (widths
+        # transcribed from the root FoodServicePage*.py format*() methods
+        # matched exactly). YBBI (Year Built Modifier - Business Income) is a
+        # table no other program has, same shape as YBBG/YBPP.
+        ["YBBI", 1, 1, 131], ["YBBI", 2, "REST", 53],
+        ["SPO", 1, 1, 160], ["SPO", 2, 2, 175],
+        ["C", 2, 2, 135],
+        ["VAL", 1, 1, 185],
     ])
 
     # =======================================================================
@@ -413,6 +423,14 @@ def build():
         # already baked into the string data itself).
         ["OPTO", 2, "REST", 4, "$#,##0.00"],
         ["VET", 2, "REST", 4, "$#,##0.00"],
+        # Food Service-only tables. YBBI mirrors YBBG/YBPP's own row above.
+        # SPO/VAL hold genuine dollar amounts pulled straight from the
+        # ratebook (unlike C's "Rate or Factor" column, which mixes a dollar
+        # base rate with plain factors and so is deliberately left on the
+        # default value format rather than forced to "$").
+        ["YBBI", 1, 1, 4, "###0"],
+        ["SPO", 2, 2, 4, "$#,##0.00"],
+        ["VAL", 2, 2, 4, "$#,##0.00"],
     ])
 
     # =======================================================================

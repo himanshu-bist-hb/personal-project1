@@ -184,3 +184,12 @@ BOP_TERRITORY_DEFS_PATH = Path(
 # PLACEHOLDER: this is a generic path, not the real network location — update
 # it to the actual BOP countrywide ratebook path.
 BOP_CW_RATEBOOK_DEFAULT = Path(r"M:\Actshare\Com\BOP\CW Ratebook\BOP CW Ratebook.xlsx")
+
+# Earthquake Territory Definitions (network drive) — required for the
+# Optional Coverages page's "Earthquake Territory Definitions" table only.
+# One tab-separated file per state: "NWCE_<state>_ZIP_1223.txt". See
+# BOP/BOPRatePages.py's load_eq_territory_defs().
+BOP_EQ_TERRITORY_DEFS_DIR = Path(
+    r"\\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\BOP\Territory Defs"
+    r"\4 Territory Defs (By Peril Grid)"
+)

@@ -18,7 +18,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 import pandas as pd
 
 from BA.BARatePages import load_ratebook, get_rate_book_info, load_all_ratebooks
-from config.constants import BOP_TERRITORY_DEFS_PATH, BOP_CW_RATEBOOK_DEFAULT
+from config.constants import BOP_TERRITORY_DEFS_PATH, BOP_CW_RATEBOOK_DEFAULT, BOP_EQ_TERRITORY_DEFS_DIR
 from . import AllPerilPage
 from . import AllPerilPageCurrent
 from . import AllProgramsPage
@@ -37,6 +37,11 @@ from . import WholesalePage
 from . import WholesalePageCurrent
 from . import FoodServicePage
 from . import FoodServicePageCurrent
+from . import OptionalCoveragesPage
+from . import RatingPlansPage
+from . import ClassModifierPage
+from . import CommonRulesPage
+from . import AdditionalRulesPage
 from .bop_config import load_bop_config
 from .BOPpagebreaks import (
     process_pagebreaks, export_to_pdf, export_single_sheet_pdf, split_pdf_by_size,
@@ -56,7 +61,15 @@ VALID_VERSIONS = ("2.0", "pre2.0")
 #   Multiplier table at all (dropped when the All Programs Territory page
 #   took over); pre2.0 versions build theirs straight from each ratebook's
 #   own BP7_Peril_TerritorialFactor table.
-VALID_PROGRAMS = ("All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale", "Food Service")
+# "Optional Coverages", "Rating Plans", "Class Modifier", "Common Rules" and
+#   "Additional Rules" are the five programs with no "2.0"/"pre2.0" split at
+#   all: there's only ever one OptionalCoveragesPage.py / RatingPlansPage.py
+#   / ClassModifierPage.py / CommonRulesPage.py / AdditionalRulesPage.py (no
+#   *Current variant), so each is built identically regardless of `version`.
+#   Optional Coverages is also the only program needing the separate
+#   Earthquake Territory Definitions file (see load_eq_territory_defs), not
+#   the All Programs Territory Definitions workbook.
+VALID_PROGRAMS = ("All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale", "Food Service", "Optional Coverages", "Rating Plans", "Class Modifier", "Common Rules", "Additional Rules")
 
 # The 2.0 "All Programs" workbook's last sheet — its 82k-row Territory
 # Definitions table dominates PDF export time, so the main PDF export
@@ -74,6 +87,16 @@ def load_territory_defs(state_abb: str) -> pd.DataFrame:
     return pd.read_excel(territory_ef, sheet_name=state_abb)
 
 
+def load_eq_territory_defs(state_abb: str) -> pd.DataFrame:
+    """
+    Load the per-state Earthquake Territory Definitions file (network drive,
+    tab-separated) — required only for Optional Coverages' "Earthquake
+    Territory Definitions" table (OC Table C.4.E.3).
+    """
+    path = BOP_EQ_TERRITORY_DEFS_DIR / f"NWCE_{state_abb}_ZIP_1223.txt"
+    return pd.read_csv(str(path), sep="\t", header=0)
+
+
 def run(
     NGICRatebook: Optional[str],
     folder_selected: str,
@@ -85,6 +108,8 @@ def run(
     HICNJRatebook: Optional[str] = None,
     progress_callback: Optional[Callable[[str], None]] = None,
     skip_pdf: bool = True,
+    irpm_credit: float = 0.0,
+    irpm_debit: float = 0.0,
     version: str = "2.0",
     program: Union[str, Sequence[str]] = "All Programs",
 ) -> Tuple[Union[str, List[str]], Union[str, List[str]]]:
@@ -154,6 +179,11 @@ def run(
     if version == "2.0" and "All Programs" in programs:
         if progress_callback: progress_callback("Loading Territory Definitions...")
         territory_defs_by_st = load_territory_defs(info.state_abb)
+
+    eq_territory_defs = None
+    if "Optional Coverages" in programs:
+        if progress_callback: progress_callback("Loading Earthquake Territory Definitions...")
+        eq_territory_defs = load_eq_territory_defs(info.state_abb)
 
     # ── 4. Load config-driven rating lookup tables ─────────────────────────
     cfg = load_bop_config()
@@ -255,6 +285,41 @@ def run(
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildFoodPage(progress_callback=cb)
+        elif prog == "Optional Coverages":
+            # No version split — same class regardless of `version`.
+            rate_pages_obj = OptionalCoveragesPage.OptionalCoverages(
+                info.state_abb, rate_tables, cfg.class_codes,
+                info.n_effective, info.r_effective, eq_territory_defs,
+            )
+            bop_workbook = rate_pages_obj.buildOptionalCoveragesPage(progress_callback=cb)
+        elif prog == "Rating Plans":
+            # No version split — same class regardless of `version`.
+            rate_pages_obj = RatingPlansPage.RatingPlans(
+                info.state_abb, rate_tables, perils, cfg.peril_conversions,
+                info.n_effective, info.r_effective, irpm_credit, irpm_debit,
+            )
+            bop_workbook = rate_pages_obj.buildRatingPlansPage(progress_callback=cb)
+        elif prog == "Class Modifier":
+            # No version split — same class regardless of `version`.
+            rate_pages_obj = ClassModifierPage.ClassModifier(
+                info.state_abb, rate_tables, perils, cfg.peril_conversions,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildClassModifierPage(progress_callback=cb)
+        elif prog == "Common Rules":
+            # No version split — same class regardless of `version`.
+            rate_pages_obj = CommonRulesPage.CommonRules(
+                info.state_abb, rate_tables, perils, cfg.peril_conversions,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildCommonRulesPage(progress_callback=cb)
+        elif prog == "Additional Rules":
+            # No version split — same class regardless of `version`.
+            rate_pages_obj = AdditionalRulesPage.AdditionalRules(
+                info.state_abb, rate_tables, perils, cfg.peril_conversions, cfg.class_codes,
+                info.n_effective, info.r_effective,
+            )
+            bop_workbook = rate_pages_obj.buildAdditionalRulesPage(progress_callback=cb)
         elif version == "2.0":
             rate_pages_obj = AllProgramsPage.AllPrograms(
                 info.state_abb, rate_tables, perils,

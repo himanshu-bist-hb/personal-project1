@@ -286,6 +286,41 @@ class Excel:
         """Territory-definitions sheet — same single-table layout as generateWorksheet."""
         return self.generateWorksheet(table_code, title, df, useIndex, useHeader)
 
+    def generateMultiTableWorksheet(self, table_code, title, dataframes, useIndex, useHeader,
+                                     reserved_header_rows=0, layout_key=None):
+        """
+        Multi-block sheet: A1 = title, A2 = blank, then each dataframe in
+        `dataframes` written contiguously (its own header row + data rows,
+        one block right after another, same as calling generateWorksheet's
+        single-block write repeatedly on one sheet).
+
+        Replaces Optional Coverages' source (root OptionalCoveragesPage.py)
+        generateWorksheet2tables .. generateWorksheet17tables / generateLiquorLiability
+        — a family of ~10 near-identical N-ary methods on the (lost, no
+        longer present anywhere in this repo) root ExcelSettings.py — with
+        one generic implementation.
+
+        reserved_header_rows: blank rows left before each block for a
+        postFormat callback to fill in with its own sub-title/sub-header
+        (e.g. "Territory 21 Loss Costs" / "Contents Grade" on the Earthquake
+        Class Rated page) — see OptionalCoveragesPage._formatEQClassRated.
+        Returns (block_start_rows, ws): block_start_rows[i] is the first
+        reserved row for block i (or its header row when
+        reserved_header_rows is 0).
+        """
+        ws = self.wb.create_sheet(title=table_code)
+        ws["A1"] = title
+        ws["A2"] = ""
+        block_start_rows = []
+        for df in dataframes:
+            for _ in range(reserved_header_rows):
+                ws.append([])
+            block_start_rows.append(ws.max_row + 1 - reserved_header_rows if reserved_header_rows
+                                     else ws.max_row + 1)
+            self._write_df_block(ws, df, useIndex, useHeader, index_cell=f"A{ws.max_row + 1}")
+        self.format_table(ws, layout_key or table_code)
+        return block_start_rows, ws
+
     # ==========================================================================
     #  GENERIC FORMATTER — replaces the ~30 near-duplicate format*() methods
     # ==========================================================================

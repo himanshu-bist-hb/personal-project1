@@ -96,6 +96,11 @@ st.session_state.setdefault("bop_pdf_status",   "idle")
 st.session_state.setdefault("bop_confirm_step", "idle")
 st.session_state.setdefault("bop_upload_reset", 0)
 st.session_state.setdefault("bop_version", "2.0")
+# Rating Plans' State IRPM Modification Plan table (RPMP) — entered as a
+# percentage (0-100) here, converted to a fraction before being passed to
+# BOP.BOPRatePages.run()'s irpm_credit/irpm_debit.
+st.session_state.setdefault("bop_irpm_credit", 0.0)
+st.session_state.setdefault("bop_irpm_debit", 0.0)
 # Which programs/version the current bop_xlsx_paths were actually built
 # with — captured at build time so the PDF step doesn't depend on the live
 # checkboxes, which the user could change while looking at the results.
@@ -131,7 +136,7 @@ st.session_state.setdefault("bop_terr_pdf_msg",    "")
 # widget state is dropped by Streamlit whenever a rerun happens before the
 # checkboxes render (e.g. clicking the Version toggle above them), so the
 # checkboxes are re-seeded from these mirrors every run.
-BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale", "Food Service"]
+BOP_AVAILABLE_PROGRAMS = ["All Programs", "All Peril", "Hab", "Auto Service", "Retail", "Service", "Office", "Wholesale", "Food Service", "Optional Coverages", "Rating Plans", "Class Modifier", "Common Rules", "Additional Rules"]
 st.session_state.setdefault("bop_sel_all_store",   False)
 st.session_state.setdefault("bop_programs_store",  [])
 st.session_state.setdefault("bop_programs",        [])
@@ -2328,7 +2333,7 @@ elif active_lob == "Business Owners Policy":
 
     with L:
         st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
-        st.markdown('<p class="f-hint"><b>All Programs</b>, <b>All Peril</b>, <b>Hab</b> and <b>Auto Service</b> pages are available today &mdash; the other individual programs are coming soon.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint">All programs listed below as <b>Available</b> can be built today.</p>', unsafe_allow_html=True)
         spacer(4)
 
         uploaded = st.file_uploader(
@@ -2397,11 +2402,11 @@ elif active_lob == "Business Owners Policy":
             ("Retail",               True,  "Available"),
             ("Service",              True,  "Available"),
             ("Wholesale",            True,  "Available"),
-            ("Class",                False, "Coming soon"),
-            ("Rating Plans",         False, "Coming soon"),
-            ("Common Rules",         False, "Coming soon"),
-            ("Additional Rules",     False, "Coming soon"),
-            ("Optional Coverages",   False, "Coming soon"),
+            ("Optional Coverages",   True,  "Available"),
+            ("Rating Plans",         True,  "Available"),
+            ("Class Modifier",       True,  "Available"),
+            ("Common Rules",         True,  "Available"),
+            ("Additional Rules",     True,  "Available"),
         ]
         prog_rows = ""
         for name, active, note in BOP_PROGRAMS:
@@ -2430,12 +2435,12 @@ elif active_lob == "Business Owners Policy":
 
         spacer(6)
         st.markdown('<p class="f-label">&#128202; &nbsp;IRPM Credit / Debit</p>', unsafe_allow_html=True)
-        st.markdown('<p class="f-hint">Used by Rating Plans — coming soon, has no effect yet</p>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint">Feeds Rating Plans\' State Individual Risk Premium Modification Plan table (RPMP) — ignored unless Rating Plans is selected above.</p>', unsafe_allow_html=True)
         ic1, ic2 = st.columns(2)
         with ic1:
-            st.number_input("IRPM Credit %", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="bop_irpm_credit_display", disabled=True)
+            st.number_input("IRPM Credit %", min_value=0.0, max_value=100.0, step=0.1, key="bop_irpm_credit")
         with ic2:
-            st.number_input("IRPM Debit %", min_value=0.0, max_value=100.0, value=0.0, step=0.1, key="bop_irpm_debit_display", disabled=True)
+            st.number_input("IRPM Debit %", min_value=0.0, max_value=100.0, step=0.1, key="bop_irpm_debit")
 
         spacer(6)
         st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
@@ -2508,7 +2513,9 @@ elif active_lob == "Business Owners Policy":
                     folder_selected=st.session_state.bop_save_dir,
                     progress_callback=update_progress, skip_pdf=True,
                     version=st.session_state.bop_version,
-                    program=built_programs)
+                    program=built_programs,
+                    irpm_credit=st.session_state.bop_irpm_credit / 100.0,
+                    irpm_debit=st.session_state.bop_irpm_debit / 100.0)
                 st.session_state.bop_xlsx_paths = xlsx_outs; st.session_state.bop_pdf_paths = pdf_outs
                 st.session_state.bop_built_programs = built_programs
                 st.session_state.bop_built_version = st.session_state.bop_version

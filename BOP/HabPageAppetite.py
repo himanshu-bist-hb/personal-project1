@@ -13,7 +13,7 @@ from .HabPage import Hab as HabBP20
 
 
 class Hab(HabBP20):
-    # Builds the "H Table 4.C. Exceptions to Habitatational - Premium
+    # Builds the "H Table 4.C. Exceptions to Habitational - Premium
     # Development" table (Appetite-only, every state): the single
     # HabitabilityExclusionFactor rate filed for the "allperil" peril in
     # "BP7_Peril ExclusionOfHabitabilityClaims_Factor".
@@ -24,13 +24,13 @@ class Hab(HabBP20):
                 rename(columns={'HabitabilityExclusionFactor': 'Rate'}).filter(items=['Rate'])
 
     # Extends BP-2.0's sheet list with the Appetite-only pages, inserted at
-    # the position matching their rule number. "HABEXPD" (4.C) sorts right
+    # the position matching their rule number. "HPD" (4.C) sorts right
     # after "PLUS" (4.B) and ahead of the CA-only "HABEX" (also 4.C, kept
     # unchanged from BP-2.0) since 4.C. Exceptions precedes 4.C Habitability
     # Exclusion within the same rule number.
     def _sheetSpecs(self):
         sheetSpecs = super()._sheetSpecs()
         insertAt = next((i for i, spec in enumerate(sheetSpecs) if spec[0] == 'HABEX'), len(sheetSpecs))
-        sheetSpecs.insert(insertAt, ('HABEXPD', 'H Table 4.C. Exceptions to Habitatational - Premium Development',
+        sheetSpecs.insert(insertAt, ('HPD', 'H Table 4.C. Exceptions to Habitational - Premium Development',
                                       self.buildHabExclusionPremiumDev, False, True, None, None))
         return sheetSpecs

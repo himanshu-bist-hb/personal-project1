@@ -240,8 +240,6 @@ class Hab:
     # inserting/removing specs at the right sort position — without
     # duplicating the sheet-building loop or any build*() methods.
     def _sheetSpecs(self):
-        companies = [c for c in self.rateTables.keys() if c != 'CW']
-
         # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
         sheetSpecs = []
         # A company can be present in rateTables (its ratebook was uploaded)

@@ -16,10 +16,10 @@ class Hab(HabBP20):
     # Builds the "H Table 4.C. Exceptions to Habitatational - Premium
     # Development" table (Appetite-only, every state): the single
     # HabitabilityExclusionFactor rate filed for the "allperil" peril in
-    # "BP7_PerilExclusionOfHabitabilityClaims_Factor".
+    # "BP7_Peril ExclusionOfHabitabilityClaims_Factor".
     # Returns a dataframe
     def buildHabExclusionPremiumDev(self):
-        habExclusionPremiumDev = self.buildDataFrame("BP7_PerilExclusionOfHabitabilityClaims_Factor")
+        habExclusionPremiumDev = self.buildDataFrame("BP7_Peril ExclusionOfHabitabilityClaims_Factor")
         return habExclusionPremiumDev.query('`Peril TypeCode` == "allperil"'). \
                 rename(columns={'HabitabilityExclusionFactor': 'Rate'}).filter(items=['Rate'])
 

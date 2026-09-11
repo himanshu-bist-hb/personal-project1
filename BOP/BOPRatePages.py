@@ -25,6 +25,7 @@ from . import AllProgramsPage
 from . import AllProgramsPageCurrent
 from . import HabPage
 from . import HabPageCurrent
+from . import HabPageAppetite
 from . import AutoServicePage
 from . import AutoServicePageCurrent
 from . import RetailPage
@@ -50,7 +51,33 @@ from .BOPpagebreaks import (
 # "2.0" -> AllProgramsPage.AllPrograms (needs Territory Defs)
 # "pre2.0" -> AllProgramsPageCurrent.AllPrograms (no Territory Defs at all —
 #   that program and its build/format methods predate the territory tables)
-VALID_VERSIONS = ("2.0", "pre2.0")
+# "Appetite" -> built directly on top of "2.0": a program with an Appetite
+#   class in APPETITE_CLASSES below adds its new Appetite-only pages on top
+#   of that program's BP-2.0 class (by subclassing it — see HabPageAppetite
+#   for the pattern); a program with no entry there just builds its plain
+#   "2.0" class, since Appetite has no changes for it yet.
+VALID_VERSIONS = ("2.0", "pre2.0", "Appetite")
+
+# Programs that have Appetite-specific pages on top of BP-2.0. Add an entry
+# here (and the matching *PageAppetite.py subclass) as more programs get
+# Appetite changes; anything not listed here falls back to the plain "2.0"
+# class when "Appetite" is selected — see _version_cls().
+APPETITE_CLASSES = {
+    "Hab": HabPageAppetite.Hab,
+}
+
+
+def _version_cls(version, cls_20, cls_pre20, program=None):
+    """
+    Resolve which page class to build for the given `version`, applying the
+    Appetite fallback: a program listed in APPETITE_CLASSES gets its
+    Appetite subclass (built on top of `cls_20`); everything else just
+    builds `cls_20` when "Appetite" is selected, since Appetite is defined
+    as an addition on top of BP-2.0, not a separate rating logic.
+    """
+    if version == "Appetite":
+        return APPETITE_CLASSES.get(program, cls_20)
+    return cls_20 if version == "2.0" else cls_pre20
 
 # "All Programs" -> AllProgramsPage / AllProgramsPageCurrent (by-peril tables)
 # "All Peril"    -> AllPerilPage / AllPerilPageCurrent (by-program tables,
@@ -117,8 +144,11 @@ def run(
     Orchestrate the BOP rate-page generation pipeline.
 
     Args:
-        version: "2.0" (default) or "pre2.0" — selects which generation of
-            the rating logic and page layout to build.
+        version: "2.0" (default), "pre2.0" or "Appetite" — selects which
+            generation of the rating logic and page layout to build.
+            "Appetite" builds BP-2.0 plus each program's Appetite-only pages
+            (see APPETITE_CLASSES) — a program with none yet builds plain
+            "2.0".
         program: which BOP program(s) to build — a single name ("All
             Programs" or "All Peril") or a list of names. The ratebooks are
             opened and extracted ONCE and every requested program is built
@@ -176,7 +206,7 @@ def run(
     # ── 3. Load Territory Definitions (2.0 All Programs only — pre2.0 and
     #       All Peril never use them) ──
     territory_defs_by_st = None
-    if version == "2.0" and "All Programs" in programs:
+    if version in ("2.0", "Appetite") and "All Programs" in programs:
         if progress_callback: progress_callback("Loading Territory Definitions...")
         territory_defs_by_st = load_territory_defs(info.state_abb)
 
@@ -218,7 +248,7 @@ def run(
     # The expensive part (opening + extracting the ratebooks above) is shared;
     # each program only costs its own workbook build and save.
     out_dir     = Path(folder_selected)
-    version_tag = "" if version == "2.0" else " (Pre 2.0)"
+    version_tag = "" if version == "2.0" else (" (Pre 2.0)" if version == "pre2.0" else " (Appetite)")
     xlsx_outs: List[str] = []
     pdf_outs:  List[str] = []
 
@@ -229,7 +259,7 @@ def run(
         t_stage = time.perf_counter()
         if cb: cb("Building Excel rate pages...")
         if prog == "All Peril":
-            peril_cls = AllPerilPage.AllPeril if version == "2.0" else AllPerilPageCurrent.AllPeril
+            peril_cls = _version_cls(version, AllPerilPage.AllPeril, AllPerilPageCurrent.AllPeril, prog)
             rate_pages_obj = peril_cls(
                 info.state_abb, rate_tables, cfg.class_codes,
                 cfg.protection_class_conversions, cfg.building_codes_by_state,
@@ -237,49 +267,49 @@ def run(
             )
             bop_workbook = rate_pages_obj.buildAllPerilPage(progress_callback=cb)
         elif prog == "Hab":
-            hab_cls = HabPage.Hab if version == "2.0" else HabPageCurrent.Hab
+            hab_cls = _version_cls(version, HabPage.Hab, HabPageCurrent.Hab, prog)
             rate_pages_obj = hab_cls(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildHabPage(progress_callback=cb)
         elif prog == "Auto Service":
-            auto_cls = AutoServicePage.Auto if version == "2.0" else AutoServicePageCurrent.Auto
+            auto_cls = _version_cls(version, AutoServicePage.Auto, AutoServicePageCurrent.Auto, prog)
             rate_pages_obj = auto_cls(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildAutoPage(progress_callback=cb)
         elif prog == "Retail":
-            retail_cls = RetailPage.Retail if version == "2.0" else RetailPageCurrent.Retail
+            retail_cls = _version_cls(version, RetailPage.Retail, RetailPageCurrent.Retail, prog)
             rate_pages_obj = retail_cls(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildRetailPage(progress_callback=cb)
         elif prog == "Service":
-            service_cls = ServicePage.Service if version == "2.0" else ServicePageCurrent.Service
+            service_cls = _version_cls(version, ServicePage.Service, ServicePageCurrent.Service, prog)
             rate_pages_obj = service_cls(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildServicePage(progress_callback=cb)
         elif prog == "Office":
-            office_cls = OfficePage.Office if version == "2.0" else OfficePageCurrent.Office
+            office_cls = _version_cls(version, OfficePage.Office, OfficePageCurrent.Office, prog)
             rate_pages_obj = office_cls(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildOfficePage(progress_callback=cb)
         elif prog == "Wholesale":
-            wholesale_cls = WholesalePage.Wholesale if version == "2.0" else WholesalePageCurrent.Wholesale
+            wholesale_cls = _version_cls(version, WholesalePage.Wholesale, WholesalePageCurrent.Wholesale, prog)
             rate_pages_obj = wholesale_cls(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildWholesalePage(progress_callback=cb)
         elif prog == "Food Service":
-            food_cls = FoodServicePage.Food if version == "2.0" else FoodServicePageCurrent.Food
+            food_cls = _version_cls(version, FoodServicePage.Food, FoodServicePageCurrent.Food, prog)
             rate_pages_obj = food_cls(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective,
@@ -320,7 +350,9 @@ def run(
                 info.n_effective, info.r_effective,
             )
             bop_workbook = rate_pages_obj.buildAdditionalRulesPage(progress_callback=cb)
-        elif version == "2.0":
+        elif version in ("2.0", "Appetite"):
+            # No Appetite-specific "All Programs" page yet — builds plain
+            # 2.0 (see APPETITE_CLASSES).
             rate_pages_obj = AllProgramsPage.AllPrograms(
                 info.state_abb, rate_tables, perils,
                 cfg.peril_conversions, cfg.protection_class_conversions,

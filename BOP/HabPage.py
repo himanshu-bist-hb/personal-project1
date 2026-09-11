@@ -234,14 +234,13 @@ class Hab:
         ws.insert_rows(2, 2)
         ws['A3'] = 'Multiply the factor below to adjust for the exclusion'
 
-    # Sets up the Hab Excel file and creates a separate worksheet for each of
-    # the given dataframes. progress_callback (optional) is called with a
-    # short message before each sheet is built.
-    # Returns the Excel workbook
-    def buildHabPage(self, progress_callback=None):
+    # Builds the (tab name, page title, builder callable, useIndex, useHeader,
+    # layout_key, post-format hook) list buildHabPage() builds from. Split out
+    # so version subclasses (e.g. HabPageAppetite.Hab) can extend the list —
+    # inserting/removing specs at the right sort position — without
+    # duplicating the sheet-building loop or any build*() methods.
+    def _sheetSpecs(self):
         companies = [c for c in self.rateTables.keys() if c != 'CW']
-
-        Hab = ExcelSettingsBOP.Excel(state=self.state, programName='Habitational', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
 
         # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
         sheetSpecs = []
@@ -276,6 +275,18 @@ class Hab:
         if self.state == 'CA':
             sheetSpecs.append(('HABEX', 'H Table 4.C Habitability Exclusion', self.buildHabExclusion, False, True, None, self._formatHabExclusion))
 
+        return sheetSpecs
+
+    # Sets up the Hab Excel file and creates a separate worksheet for each of
+    # the given dataframes. progress_callback (optional) is called with a
+    # short message before each sheet is built.
+    # Returns the Excel workbook
+    def buildHabPage(self, progress_callback=None):
+        companies = [c for c in self.rateTables.keys() if c != 'CW']
+
+        Hab = ExcelSettingsBOP.Excel(state=self.state, programName='Habitational', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
+        sheetSpecs = self._sheetSpecs()
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):
             if progress_callback:

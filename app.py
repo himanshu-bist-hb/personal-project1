@@ -2289,7 +2289,7 @@ elif active_lob == "Business Owners Policy":
     # Mirrors the two "Create BP2.0 / Create Pre 2.0" buttons in the old
     # desktop tool. Both versions have a working backend now.
     st.markdown('<div class="sec-label">&#128209; &nbsp;Rate Page Version</div>', unsafe_allow_html=True)
-    vc1, vc2, _ = st.columns([2, 2, 8])
+    vc1, vc2, vc3, _ = st.columns([2, 2, 2, 6])
     with vc1:
         if st.button("BP-2.0", key="bop_ver_20", use_container_width=True,
                      type="primary" if st.session_state.bop_version == "2.0" else "secondary"):
@@ -2300,6 +2300,12 @@ elif active_lob == "Business Owners Policy":
                      type="primary" if st.session_state.bop_version == "pre2.0" else "secondary"):
             if st.session_state.bop_version != "pre2.0":
                 st.session_state.bop_version = "pre2.0"; st.rerun()
+    with vc3:
+        if st.button("Appetite", key="bop_ver_appetite", use_container_width=True,
+                     type="primary" if st.session_state.bop_version == "Appetite" else "secondary",
+                     help="BP-2.0 plus Appetite-only pages, where a program has them"):
+            if st.session_state.bop_version != "Appetite":
+                st.session_state.bop_version = "Appetite"; st.rerun()
     spacer(10)
 
     # ── Program selection ────────────────────────────────────────────────────
@@ -2548,7 +2554,7 @@ elif active_lob == "Business Owners Policy":
                     # sheet is huge and optional — leave it out of the main
                     # PDF here; the user can generate it separately below.
                     prog_name = built_programs[i - 1] if i - 1 < len(built_programs) else None
-                    exclude = [TERRITORY_DEFS_SHEET] if (prog_name == "All Programs" and built_version == "2.0") else None
+                    exclude = [TERRITORY_DEFS_SHEET] if (prog_name == "All Programs" and built_version in ("2.0", "Appetite")) else None
                     final_paths.extend(generate_pdf_only(xp, pp, progress_callback=_cb,
                                                           exclude_sheets=exclude, max_pdf_mb=max_mb))
                 st.session_state.bop_pdf_final_paths = final_paths
@@ -2611,7 +2617,7 @@ elif active_lob == "Business Owners Policy":
                 # Left out of the PDF above (82k rows, dominates export time);
                 # optional, so it's offered here rather than bundled in.
                 if ("All Programs" in st.session_state.bop_built_programs
-                        and st.session_state.bop_built_version == "2.0"):
+                        and st.session_state.bop_built_version in ("2.0", "Appetite")):
                     spacer(10)
                     if st.session_state.bop_terr_pdf_status == "success":
                         for tp in st.session_state.bop_terr_pdf_paths:

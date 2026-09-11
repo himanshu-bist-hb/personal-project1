@@ -2302,8 +2302,7 @@ elif active_lob == "Business Owners Policy":
                 st.session_state.bop_version = "pre2.0"; st.rerun()
     with vc3:
         if st.button("Appetite", key="bop_ver_appetite", use_container_width=True,
-                     type="primary" if st.session_state.bop_version == "Appetite" else "secondary",
-                     help="BP-2.0 plus Appetite-only pages, where a program has them"):
+                     type="primary" if st.session_state.bop_version == "Appetite" else "secondary"):
             if st.session_state.bop_version != "Appetite":
                 st.session_state.bop_version = "Appetite"; st.rerun()
     spacer(10)

@@ -20,7 +20,7 @@ class Hab(HabBP20):
     # Returns a dataframe
     def buildHabExclusionPremiumDev(self):
         habExclusionPremiumDev = self.buildDataFrame("BP7_Peril ExclusionOfHabitabilityClaims_Factor")
-        return habExclusionPremiumDev.query('`Peril TypeCode` == "allperil"'). \
+        return habExclusionPremiumDev[habExclusionPremiumDev['Peril TypeCodeCode'] == 'allperil']. \
                 rename(columns={'HabitabilityExclusionFactor': 'Rate'}).filter(items=['Rate'])
 
     # Extends BP-2.0's sheet list with the Appetite-only pages, inserted at

@@ -353,13 +353,22 @@ class Retail:
     def buildPSBusinessIncomeWorker(self):
         return self._buildPSBusinessIncome("1st Pet Service Worker", "Each Addl Pet Service Worker", "1st Worker")
 
-    # Builds the table for Pet Services Professional Liability
+    # Builds the table for Pet Services Professional Liability — pulled from
+    # the ratebook's BP7_PetServicesProfessionalLiability tab. The rate page
+    # only shows the occurrence half as "Limits" (the aggregate half of
+    # PerOccurrenceAggregateLimitCode, e.g. "1000000/3000000", is dropped —
+    # there's already a PerOccurrenceAggregateLimitDisplay Name column in the
+    # ratebook for that pairing, unused here since the rate page's Limits
+    # column is occurrence-only, unlike Table 4.B's Occurrence/Aggregate
+    # tables built from a similar-looking source).
     # Returns a dataframe
     def buildPSProfLiab(self):
-        return pd.DataFrame({
-            "Limits": ["$300,000/$600,000", "$500,000/$1,000,000", "$1,000,000/$2,000,000", "$2,000,000/$4,000,000"],
-            "Rate": ["$43", "$56", "$68", "$83"],
-        })
+        psProfLiab = self.buildDataFrame("BP7_PetServicesProfessionalLiability").copy()
+        psProfLiab['Limits'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
+        psProfLiab = psProfLiab.sort_values(by='Limits').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
+        psProfLiab['Limits'] = psProfLiab['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        psProfLiab['Rate'] = psProfLiab['Rate'].apply(lambda x: "${0:,.0f}".format(x))
+        return psProfLiab.filter(items=['Limits', 'Rate'])
 
     # Merges the "Number of Units" column of the D&O table into its 2 bands
     # ("Under 51" / "51 or More" — Retail only has 2, unlike Hab's 5).

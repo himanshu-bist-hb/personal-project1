@@ -384,11 +384,13 @@ class Retail:
             ws[f'D{start}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
 
     # Appends a series of (label, dataframe) blocks below ws's current
-    # content, each as a bolded section label row + bolded, bordered
-    # column-header row + bordered plain data rows, with one blank separator
-    # row between blocks (and, if blank_before_first, before the first block
-    # too — used by _formatPSSplzdEndo to separate the appended blocks from
-    # the merged base premium table above them). Same pattern as Service's
+    # content, each as a bolded section label row (merged across the block's
+    # own columns so the title sits centered on one line instead of
+    # overflowing out of column A) + bolded, bordered column-header row +
+    # bordered plain data rows, with one blank separator row between blocks
+    # (and, if blank_before_first, before the first block too — used by
+    # _formatPSSplzdEndo to separate the appended blocks from the merged
+    # base premium table above them). Same pattern as Service's
     # identically-named helper in ServicePage.py — see [[bop_service_port]].
     #
     # Each row is only bordered/aligned across its OWN block's column count
@@ -396,6 +398,17 @@ class Retail:
     # block following a wider one would pick up a stray bordered empty cell
     # on its right, and bestFit below would size that column from blank
     # cells instead of its real content.
+    #
+    # Feedback fix: the row tracker advanced to the block's LAST used row
+    # (header_row + len(df)) instead of the next EMPTY row, so the "blank
+    # separator" increment for the following block landed on what should
+    # have been the blank row and wrote the label straight onto it — every
+    # block after the first ran flush against the one before with no gap.
+    # Also, the label was written only into column 1 (rendering as a
+    # bordered box on the left instead of a title spanning the table), and
+    # merging the label row AFTER the per-cell font/border loop would have
+    # thrown on the now-MergedCell columns 2..n, so the label row is styled
+    # and merged in its own pass before the header row is touched.
     def _appendLabeledBlocks(self, ws, boldFont, font, blocks, blank_before_first=False):
         row = ws.max_row + 1
         max_col = 1
@@ -411,12 +424,18 @@ class Retail:
             for r_off, (_, data_row) in enumerate(df.iterrows()):
                 for col, val in enumerate(data_row, start=1):
                     ws.cell(row=header_row + 1 + r_off, column=col, value=val)
-            for r in (label_row, header_row):
-                for col in range(1, n_cols + 1):
-                    cell = ws.cell(row=r, column=col)
-                    cell.font = boldFont
-                    cell.border = _THIN_BORDER
-                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+            for col in range(1, n_cols + 1):
+                cell = ws.cell(row=label_row, column=col)
+                cell.font = boldFont
+                cell.border = _THIN_BORDER
+                cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            if n_cols > 1:
+                ws.merge_cells(start_row=label_row, start_column=1, end_row=label_row, end_column=n_cols)
+            for col in range(1, n_cols + 1):
+                header_cell = ws.cell(row=header_row, column=col)
+                header_cell.font = boldFont
+                header_cell.border = _THIN_BORDER
+                header_cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
             for r_off in range(len(df)):
                 for col in range(1, n_cols + 1):
                     cell = ws.cell(row=header_row + 1 + r_off, column=col)
@@ -424,7 +443,7 @@ class Retail:
                     cell.border = _THIN_BORDER
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
             max_col = max(max_col, n_cols)
-            row = header_row + len(df)
+            row = header_row + len(df) + 1  # next empty row, not the last used one
         for col in range(1, max_col + 1):
             ws.column_dimensions[get_column_letter(col)].bestFit = True
 

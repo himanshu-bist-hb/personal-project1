@@ -299,20 +299,59 @@ class Retail:
         return franchiseUpgradeEndorsement.filter(items=['Rate or Premium', 'Per Building'])
 
     # Builds the table for Pet Services Specialized Endorsement (base premium)
+    # — pulled from the ratebook's BP7_PetServicesSpecialized tab, which is
+    # a single-row Constant/Rate table (Constant == "Y").
     # Returns a dataframe
     def buildPSSplzdEndo(self):
-        return pd.DataFrame({"Base premium for each Retail Premises": ["$212.00"]})
+        pssRate = self.buildDataFrame("BP7_PetServicesSpecialized")
+        filteredPSSRate = pssRate.query('Constant == "Y"')
+        rate = filteredPSSRate['PetServicesSpecializedRate'].iloc[0]
+        return pd.DataFrame({"Base premium for each Retail Premises": ["${0:,.2f}".format(float(rate))]})
 
-    # Builds the Pet Services - Business Income table (the second, appended
-    # block of the PSS sheet — see _formatPSSplzdEndo)
+    # Builds the Mobile Equipment block of the PSS sheet — pulled from the
+    # ratebook's BP7_PetMobileServicesPetEquipment tab, filtered to the
+    # "Pet Services" occupancy row (the same tab also carries Veterinarian
+    # rows, which don't apply to Retail's Pet Services Specialized Endorsement).
     # Returns a dataframe
-    def buildPSSBIncome(self):
-        data = [
-            ("$25,000", "$13", "$7"),
-            ("$50,000", "$20", "$13"),
-            ("$100,000", "$26", "$20"),
-        ]
-        return pd.DataFrame(data, columns=["Limits", "1st Worker", "Each Additional Worker"])
+    def buildPSMobileEquipment(self):
+        mobileEquip = self.buildDataFrame("BP7_PetMobileServicesPetEquipment")
+        filteredMobileEquip = mobileEquip.query('PetServicesType == "Pet Services"').sort_values(by='MobileEquipmentCoverageLimit')
+        filteredMobileEquip = filteredMobileEquip.rename(columns={'MobileEquipmentCoverageLimit': 'Limits', 'MobileEquipmentCoverageRate': 'Rate'}). \
+                filter(items=['Limits', 'Rate'])
+        filteredMobileEquip['Limits'] = filteredMobileEquip['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        filteredMobileEquip['Rate'] = filteredMobileEquip['Rate'].apply(lambda x: "${0:,.0f}".format(x))
+        return filteredMobileEquip
+
+    # Builds a Business Income (BI) block of the PSS sheet from the
+    # ratebook's BP7_PetMobileServicesBusinessIncome tab, pivoting the
+    # "1st ..." and "Each Addl ..." MobileBusinessIncomeType rows for the
+    # given exposure (Customized Vehicle or Worker) into a single
+    # Limits (BI) / 1st .../Each Additional table. Shared by
+    # buildPSBusinessIncomeVehicle and buildPSBusinessIncomeWorker.
+    # Returns a dataframe
+    def _buildPSBusinessIncome(self, firstType, addlType, firstLabel):
+        biTable = self.buildDataFrame("BP7_PetMobileServicesBusinessIncome")
+        firstRows = biTable.query('MobileBusinessIncomeType == @firstType'). \
+                rename(columns={'MobileBusinessIncomeCoverageLimit': 'Limits (BI)', 'MobileBusinessIncomeCoverageRate': firstLabel}). \
+                filter(items=['Limits (BI)', firstLabel])
+        addlRows = biTable.query('MobileBusinessIncomeType == @addlType'). \
+                rename(columns={'MobileBusinessIncomeCoverageLimit': 'Limits (BI)', 'MobileBusinessIncomeCoverageRate': 'Each Additional'}). \
+                filter(items=['Limits (BI)', 'Each Additional'])
+        merged = pd.merge(firstRows, addlRows, how='outer', on='Limits (BI)').sort_values(by='Limits (BI)')
+        merged['Limits (BI)'] = merged['Limits (BI)'].apply(lambda x: "${0:,.0f}".format(x))
+        merged[firstLabel] = merged[firstLabel].apply(lambda x: "${0:,.0f}".format(x))
+        merged['Each Additional'] = merged['Each Additional'].apply(lambda x: "${0:,.0f}".format(x))
+        return merged
+
+    # Builds the Business Income (BI) per Customized Vehicle block of the PSS sheet
+    # Returns a dataframe
+    def buildPSBusinessIncomeVehicle(self):
+        return self._buildPSBusinessIncome("1st Pet Service Customized Vehicle", "Each Addl Pet Service Customized Vehicle", "1st Vehicle")
+
+    # Builds the Business Income (BI) per Worker block of the PSS sheet
+    # Returns a dataframe
+    def buildPSBusinessIncomeWorker(self):
+        return self._buildPSBusinessIncome("1st Pet Service Worker", "Each Addl Pet Service Worker", "1st Worker")
 
     # Builds the table for Pet Services Professional Liability
     # Returns a dataframe
@@ -344,53 +383,74 @@ class Retail:
             ws[f'A{start}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
             ws[f'D{start}'].alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
 
-    # Appends the Pet Services - Business Income table below the base
-    # premium table on the same sheet. There's no direct BOP equivalent of
-    # the root tool's generateWorksheet2tables (that module isn't present in
-    # this repo), so this reconstructs the same two-block layout by hand: the
-    # first table (buildPSSplzdEndo, written normally by generateWorksheet)
-    # occupies rows 3-4 (merged A3:C3/A4:C4 to span columns A-C, matching the
-    # ["PSS", 1, 3, 120] width config and RSS's identical merge in
-    # ServicePage.py); this appends a plain, unboxed "Pet Services - Business
-    # Income" section label plus the second table's header/data rows below
-    # it.
+    # Appends a series of (label, dataframe) blocks below ws's current
+    # content, each as a bolded section label row + bolded, bordered
+    # column-header row + bordered plain data rows, with one blank separator
+    # row between blocks (and, if blank_before_first, before the first block
+    # too — used by _formatPSSplzdEndo to separate the appended blocks from
+    # the merged base premium table above them). Same pattern as Service's
+    # identically-named helper in ServicePage.py — see [[bop_service_port]].
     #
-    # Feedback fix: the header row previously got font/border/alignment but
-    # the DATA rows didn't (only the label+header got styled, and the label
-    # picked up a border it shouldn't have), leaving a boxed header floating
-    # over plain, unbordered data and a stray tight box around the label —
-    # see [[bop_service_port]]'s _appendLabeledBlocks for the analogous
-    # Service-side bug. Data rows now get the same thin border/center
-    # alignment as the header (in the regular, not bold, font), the label
-    # stays unboxed, and the hardcoded 120px width override — which squeezed
-    # both this header row and the merged base-premium title above it into a
-    # multi-line wrap — is replaced with bestFit so columns size to their
-    # actual content.
-    def _formatPSSplzdEndo(self, ws, boldFont, font, biDf):
+    # Each row is only bordered/aligned across its OWN block's column count
+    # (n_cols), not the sheet's running max column — otherwise a narrower
+    # block following a wider one would pick up a stray bordered empty cell
+    # on its right, and bestFit below would size that column from blank
+    # cells instead of its real content.
+    def _appendLabeledBlocks(self, ws, boldFont, font, blocks, blank_before_first=False):
+        row = ws.max_row + 1
+        max_col = 1
+        for i, (label, df) in enumerate(blocks):
+            if i > 0 or blank_before_first:
+                row += 1  # blank separator row, left untouched (no border)
+            label_row = row
+            header_row = label_row + 1
+            n_cols = len(df.columns)
+            ws.cell(row=label_row, column=1, value=label)
+            for col, name in enumerate(df.columns, start=1):
+                ws.cell(row=header_row, column=col, value=name)
+            for r_off, (_, data_row) in enumerate(df.iterrows()):
+                for col, val in enumerate(data_row, start=1):
+                    ws.cell(row=header_row + 1 + r_off, column=col, value=val)
+            for r in (label_row, header_row):
+                for col in range(1, n_cols + 1):
+                    cell = ws.cell(row=r, column=col)
+                    cell.font = boldFont
+                    cell.border = _THIN_BORDER
+                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+            for r_off in range(len(df)):
+                for col in range(1, n_cols + 1):
+                    cell = ws.cell(row=header_row + 1 + r_off, column=col)
+                    cell.font = font
+                    cell.border = _THIN_BORDER
+                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+            max_col = max(max_col, n_cols)
+            row = header_row + len(df)
+        for col in range(1, max_col + 1):
+            ws.column_dimensions[get_column_letter(col)].bestFit = True
+
+    # Appends the Mobile Equipment, Business Income (BI) per Customized
+    # Vehicle, and Business Income (BI) per Worker tables below the base
+    # premium table on the same sheet (widened to span columns A-C via the
+    # A3:C3/A4:C4 merge, matching the ["PSS", 1, 3, 120] width config).
+    # There's no direct BOP equivalent of the root tool's
+    # generateWorksheet2tables/4tables (not present in this repo), so this
+    # reconstructs the multi-block layout by hand: the first table
+    # (buildPSSplzdEndo, written normally by generateWorksheet) occupies rows
+    # 3-4, and the three additional tables — previously either missing
+    # (Mobile Equipment, per-Customized-Vehicle) or hardcoded (per-Worker,
+    # under the wrong "Limits"/"Each Additional Worker" headers) — are
+    # appended below via _appendLabeledBlocks, now driven by live ratebook
+    # data (see buildPSMobileEquipment/buildPSBusinessIncomeVehicle/
+    # buildPSBusinessIncomeWorker).
+    def _formatPSSplzdEndo(self, ws, boldFont, font, mobileDf, vehicleDf, workerDf):
         ws.merge_cells('A3:C3')
         ws.merge_cells('A4:C4')
-        label_row = ws.max_row + 2
-        header_row = label_row + 1
-        label_cell = ws.cell(row=label_row, column=1, value="Pet Services - Business Income")
-        label_cell.font = boldFont
-        for col, name in enumerate(biDf.columns, start=1):
-            ws.cell(row=header_row, column=col, value=name)
-        for r_off, (_, row) in enumerate(biDf.iterrows()):
-            for col, val in enumerate(row, start=1):
-                ws.cell(row=header_row + 1 + r_off, column=col, value=val)
-        for col in range(1, len(biDf.columns) + 1):
-            header_cell = ws.cell(row=header_row, column=col)
-            header_cell.font = boldFont
-            header_cell.border = _THIN_BORDER
-            header_cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for r_off in range(len(biDf)):
-            for col in range(1, len(biDf.columns) + 1):
-                cell = ws.cell(row=header_row + 1 + r_off, column=col)
-                cell.font = font
-                cell.border = _THIN_BORDER
-                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for col in range(1, len(biDf.columns) + 1):
-            ws.column_dimensions[get_column_letter(col)].bestFit = True
+        blocks = [
+            ("Mobile Equipment", mobileDf),
+            ("Business Income (BI) per Customized Vehicle", vehicleDf),
+            ("Business Income (BI) per Worker", workerDf),
+        ]
+        self._appendLabeledBlocks(ws, boldFont, font, blocks, blank_before_first=True)
 
     # Sets up the Retail Excel file and creates a separate worksheet for
     # each of the given dataframes. progress_callback (optional) is called
@@ -438,7 +498,8 @@ class Retail:
             ('RTS', 'R Table 4.C. Retail Trade Specialized Endorsement', self.buildRTSplzdEndo, False, True, None, None),
             ('FR', 'R Table 4.D. Franchise Upgrade Endorsement', self.buildFranchiseUpgradeEndorsement, False, True, None, None),
             ('PSS', 'R Table 4.E. Pet Services Specialized Endorsement', self.buildPSSplzdEndo, False, True, None,
-             lambda ws: self._formatPSSplzdEndo(ws, Retail.fontBold, Retail.font, self.buildPSSBIncome())),
+             lambda ws: self._formatPSSplzdEndo(ws, Retail.fontBold, Retail.font, self.buildPSMobileEquipment(),
+                                                 self.buildPSBusinessIncomeVehicle(), self.buildPSBusinessIncomeWorker())),
             ('PSPL', 'R Table 4.F. Pet Services Professional Liability', self.buildPSProfLiab, False, True, 'PED', None),
         ]
 

@@ -35,6 +35,24 @@ class BOPConfig:
     protection_class_conversions: Dict[str, str] = field(default_factory=dict)
     building_codes_by_state: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
     class_codes: Dict[int, str] = field(default_factory=dict)
+    version_by_state: Dict[str, str] = field(default_factory=dict)
+
+
+# "Version By State" tab values -> the `version` strings BOPRatePages.run()
+# understands. "Default" version selection looks a state up in
+# version_by_state and converts it through this map.
+VERSION_CODE_MAP = {"1": "pre2.0", "2": "2.0", "APPETITE": "Appetite"}
+
+
+def resolve_default_version(cfg: "BOPConfig", state_abb: str) -> str:
+    """
+    Map a state to its default rate-page version per the "Version By State"
+    tab. Falls back to "2.0" if the state has no row there.
+    """
+    code = cfg.version_by_state.get(state_abb)
+    if code is None:
+        return "2.0"
+    return VERSION_CODE_MAP.get(str(code).strip().upper(), "2.0")
 
 
 # Class_Code_Min -> program display name, used by the All Peril page.
@@ -117,6 +135,10 @@ def load_bop_config(path: str = None) -> BOPConfig:
             cfg.class_codes[int(class_code_min)] = str(program)
     else:
         cfg.class_codes = dict(DEFAULT_CLASS_CODES)
+
+    if "Version By State" in wb.sheetnames:
+        for state, version_code in _rows(wb["Version By State"]):
+            cfg.version_by_state[state] = str(version_code)
 
     wb.close()
     return cfg

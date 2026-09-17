@@ -95,7 +95,7 @@ st.session_state.setdefault("bop_pdf_paths",    [])
 st.session_state.setdefault("bop_pdf_status",   "idle")
 st.session_state.setdefault("bop_confirm_step", "idle")
 st.session_state.setdefault("bop_upload_reset", 0)
-st.session_state.setdefault("bop_version", "2.0")
+st.session_state.setdefault("bop_version", "Default")
 # Rating Plans' State IRPM Modification Plan table (RPMP) — entered as a
 # percentage (0-100) here, converted to a fraction before being passed to
 # BOP.BOPRatePages.run()'s irpm_credit/irpm_debit.
@@ -2289,7 +2289,12 @@ elif active_lob == "Business Owners Policy":
     # Mirrors the two "Create BP2.0 / Create Pre 2.0" buttons in the old
     # desktop tool. Both versions have a working backend now.
     st.markdown('<div class="sec-label">&#128209; &nbsp;Rate Page Version</div>', unsafe_allow_html=True)
-    vc1, vc2, vc3, _ = st.columns([2, 2, 2, 6])
+    vc0, vc1, vc2, vc3, _ = st.columns([2, 2, 2, 2, 6])
+    with vc0:
+        if st.button("Default", key="bop_ver_default", use_container_width=True,
+                     type="primary" if st.session_state.bop_version == "Default" else "secondary"):
+            if st.session_state.bop_version != "Default":
+                st.session_state.bop_version = "Default"; st.rerun()
     with vc1:
         if st.button("BP-2.0", key="bop_ver_20", use_container_width=True,
                      type="primary" if st.session_state.bop_version == "2.0" else "secondary"):
@@ -2305,6 +2310,8 @@ elif active_lob == "Business Owners Policy":
                      type="primary" if st.session_state.bop_version == "Appetite" else "secondary"):
             if st.session_state.bop_version != "Appetite":
                 st.session_state.bop_version = "Appetite"; st.rerun()
+    if st.session_state.bop_version == "Default":
+        st.markdown('<p class="f-hint">Version is chosen automatically per state from the "Version By State" tab in BOP Input File.xlsx.</p>', unsafe_allow_html=True)
     spacer(10)
 
     # ── Program selection ────────────────────────────────────────────────────
@@ -2511,7 +2518,7 @@ elif active_lob == "Business Owners Policy":
                     f = st.session_state.get(f"bop_file_{k}")
                     return io.BytesIO(f["bytes"]) if f and "error" not in f else None
                 built_programs = list(st.session_state.bop_programs)
-                xlsx_outs, pdf_outs = run_bop_rate_pages(
+                xlsx_outs, pdf_outs, resolved_version = run_bop_rate_pages(
                     NGICRatebook=_rb("NGIC"), CWRatebook=_rb("CW"), MMRatebook=_rb("MM"),
                     NACORatebook=_rb("NACO"), NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"),
                     HICNJRatebook=_rb("HICNJ"),
@@ -2523,7 +2530,10 @@ elif active_lob == "Business Owners Policy":
                     irpm_debit=st.session_state.bop_irpm_debit / 100.0)
                 st.session_state.bop_xlsx_paths = xlsx_outs; st.session_state.bop_pdf_paths = pdf_outs
                 st.session_state.bop_built_programs = built_programs
-                st.session_state.bop_built_version = st.session_state.bop_version
+                # Store the *resolved* version (e.g. "Default" -> "2.0" for
+                # that state's ratebook) — the PDF step's TRDEF-exclusion
+                # check below needs the actual version built, not "Default".
+                st.session_state.bop_built_version = resolved_version
                 st.session_state.bop_run_status = "success"; st.session_state.bop_pdf_status = "idle"
                 st.session_state.bop_pdf_final_paths = []
                 st.session_state.bop_terr_pdf_status = "idle"; st.session_state.bop_terr_pdf_paths = []

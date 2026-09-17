@@ -43,7 +43,7 @@ from . import RatingPlansPage
 from . import ClassModifierPage
 from . import CommonRulesPage
 from . import AdditionalRulesPage
-from .bop_config import load_bop_config
+from .bop_config import load_bop_config, resolve_default_version
 from .BOPpagebreaks import (
     process_pagebreaks, export_to_pdf, export_single_sheet_pdf, split_pdf_by_size,
 )
@@ -56,7 +56,7 @@ from .BOPpagebreaks import (
 #   of that program's BP-2.0 class (by subclassing it — see HabPageAppetite
 #   for the pattern); a program with no entry there just builds its plain
 #   "2.0" class, since Appetite has no changes for it yet.
-VALID_VERSIONS = ("2.0", "pre2.0", "Appetite")
+VALID_VERSIONS = ("2.0", "pre2.0", "Appetite", "Default")
 
 # Programs that have Appetite-specific pages on top of BP-2.0. Add an entry
 # here (and the matching *PageAppetite.py subclass) as more programs get
@@ -137,26 +137,33 @@ def run(
     skip_pdf: bool = True,
     irpm_credit: float = 0.0,
     irpm_debit: float = 0.0,
-    version: str = "2.0",
+    version: str = "Default",
     program: Union[str, Sequence[str]] = "All Programs",
 ) -> Tuple[Union[str, List[str]], Union[str, List[str]]]:
     """
     Orchestrate the BOP rate-page generation pipeline.
 
     Args:
-        version: "2.0" (default), "pre2.0" or "Appetite" — selects which
-            generation of the rating logic and page layout to build.
-            "Appetite" builds BP-2.0 plus each program's Appetite-only pages
-            (see APPETITE_CLASSES) — a program with none yet builds plain
-            "2.0".
+        version: "Default" (default), "2.0", "pre2.0" or "Appetite" —
+            selects which generation of the rating logic and page layout to
+            build. "Default" looks the ratebook's state up in the "Version
+            By State" tab of BOP Input File.xlsx and resolves to "2.0",
+            "pre2.0" or "Appetite" from there (see resolve_default_version);
+            it is resolved after the state is known, once ratebook metadata
+            has been extracted below. "Appetite" builds BP-2.0 plus each
+            program's Appetite-only pages (see APPETITE_CLASSES) — a program
+            with none yet builds plain "2.0".
         program: which BOP program(s) to build — a single name ("All
             Programs" or "All Peril") or a list of names. The ratebooks are
             opened and extracted ONCE and every requested program is built
             from the same tables, each saved as its own file.
 
     Returns:
-        (xlsx_out, pdf_out) paths when program is a single name;
-        ([xlsx_outs], [pdf_outs]) in the same order when it is a list.
+        (xlsx_out, pdf_out, resolved_version) when program is a single name;
+        ([xlsx_outs], [pdf_outs], resolved_version) in the same order when
+        it is a list. resolved_version is the input `version`, except when
+        that was "Default" — then it's whichever of "2.0"/"pre2.0"/
+        "Appetite" the ratebook's state resolved to.
     """
     single = isinstance(program, str)
     programs = [program] if single else list(program)
@@ -203,7 +210,22 @@ def run(
     # ── 2. Extract state / date metadata (same 'Rate Book Details' layout BA uses) ──
     info = get_rate_book_info(ngic_loaded=ratebooks["NGIC"], mm_loaded=ratebooks["MM"])
 
-    # ── 3. Load Territory Definitions (2.0 All Programs only — pre2.0 and
+    # ── 3. Load config-driven rating lookup tables ─────────────────────────
+    cfg = load_bop_config()
+    if info.state_abb not in cfg.perils_by_state:
+        raise ValueError(
+            f"No 'Perils By State' entry for '{info.state_abb}' in BOP Input File.xlsx — "
+            "add a row there before generating this state's rate pages."
+        )
+    perils = cfg.perils_by_state[info.state_abb]
+
+    # "Default" resolves to this state's version per the "Version By State"
+    # tab (see resolve_default_version) — must happen before the Territory
+    # Definitions load below, since that depends on the resolved version.
+    if version == "Default":
+        version = resolve_default_version(cfg, info.state_abb)
+
+    # ── 4. Load Territory Definitions (2.0 All Programs only — pre2.0 and
     #       All Peril never use them) ──
     territory_defs_by_st = None
     if version in ("2.0", "Appetite") and "All Programs" in programs:
@@ -214,15 +236,6 @@ def run(
     if "Optional Coverages" in programs:
         if progress_callback: progress_callback("Loading Earthquake Territory Definitions...")
         eq_territory_defs = load_eq_territory_defs(info.state_abb)
-
-    # ── 4. Load config-driven rating lookup tables ─────────────────────────
-    cfg = load_bop_config()
-    if info.state_abb not in cfg.perils_by_state:
-        raise ValueError(
-            f"No 'Perils By State' entry for '{info.state_abb}' in BOP Input File.xlsx — "
-            "add a row there before generating this state's rate pages."
-        )
-    perils = cfg.perils_by_state[info.state_abb]
 
     # ── 5. Assemble the rate_books dict & extract all tables ───────────────
     rate_books: Dict[str, Union[pd.ExcelFile, str]] = {
@@ -393,8 +406,8 @@ def run(
     print(f"This program ran in {elapsed:0.4f} seconds")
 
     if single:
-        return xlsx_outs[0], pdf_outs[0]
-    return xlsx_outs, pdf_outs
+        return xlsx_outs[0], pdf_outs[0], version
+    return xlsx_outs, pdf_outs, version
 
 
 def generate_pdf_only(

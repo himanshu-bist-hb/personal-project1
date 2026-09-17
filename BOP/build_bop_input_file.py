@@ -573,6 +573,18 @@ def build():
     _write_table(ws, ["State", "Perils"], rows)
 
     # =======================================================================
+    # Version By State — which rate-page generation ("1" = Pre 2.0, "2" =
+    # BP-2.0, "Appetite") "Default" version selection uses for each state.
+    # Every state below is also a "Perils By State" row.
+    # =======================================================================
+    ws = wb.create_sheet("Version By State")
+    all_states = [r[0] for r in rows]  # same state list as Perils By State
+    version_overrides = {"WA": "1", "KS": "Appetite"}
+    _write_table(ws, ["State", "Version"], [
+        [s, version_overrides.get(s, "2")] for s in all_states
+    ])
+
+    # =======================================================================
     # Peril Conversions — internal peril code -> display name.
     # =======================================================================
     ws = wb.create_sheet("Peril Conversions")

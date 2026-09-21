@@ -681,6 +681,11 @@ table.cmp-diff tbody tr:hover td { filter:brightness(0.97); }
 
 /* ── Truncation note ── */
 .cmp-truncation-note { text-align:center; padding:8px 12px; color:var(--muted); font-style:italic; font-size:12px; background:var(--off); }
+
+/* ── BOP program checkbox grid — labels must never wrap mid-word, no
+   matter how narrow the column gets (e.g. many programs on one row) ── */
+.bop-prog-grid [data-testid="stCheckbox"] label { white-space:nowrap; }
+.bop-prog-grid [data-testid="stCheckbox"] label p { white-space:nowrap; overflow:visible; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -2325,21 +2330,31 @@ elif active_lob == "Business Owners Policy":
     # Every checked program is built in ONE run (the ratebooks are opened and
     # extracted once), each saved as its own xlsx.
     st.markdown('<div class="sec-label">&#128218; &nbsp;Programs to Build</div>', unsafe_allow_html=True)
-    sel_cols = st.columns([2] * (len(BOP_AVAILABLE_PROGRAMS) + 1) + [6])
-    with sel_cols[0]:
+    st.markdown('<div class="bop-prog-grid">', unsafe_allow_html=True)
+
+    sel_all_col, _ = st.columns([2, 10])
+    with sel_all_col:
         sel_all = st.checkbox("Select all", key="bop_prog_select_all",
                               value=st.session_state.bop_sel_all_store,
                               help="Build every available program in one run")
     st.session_state.bop_sel_all_store = sel_all
 
+    # Wrapped in fixed-size rows (not one row of len(programs) columns) so
+    # each checkbox keeps enough width for its label to stay on one line
+    # regardless of how many programs exist.
+    PROGS_PER_ROW = 7
     individually_checked = []
-    for i, prog_name in enumerate(BOP_AVAILABLE_PROGRAMS):
-        with sel_cols[i + 1]:
-            chk = st.checkbox(prog_name, key=f"bop_prog_chk_{prog_name.replace(' ', '_')}",
-                              value=(prog_name in st.session_state.bop_programs_store),
-                              disabled=sel_all)
-        if chk:
-            individually_checked.append(prog_name)
+    for row_start in range(0, len(BOP_AVAILABLE_PROGRAMS), PROGS_PER_ROW):
+        row_progs = BOP_AVAILABLE_PROGRAMS[row_start:row_start + PROGS_PER_ROW]
+        row_cols = st.columns(PROGS_PER_ROW)
+        for col, prog_name in zip(row_cols, row_progs):
+            with col:
+                chk = st.checkbox(prog_name, key=f"bop_prog_chk_{prog_name.replace(' ', '_')}",
+                                  value=(prog_name in st.session_state.bop_programs_store),
+                                  disabled=sel_all)
+            if chk:
+                individually_checked.append(prog_name)
+    st.markdown('</div>', unsafe_allow_html=True)
     # Individual picks survive toggling "Select all" off again.
     st.session_state.bop_programs_store = individually_checked
     st.session_state.bop_programs = list(BOP_AVAILABLE_PROGRAMS) if sel_all else individually_checked

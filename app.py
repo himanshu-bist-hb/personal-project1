@@ -96,6 +96,10 @@ st.session_state.setdefault("bop_pdf_status",   "idle")
 st.session_state.setdefault("bop_confirm_step", "idle")
 st.session_state.setdefault("bop_upload_reset", 0)
 st.session_state.setdefault("bop_version", "Default")
+# Appetite is an add-on checkbox, not a version — ignored while bop_version
+# is "Default" (that case resolves both version and Appetite per-state from
+# the "Version By State" tab).
+st.session_state.setdefault("bop_appetite", False)
 # Rating Plans' State IRPM Modification Plan table (RPMP) — entered as a
 # percentage (0-100) here, converted to a fraction before being passed to
 # BOP.BOPRatePages.run()'s irpm_credit/irpm_debit.
@@ -106,6 +110,7 @@ st.session_state.setdefault("bop_irpm_debit", 0.0)
 # checkboxes, which the user could change while looking at the results.
 st.session_state.setdefault("bop_built_programs", [])
 st.session_state.setdefault("bop_built_version",  "2.0")
+st.session_state.setdefault("bop_built_appetite", False)
 # Optional "max PDF size" — when set, a PDF over this many MB is split into
 # "_part1"/"_part2"/... files each under the limit (see split_pdf_by_size).
 # None (the default, nothing typed) keeps today's single-PDF behavior.
@@ -2289,7 +2294,7 @@ elif active_lob == "Business Owners Policy":
     # Mirrors the two "Create BP2.0 / Create Pre 2.0" buttons in the old
     # desktop tool. Both versions have a working backend now.
     st.markdown('<div class="sec-label">&#128209; &nbsp;Rate Page Version</div>', unsafe_allow_html=True)
-    vc0, vc1, vc2, vc3, _ = st.columns([2, 2, 2, 2, 6])
+    vc0, vc1, vc2, vc4, _ = st.columns([2, 2, 2, 3, 5])
     with vc0:
         if st.button("Default", key="bop_ver_default", use_container_width=True,
                      type="primary" if st.session_state.bop_version == "Default" else "secondary"):
@@ -2299,19 +2304,20 @@ elif active_lob == "Business Owners Policy":
         if st.button("BP-2.0", key="bop_ver_20", use_container_width=True,
                      type="primary" if st.session_state.bop_version == "2.0" else "secondary"):
             if st.session_state.bop_version != "2.0":
-                st.session_state.bop_version = "2.0"; st.rerun()
+                st.session_state.bop_version = "2.0"; st.session_state.bop_appetite = True; st.rerun()
     with vc2:
         if st.button("Pre 2.0", key="bop_ver_pre", use_container_width=True,
                      type="primary" if st.session_state.bop_version == "pre2.0" else "secondary"):
             if st.session_state.bop_version != "pre2.0":
-                st.session_state.bop_version = "pre2.0"; st.rerun()
-    with vc3:
-        if st.button("Appetite", key="bop_ver_appetite", use_container_width=True,
-                     type="primary" if st.session_state.bop_version == "Appetite" else "secondary"):
-            if st.session_state.bop_version != "Appetite":
-                st.session_state.bop_version = "Appetite"; st.rerun()
+                st.session_state.bop_version = "pre2.0"; st.session_state.bop_appetite = True; st.rerun()
+    with vc4:
+        is_default = st.session_state.bop_version == "Default"
+        if is_default:
+            st.session_state.bop_appetite = False
+        st.checkbox("Add Appetite pages", key="bop_appetite", disabled=is_default,
+                     help="Add each program's Appetite-only pages on top of the selected version.")
     if st.session_state.bop_version == "Default":
-        st.markdown('<p class="f-hint">Version is chosen automatically per state from the "Version By State" tab in BOP Input File.xlsx.</p>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint">Version and Appetite are chosen automatically per state from the "Version By State" tab in BOP Input File.xlsx.</p>', unsafe_allow_html=True)
     spacer(10)
 
     # ── Program selection ────────────────────────────────────────────────────
@@ -2518,22 +2524,25 @@ elif active_lob == "Business Owners Policy":
                     f = st.session_state.get(f"bop_file_{k}")
                     return io.BytesIO(f["bytes"]) if f and "error" not in f else None
                 built_programs = list(st.session_state.bop_programs)
-                xlsx_outs, pdf_outs, resolved_version = run_bop_rate_pages(
+                xlsx_outs, pdf_outs, resolved_version, resolved_appetite = run_bop_rate_pages(
                     NGICRatebook=_rb("NGIC"), CWRatebook=_rb("CW"), MMRatebook=_rb("MM"),
                     NACORatebook=_rb("NACO"), NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"),
                     HICNJRatebook=_rb("HICNJ"),
                     folder_selected=st.session_state.bop_save_dir,
                     progress_callback=update_progress, skip_pdf=True,
                     version=st.session_state.bop_version,
+                    appetite=st.session_state.bop_appetite,
                     program=built_programs,
                     irpm_credit=st.session_state.bop_irpm_credit / 100.0,
                     irpm_debit=st.session_state.bop_irpm_debit / 100.0)
                 st.session_state.bop_xlsx_paths = xlsx_outs; st.session_state.bop_pdf_paths = pdf_outs
                 st.session_state.bop_built_programs = built_programs
-                # Store the *resolved* version (e.g. "Default" -> "2.0" for
-                # that state's ratebook) — the PDF step's TRDEF-exclusion
-                # check below needs the actual version built, not "Default".
+                # Store the *resolved* version/appetite (e.g. "Default" ->
+                # "2.0"/True for that state's ratebook) — the PDF step's
+                # TRDEF-exclusion check below needs the actual version
+                # built, not "Default".
                 st.session_state.bop_built_version = resolved_version
+                st.session_state.bop_built_appetite = resolved_appetite
                 st.session_state.bop_run_status = "success"; st.session_state.bop_pdf_status = "idle"
                 st.session_state.bop_pdf_final_paths = []
                 st.session_state.bop_terr_pdf_status = "idle"; st.session_state.bop_terr_pdf_paths = []
@@ -2563,7 +2572,7 @@ elif active_lob == "Business Owners Policy":
                     # sheet is huge and optional — leave it out of the main
                     # PDF here; the user can generate it separately below.
                     prog_name = built_programs[i - 1] if i - 1 < len(built_programs) else None
-                    exclude = [TERRITORY_DEFS_SHEET] if (prog_name == "All Programs" and built_version in ("2.0", "Appetite")) else None
+                    exclude = [TERRITORY_DEFS_SHEET] if (prog_name == "All Programs" and built_version == "2.0") else None
                     final_paths.extend(generate_pdf_only(xp, pp, progress_callback=_cb,
                                                           exclude_sheets=exclude, max_pdf_mb=max_mb))
                 st.session_state.bop_pdf_final_paths = final_paths
@@ -2626,7 +2635,7 @@ elif active_lob == "Business Owners Policy":
                 # Left out of the PDF above (82k rows, dominates export time);
                 # optional, so it's offered here rather than bundled in.
                 if ("All Programs" in st.session_state.bop_built_programs
-                        and st.session_state.bop_built_version in ("2.0", "Appetite")):
+                        and st.session_state.bop_built_version == "2.0"):
                     spacer(10)
                     if st.session_state.bop_terr_pdf_status == "success":
                         for tp in st.session_state.bop_terr_pdf_paths:

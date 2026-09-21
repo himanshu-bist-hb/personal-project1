@@ -36,23 +36,39 @@ class BOPConfig:
     building_codes_by_state: Dict[str, Dict[str, List[str]]] = field(default_factory=dict)
     class_codes: Dict[int, str] = field(default_factory=dict)
     version_by_state: Dict[str, str] = field(default_factory=dict)
+    appetite_by_state: Dict[str, str] = field(default_factory=dict)
 
 
-# "Version By State" tab values -> the `version` strings BOPRatePages.run()
-# understands. "Default" version selection looks a state up in
-# version_by_state and converts it through this map.
-VERSION_CODE_MAP = {"1": "pre2.0", "2": "2.0", "APPETITE": "Appetite"}
+# "Version By State" tab "Version" column values -> the `version` strings
+# BOPRatePages.run() understands. "Default" version selection looks a state
+# up in version_by_state and converts it through this map. Appetite is no
+# longer a version of its own — see appetite_by_state / resolve_default_appetite
+# below; it's an add-on flag on top of either "2.0" or "pre2.0".
+VERSION_CODE_MAP = {"1": "pre2.0", "2": "2.0"}
 
 
 def resolve_default_version(cfg: "BOPConfig", state_abb: str) -> str:
     """
-    Map a state to its default rate-page version per the "Version By State"
-    tab. Falls back to "2.0" if the state has no row there.
+    Map a state to its default rate-page version ("2.0" or "pre2.0") per the
+    "Version" column of the "Version By State" tab. Falls back to "2.0" if
+    the state has no row there.
     """
     code = cfg.version_by_state.get(state_abb)
     if code is None:
         return "2.0"
     return VERSION_CODE_MAP.get(str(code).strip().upper(), "2.0")
+
+
+def resolve_default_appetite(cfg: "BOPConfig", state_abb: str) -> bool:
+    """
+    Map a state to whether Appetite pages are added on top of its version,
+    per the "Appetite" column (Y/N) of the "Version By State" tab. Falls
+    back to False if the state has no row there.
+    """
+    code = cfg.appetite_by_state.get(state_abb)
+    if code is None:
+        return False
+    return str(code).strip().upper() == "Y"
 
 
 # Class_Code_Min -> program display name, used by the All Peril page.
@@ -137,8 +153,11 @@ def load_bop_config(path: str = None) -> BOPConfig:
         cfg.class_codes = dict(DEFAULT_CLASS_CODES)
 
     if "Version By State" in wb.sheetnames:
-        for state, version_code in _rows(wb["Version By State"]):
+        for row in _rows(wb["Version By State"]):
+            state, version_code = row[0], row[1]
             cfg.version_by_state[state] = str(version_code)
+            appetite_code = row[2] if len(row) > 2 else None
+            cfg.appetite_by_state[state] = str(appetite_code) if appetite_code is not None else "N"
 
     wb.close()
     return cfg

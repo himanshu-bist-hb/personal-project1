@@ -574,14 +574,17 @@ def build():
 
     # =======================================================================
     # Version By State — which rate-page generation ("1" = Pre 2.0, "2" =
-    # BP-2.0, "Appetite") "Default" version selection uses for each state.
-    # Every state below is also a "Perils By State" row.
+    # BP-2.0) and whether Appetite add-on pages are layered on top ("Y"/"N"),
+    # that "Default" version selection uses for each state. Appetite is not
+    # a version of its own — it's an add-on flag on top of either "1" or
+    # "2". Every state below is also a "Perils By State" row.
     # =======================================================================
     ws = wb.create_sheet("Version By State")
     all_states = [r[0] for r in rows]  # same state list as Perils By State
-    version_overrides = {"WA": "1", "KS": "Appetite"}
-    _write_table(ws, ["State", "Version"], [
-        [s, version_overrides.get(s, "2")] for s in all_states
+    version_overrides = {"WA": "1"}
+    appetite_overrides = {"KS": "Y"}
+    _write_table(ws, ["State", "Version", "Appetite"], [
+        [s, version_overrides.get(s, "2"), appetite_overrides.get(s, "N")] for s in all_states
     ])
 
     # =======================================================================

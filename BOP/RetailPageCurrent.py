@@ -268,11 +268,16 @@ class Retail:
         pedorthistsLiab['Occurrence / Aggregate'] = pedorthistsLiab['Liability Limit Occurrence'] + ' / ' + pedorthistsLiab['LiabilityLimitAggregate']
         return pedorthistsLiab.filter(items=['Occurrence / Aggregate', 'BaseRate']).rename(columns={'BaseRate': 'Each Certified Pedorthist'})
 
-    # Builds the endorsement charge table
+    # Builds the Retail PLUS Endorsement charge table. Pulled from
+    # "BP7_MiscellaneousSpecializedEndorsement_Charges" (BuildingClassCode /
+    # SpecializedEndorsementName / EndorsementCharge columns), filtered to
+    # the "Professional Services Specialized Endorsement" rows — every
+    # matching row carries the same charge, so the first is taken.
     # Returns a dataframe
     def buildEndorsementCharge(self):
-        endorsementCharge = self.buildDataFrame("BP7_PlusEndorsementCharge")
-        return endorsementCharge.query(f'ClassCodeMIn == {self.retailProgramCode}').filter(items=['PlusEndorsementCharge']).rename(columns={'PlusEndorsementCharge': 'Base premium for each Retail premises'})
+        endorsementCharge = self.buildDataFrame("BP7_MiscellaneousSpecializedEndorsement_Charges")
+        return endorsementCharge[endorsementCharge['SpecializedEndorsementName'] == 'Professional Services Specialized Endorsement'] \
+            .filter(items=['EndorsementCharge']).rename(columns={'EndorsementCharge': 'Base premium for each Retail premises'}).head(1)
 
     # Builds the franchise upgrade endorsement table for the given program
     # Returns a dataframe

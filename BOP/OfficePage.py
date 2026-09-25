@@ -233,17 +233,92 @@ class Office:
         optometristsProfessionalLiab['Occurrence / Aggregate'] = optometristsProfessionalLiab['LiabilityAmount'] + ' / ' + optometristsProfessionalLiab['AggregateLimit']
         return optometristsProfessionalLiab.rename(columns={'OptometristRate': 'Each Optometrist', 'OpticianRate': 'Each Optician'}).filter(items=['Occurrence / Aggregate', 'Each Optometrist', 'Each Optician'])
 
-    # Builds the veterinarian specialized endorsement with professional
-    # liability summary table (VSPL) — flat premium, hardcoded in the root
-    # tool rather than pulled from the ratebook
+    # Builds one Rate per Veterinarian block of the VSPL sheet (O Table
+    # 4.C.4.A) from the ratebook's BP7_VeterinarianSpecializedProfessional
+    # tab, filtered to the given PetType ("HouseholdPet" or
+    # "OtherThanHouseholdPet"). Limits come from
+    # PerOccurrenceAggregateLimitCode (e.g. "300000/900000", shown as
+    # "300,000/900,000" — no "$", matching the rate page), sorted by the
+    # occurrence half numerically.
     # Returns a dataframe
-    def buildVetSpecializedLiab(self):
-        data = [
-            ("$25,000", "$32", "$17"),
-            ("$50,000", "$49", "$32"),
-            ("$100,000", "$65", "$49"),
-        ]
-        return pd.DataFrame(data, columns=["Limits", "1st Worker", "Each Additional Worker"])
+    def _buildVetSpecializedLiabByPet(self, petType):
+        vetLiab = self.buildDataFrame("BP7_VeterinarianSpecializedProfessional")
+        filtered = vetLiab.query('PetType == @petType').copy()
+        filtered['_occ'] = filtered['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
+        filtered = filtered.sort_values(by='_occ')
+        filtered['Limits'] = filtered['PerOccurrenceAggregateLimitCode'].apply(
+            lambda x: "/".join("{0:,.0f}".format(int(p)) for p in x.split('/')))
+        filtered['Rate'] = filtered['VeterinarianSpecializedLiabilityRate'].apply(lambda x: "${0:,.0f}".format(x))
+        return filtered.filter(items=['Limits', 'Rate'])
+
+    # Household Pet block of VSPL
+    def buildVetSpecializedLiabHousehold(self):
+        return self._buildVetSpecializedLiabByPet("HouseholdPet")
+
+    # Non Household Pet block of VSPL
+    def buildVetSpecializedLiabNonHousehold(self):
+        return self._buildVetSpecializedLiabByPet("OtherThanHouseholdPet")
+
+    # Builds a Mobile Equipment block from the ratebook's
+    # BP7_PetMobileServicesPetEquipment tab, filtered to the given
+    # PetServicesType ("Veterinarian" or "Pet Services" — the tab carries
+    # both). Shared by VSPL (Veterinarian) and PSS (Pet Services).
+    # Returns a dataframe
+    def _buildMobileEquipment(self, petServicesType):
+        mobileEquip = self.buildDataFrame("BP7_PetMobileServicesPetEquipment")
+        filtered = mobileEquip.query('PetServicesType == @petServicesType').sort_values(by='MobileEquipmentCoverageLimit')
+        filtered = filtered.rename(columns={'MobileEquipmentCoverageLimit': 'Limits', 'MobileEquipmentCoverageRate': 'Rate'}). \
+                filter(items=['Limits', 'Rate'])
+        filtered['Limits'] = filtered['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        filtered['Rate'] = filtered['Rate'].apply(lambda x: "${0:,.0f}".format(x))
+        return filtered
+
+    # Mobile Equipment block of VSPL (Veterinarian rows)
+    def buildVetSpecializedMobileEquip(self):
+        return self._buildMobileEquipment("Veterinarian")
+
+    # Mobile Equipment block of PSS (Pet Services rows)
+    def buildPSMobileEquipment(self):
+        return self._buildMobileEquipment("Pet Services")
+
+    # Builds a Business Income (BI) block of VSPL from the ratebook's
+    # BP7_PetMobileServicesBusinessIncome tab, pivoting the "1st ..." and
+    # "Each Addl ..." MobileBusinessIncomeType rows into one
+    # Limits (BI) / 1st ... / Each Additional table. Same shape as Retail's
+    # _buildPSBusinessIncome.
+    # Returns a dataframe
+    def _buildVetSpecializedBusinessIncome(self, firstType, addlType, firstLabel):
+        biTable = self.buildDataFrame("BP7_PetMobileServicesBusinessIncome")
+        firstRows = biTable.query('MobileBusinessIncomeType == @firstType'). \
+                rename(columns={'MobileBusinessIncomeCoverageLimit': 'Limits (BI)', 'MobileEquipmentCoverageRate': firstLabel,
+                                'MobileBusinessIncomeCoverageRate': firstLabel}). \
+                filter(items=['Limits (BI)', firstLabel])
+        addlRows = biTable.query('MobileBusinessIncomeType == @addlType'). \
+                rename(columns={'MobileBusinessIncomeCoverageLimit': 'Limits (BI)', 'MobileEquipmentCoverageRate': 'Each Additional',
+                                'MobileBusinessIncomeCoverageRate': 'Each Additional'}). \
+                filter(items=['Limits (BI)', 'Each Additional'])
+        merged = pd.merge(firstRows, addlRows, how='outer', on='Limits (BI)').sort_values(by='Limits (BI)')
+        for col in ('Limits (BI)', firstLabel, 'Each Additional'):
+            merged[col] = merged[col].apply(lambda x: "${0:,.0f}".format(x))
+        return merged
+
+    # Business Income (BI) per Customized Vehicle block of VSPL
+    def buildVetSpecializedBIVehicle(self):
+        return self._buildVetSpecializedBusinessIncome("1st Veterinarian Customized Vehicle",
+                                                       "Each Addl Veterinarian Customized Vehicle", "1st Vehicle")
+
+    # Business Income (BI) per Worker block of VSPL
+    def buildVetSpecializedBIWorker(self):
+        return self._buildVetSpecializedBusinessIncome("1st Veterinarian", "Each Addl Veterinarian", "1st Worker")
+
+    # Business Income (BI) per Customized Vehicle block of PSS (Pet Services)
+    def buildPSBusinessIncomeVehicle(self):
+        return self._buildVetSpecializedBusinessIncome("1st Pet Service Customized Vehicle",
+                                                       "Each Addl Pet Service Customized Vehicle", "1st Vehicle")
+
+    # Business Income (BI) per Worker block of PSS (Pet Services)
+    def buildPSBusinessIncomeWorker(self):
+        return self._buildVetSpecializedBusinessIncome("1st Pet Service Worker", "Each Addl Pet Service Worker", "1st Worker")
 
     # Builds the veterinarians professional liability table
     # Returns a dataframe
@@ -277,38 +352,77 @@ class Office:
                                                                franchiseUpgradeEndorsement['FranchiseUpgradeBase'])
         return franchiseUpgradeEndorsement.filter(items=['Rate or Premium', 'Per Building'])
 
-    # Builds the Architects and Engineers Specialized Endorsement table (flat
-    # premium, hardcoded in the root tool rather than pulled from the ratebook)
+    # Builds the Architects and Engineers Specialized Endorsement table (O
+    # Table 4.F). Pulled from the ratebook's
+    # "BP7_MiscellaneousSpecializedEndorsement_Charges" tab (same source as
+    # Retail's buildRTSplzdEndo), filtered to the "Architects and Engineers
+    # Specialized Endorsement" rows — every matching row (one per
+    # BuildingClassCode) carries the same EndorsementCharge, so the first is
+    # taken. Formatted as a string like its sibling flat-premium tables
+    # (CS/PFSS/ACS/ATS), since the shared "AES" layout has no number format.
     # Returns a dataframe
     def buildArchitectsEngineersEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": ["$200.00"]})
+        return self._buildFlatSpecializedEndorsement('Architects and Engineers Specialized Endorsement',
+                                                     header="Base premium for each Office premises")
 
-    # Builds the Consultants Specialized Endorsement table (flat premium)
+    # Builds a flat "Base Premium for each Office Premises" table from the
+    # ratebook's BP7_MiscellaneousSpecializedEndorsement_Charges tab, for the
+    # given SpecializedEndorsementName (see buildArchitectsEngineersEndorsement).
+    # Returns a dataframe
+    # header is the column header shown on the rate page — it differs per
+    # table (e.g. 4.G reads "Base premium for each risk premises").
+    def _buildFlatSpecializedEndorsement(self, endorsementName, header="Base Premium for each Office Premises"):
+        endorsementCharge = self.buildDataFrame("BP7_MiscellaneousSpecializedEndorsement_Charges")
+        rows = endorsementCharge[endorsementCharge['SpecializedEndorsementName'] == endorsementName]
+        charge = float(rows['EndorsementCharge'].iloc[0])
+        return pd.DataFrame({header: ["${0:,.2f}".format(charge)]})
+
+    # Builds the Consultants Specialized Endorsement table (O Table 4.G),
+    # pulled from the ratebook the same way as Table 4.F
     # Returns a dataframe
     def buildConsultantSpecializedEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": ["$200.00"]})
+        return self._buildFlatSpecializedEndorsement('Consultants Specialized Endorsement',
+                                                     header="Base premium for each risk premises")
 
-    # Builds the Professional Services Specialized Endorsement table (flat premium)
+    # Builds the Professional Services Specialized Endorsement table (O Table
+    # 4.H), pulled from the ratebook the same way as Table 4.F
     # Returns a dataframe
     def buildProfessionalServicesEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": ["$125.00"]})
+        return self._buildFlatSpecializedEndorsement('Professional Services Specialized Endorsement',
+                                                     header="Base premium for each Office premises")
 
-    # Builds the Accountants Specialized Endorsement table (flat premium)
+    # Builds the Accountants Specialized Endorsement table (O Table 4.I),
+    # pulled from the ratebook the same way as Table 4.F
     # Returns a dataframe
     def buildAccountantsSpecializedEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": ["$200.00"]})
+        return self._buildFlatSpecializedEndorsement('Accountants Specialized Endorsement',
+                                                     header="Base premium for each Office premises")
 
-    # Builds the Attorneys Specialized Endorsement table (flat premium)
+    # Builds the Attorneys Specialized Endorsement table (O Table 4.J),
+    # pulled from the ratebook the same way as Table 4.F
     # Returns a dataframe
     def buildAttorneySpecializedEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": ["$200.00"]})
+        return self._buildFlatSpecializedEndorsement('Attorneys Specialized Endorsement',
+                                                     header="Base premium for each Office premises")
 
-    # Builds the Health Care Specialized Endorsement table (flat premium plus
-    # a per-employee dishonesty-coverage surcharge line)
+    # Builds the Health Care Specialized Endorsement table (O Table 4.K): the
+    # base premium plus a per-employee dishonesty-coverage surcharge line.
+    # Pulled from the ratebook's "BP7_HealthCareSpecialized_Charge" tab —
+    # base premium from 1to5EmployeesCharge, surcharge from
+    # EachAddlEmployeeCharge. Every building class code carries the same
+    # charges, so the first row is taken — but the tab also has a leading
+    # placeholder row of 0/0 with no class code, so zero/blank rows are
+    # dropped first. The "above 5" threshold is fixed by the column name
+    # (1to5Employees), not a ratebook value.
     # Returns a dataframe
     def buildHealthCareSpecializedEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": [
-            "$300.00", "Plus $10 for each additional employee above 5\nfor employee dishonesty coverage",
+        charges = self.buildDataFrame("BP7_HealthCareSpecialized_Charge")
+        charges = charges[(charges['1to5EmployeesCharge'].fillna(0) > 0) & (charges['EachAddlEmployeeCharge'].fillna(0) > 0)]
+        baseCharge = float(charges['1to5EmployeesCharge'].iloc[0])
+        addlCharge = float(charges['EachAddlEmployeeCharge'].iloc[0])
+        return pd.DataFrame({"Base premium for each Office premises": [
+            "${0:,.2f}".format(baseCharge),
+            "Plus ${0:,.0f} for each additional employee above 5,\npolicy wide for Employee Dishonesty coverage".format(addlCharge),
         ]})
 
     # Builds the veterinarian specialized endorsement base premium table (the
@@ -389,17 +503,14 @@ class Office:
         return pd.DataFrame(data, columns=["Limits", "1st Worker", "Each Additional Worker"])
 
     # Builds the Pet Services Specialized Endorsement base premium table (the
-    # first block of the PSS sheet — see _formatPSSplzdEndo)
+    # first block of the PSS sheet — see _formatPSSplzdEndo), pulled from the
+    # ratebook's BP7_PetServicesSpecialized tab, a single-row Constant/Rate
+    # table (Constant == "Y").
     # Returns a dataframe
     def buildPetServicesSpecializedEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": ["$212.00"]})
-
-    # Builds the Pet Services - Business Income table (the second, appended
-    # block of the PSS sheet — see _formatPSSplzdEndo)
-    # Returns a dataframe
-    def buildPetServicesSpecializedEndorsementIncome(self):
-        data = [("$25,000", "$13", "$7"), ("$50,000", "$20", "$13"), ("$100,000", "$26", "$20")]
-        return pd.DataFrame(data, columns=["Limits", "1st Worker", "Each Additional Worker"])
+        pssRate = self.buildDataFrame("BP7_PetServicesSpecialized")
+        rate = pssRate.query('Constant == "Y"')['PetServicesSpecializedRate'].iloc[0]
+        return pd.DataFrame({"Base premium per policy": ["${0:,.2f}".format(float(rate))]})
 
     # Builds the table for Pet Services Professional Liability
     # Returns a dataframe
@@ -470,9 +581,31 @@ class Office:
                     cell.border = _THIN_BORDER
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
             max_col = max(max_col, n_cols)
-            row = header_row + len(df)
+            row = header_row + len(df) + 1  # next empty row, so the following block gets its blank separator
         for col in range(1, max_col + 1):
             ws.column_dimensions[get_column_letter(col)].bestFit = True
+
+    # Builds the whole VSPL sheet (O Table 4.C.4.A) from scratch —
+    # generateWorksheet is called with an EMPTY dataframe (just the title in
+    # A1), same pattern as VPL/MPVS: Household / Non Household Pet rates per
+    # veterinarian, a plain note, then Mobile Equipment and the
+    # two Business Income blocks, all driven by the ratebook.
+    def _formatVSPL(self, ws, boldFont, font):
+        self._appendLabeledBlocks(ws, boldFont, font, [
+            ("Rate per Veterinarian - Household Pet", self.buildVetSpecializedLiabHousehold()),
+            ("Rate per Veterinarian - Non Household Pet", self.buildVetSpecializedLiabNonHousehold()),
+        ])
+        noteRow = ws.max_row + 2
+        ws.cell(row=noteRow, column=1, value="This coverage does not charge on the basis of per employee, but veterinarians only").font = font
+        self._appendLabeledBlocks(ws, boldFont, font, [
+            ("Mobile Equipment", self.buildVetSpecializedMobileEquip()),
+            ("Business Income (BI) per Customized Vehicle", self.buildVetSpecializedBIVehicle()),
+            ("Business Income (BI) per Worker", self.buildVetSpecializedBIWorker()),
+        ], blank_before_first=True)
+        # Wide enough for "2,000,000/6,000,000" and "Each Additional"
+        ws.column_dimensions['A'].width = 160 / 7.0
+        ws.column_dimensions['B'].width = 120 / 7.0
+        ws.column_dimensions['C'].width = 120 / 7.0
 
     # Appends the Veterinarian Services - Business Income table below the
     # base premium table on the same sheet (widened to span columns A-C via
@@ -518,13 +651,18 @@ class Office:
         ]
         self._appendLabeledBlocks(ws, boldFont, font, blocks)
 
-    # Appends the Pet Services - Business Income table below the base
+    # Appends the Mobile Equipment, Business Income (BI) per Customized
+    # Vehicle, and Business Income (BI) per Worker tables below the base
     # premium table on the same sheet (widened to span columns A-C, same
-    # merge/shape as VS's above and Retail/Service's PSS).
+    # merge/shape as Service's PSS, S Table 4.F), all driven by the ratebook.
     def _formatPSSplzdEndo(self, ws, boldFont, font):
         ws.merge_cells('A3:C3')
         ws.merge_cells('A4:C4')
-        blocks = [("Pet Services - Business Income", self.buildPetServicesSpecializedEndorsementIncome())]
+        blocks = [
+            ("Mobile Equipment", self.buildPSMobileEquipment()),
+            ("Business Income (BI) per Customized Vehicle", self.buildPSBusinessIncomeVehicle()),
+            ("Business Income (BI) per Worker", self.buildPSBusinessIncomeWorker()),
+        ]
         self._appendLabeledBlocks(ws, boldFont, font, blocks, blank_before_first=True)
 
     # Sets up the Office Excel file and creates a separate worksheet for
@@ -562,7 +700,8 @@ class Office:
             ('DONM', 'O Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, None, None),
             ('ERP', 'O Table 4.A.3. Directors and Officers Liability Insurance - Extended Reporting Periods', self.buildDirsOfficersReportingPeriods, False, True, None, None),
             ('OPTO', 'O Table 4.B.5.a. Optometrists Professional Liability', self.buildOptometristsProfessionalLiab, False, True, None, None),
-            ('VSPL', 'O Table 4.C.4.A. Veterinarian Specialized Endorsement With Professional Liability', self.buildVetSpecializedLiab, False, True, 'PSS', None),
+            ('VSPL', 'O Table 4.C.4.A. Veterinarian Specialized Endorsement With Professional Liability', lambda: pd.DataFrame(), False, False, None,
+             lambda ws: self._formatVSPL(ws, Office.fontBold, Office.font)),
             ('VET', 'O Table 4.C.5.a. Veterinarians Professional Liability', self.buildVetProfessionalLiab, False, True, None, None),
             ('PLUS', 'O Table 4.D. Office PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
             ('FR', 'O Table 4.E. Franchise Upgrade Endorsement', self.buildFranchiseUpgradeEndorsement, False, True, None, None),

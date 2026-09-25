@@ -295,62 +295,101 @@ class Service:
                                                                franchiseUpgradeEndorsement['FranchiseUpgradeBase'])
         return franchiseUpgradeEndorsement.filter(items=['Rate or Premium', 'Per Building'])
 
-    # Builds the Repair Services Specialized Endorsement table (flat premium,
-    # hardcoded in the root tool rather than pulled from the ratebook)
+    # Builds the Repair Services Specialized Endorsement table (S Table 4.E).
+    # Pulled from the ratebook's
+    # "BP7_MiscellaneousSpecializedEndorsement_Charges" tab (same source and
+    # approach as Office's Tables 4.F-4.J), filtered to the "Repair Services
+    # Specialized Endorsement" rows — every matching row (one per
+    # BuildingClassCode) carries the same EndorsementCharge, so the first is
+    # taken.
     # Returns a dataframe
     def buildRepairSpecializedEndorsement(self):
-        return pd.DataFrame({"Base premium for each Service premises": ["$300.00"]})
+        endorsementCharge = self.buildDataFrame("BP7_MiscellaneousSpecializedEndorsement_Charges")
+        rows = endorsementCharge[endorsementCharge['SpecializedEndorsementName'] == 'Repair Services Specialized Endorsement']
+        charge = float(rows['EndorsementCharge'].iloc[0])
+        return pd.DataFrame({"Base premium for each Service premises": ["${0:,.2f}".format(charge)]})
 
-    # Builds the table for Pet Services Specialized Endorsement (base premium,
-    # also hardcoded in the root tool)
+    # Builds the table for Pet Services Specialized Endorsement (base premium)
+    # — pulled from the ratebook's BP7_PetServicesSpecialized tab, a
+    # single-row Constant/Rate table (Constant == "Y").
     # Returns a dataframe
     def buildPetSpecializedEndorsement(self):
-        return pd.DataFrame({"Base premium for each Service premises": ["$212.00"]})
+        pssRate = self.buildDataFrame("BP7_PetServicesSpecialized")
+        rate = pssRate.query('Constant == "Y"')['PetServicesSpecializedRate'].iloc[0]
+        return pd.DataFrame({"Base premium per policy": ["${0:,.2f}".format(float(rate))]})
 
-    # Builds the Pet Services - Business Income table (the second, appended
-    # block of the PSS sheet — see _formatPSSplzdEndo)
+    # Builds a Mobile Equipment block from the ratebook's
+    # BP7_PetMobileServicesPetEquipment tab, filtered to the given
+    # PetServicesType ("Pet Services" or "Veterinarian" — the tab carries
+    # both). Shared by the PSS (4.F) and MPVS (4.H) sheets.
     # Returns a dataframe
-    def buildServiceBusinessIncome(self):
-        data = [("$25,000", "$13", "$7"), ("$50,000", "$20", "$13"), ("$100,000", "$26", "$20")]
-        return pd.DataFrame(data, columns=["Limit", "1st Worker", "Each Addl"])
+    def _buildMobileEquipment(self, petServicesType):
+        mobileEquip = self.buildDataFrame("BP7_PetMobileServicesPetEquipment")
+        filtered = mobileEquip.query('PetServicesType == @petServicesType').sort_values(by='MobileEquipmentCoverageLimit')
+        filtered = filtered.rename(columns={'MobileEquipmentCoverageLimit': 'Limits', 'MobileEquipmentCoverageRate': 'Rate'}). \
+                filter(items=['Limits', 'Rate'])
+        filtered['Limits'] = filtered['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        filtered['Rate'] = filtered['Rate'].apply(lambda x: "${0:,.0f}".format(x))
+        return filtered
 
-    # Builds the table for Pet Services Professional Liability
+    # Mobile Equipment block for Pet Services (PSS / MPVS)
+    def buildPSMobileEquipment(self):
+        return self._buildMobileEquipment("Pet Services")
+
+    # Mobile Equipment block for Veterinarian Services (MPVS)
+    def buildVetMobileEquipment(self):
+        return self._buildMobileEquipment("Veterinarian")
+
+    # Builds a Business Income (BI) block of the PSS sheet from the
+    # ratebook's BP7_PetMobileServicesBusinessIncome tab, pivoting the
+    # "1st ..." and "Each Addl ..." MobileBusinessIncomeType rows for the
+    # given exposure (Customized Vehicle or Worker) into one Limits (BI) /
+    # 1st .../Each Additional table. Shared by the Pet Services and
+    # Veterinarian Vehicle/Worker builders below.
+    # Returns a dataframe
+    def _buildPSBusinessIncome(self, firstType, addlType, firstLabel):
+        biTable = self.buildDataFrame("BP7_PetMobileServicesBusinessIncome")
+        firstRows = biTable.query('MobileBusinessIncomeType == @firstType'). \
+                rename(columns={'MobileBusinessIncomeCoverageLimit': 'Limits (BI)', 'MobileBusinessIncomeCoverageRate': firstLabel}). \
+                filter(items=['Limits (BI)', firstLabel])
+        addlRows = biTable.query('MobileBusinessIncomeType == @addlType'). \
+                rename(columns={'MobileBusinessIncomeCoverageLimit': 'Limits (BI)', 'MobileBusinessIncomeCoverageRate': 'Each Additional'}). \
+                filter(items=['Limits (BI)', 'Each Additional'])
+        merged = pd.merge(firstRows, addlRows, how='outer', on='Limits (BI)').sort_values(by='Limits (BI)')
+        for col in ('Limits (BI)', firstLabel, 'Each Additional'):
+            merged[col] = merged[col].apply(lambda x: "${0:,.0f}".format(x))
+        return merged
+
+    # Business Income (BI) per Customized Vehicle block of the PSS sheet
+    def buildPSBusinessIncomeVehicle(self):
+        return self._buildPSBusinessIncome("1st Pet Service Customized Vehicle", "Each Addl Pet Service Customized Vehicle", "1st Vehicle")
+
+    # Business Income (BI) per Worker block of the PSS sheet
+    def buildPSBusinessIncomeWorker(self):
+        return self._buildPSBusinessIncome("1st Pet Service Worker", "Each Addl Pet Service Worker", "1st Worker")
+
+    # Business Income (BI) per Customized Vehicle block for Veterinarian
+    # Services (MPVS)
+    def buildVetBusinessIncomeVehicle(self):
+        return self._buildPSBusinessIncome("1st Veterinarian Customized Vehicle", "Each Addl Veterinarian Customized Vehicle", "1st Vehicle")
+
+    # Business Income (BI) per Worker block for Veterinarian Services (MPVS)
+    def buildVetBusinessIncomeWorker(self):
+        return self._buildPSBusinessIncome("1st Veterinarian", "Each Addl Veterinarian", "1st Worker")
+
+    # Builds the table for Pet Services Professional Liability — pulled from
+    # the ratebook's BP7_PetServicesProfessionalLiability tab. The rate page
+    # only shows the occurrence half of PerOccurrenceAggregateLimitCode (e.g.
+    # "300000/900000" -> $300,000), sorted numerically (the ratebook rows
+    # are in text order).
     # Returns a dataframe
     def buildPetServicePL(self):
-        return pd.DataFrame({
-            "Limits": ["$300,000", "$500,000", "$1,000,000", "$2,000,000"],
-            "Rate": ["$43", "$56", "$68", "$83"],
-        })
-
-    # Builds the Pet Services block of the Mobile Pet and Veterinarian
-    # Services Endorsement sheet (MPVS) — Returns a dataframe
-    def buildPetServices(self):
-        data = [("$15,000", "$49"), ("$25,000", "$85"), ("$50,000", "$166"), ("$100,000", "$220")]
-        return pd.DataFrame(data, columns=["Limit", "Mobile Equipment"])
-
-    # Builds the Pet Services per Customized Vehicle block of MPVS
-    # Returns a dataframe
-    def buildPetServicesCustomized(self):
-        data = [("$25,000", "$91", "$46"), ("$50,000", "$104", "$59"), ("$100,000", "$117", "$71")]
-        return pd.DataFrame(data, columns=["Limit", "1st Vehicle", "Each Addl"])
-
-    # Builds the Veterinarian block of MPVS
-    # Returns a dataframe
-    def buildVet(self):
-        data = [("$15,000", "$122"), ("$25,000", "$211"), ("$50,000", "$414"), ("$100,000", "$549")]
-        return pd.DataFrame(data, columns=["Limits", "Mobile Equipment"])
-
-    # Builds the Veterinarian Services per Customized Vehicle block of MPVS
-    # Returns a dataframe
-    def buildVetCustom(self):
-        data = [("$25,000", "$227", "$113"), ("$50,000", "$260", "$146"), ("$100,000", "$293", "$179")]
-        return pd.DataFrame(data, columns=["Limits", "1st Vehicle", "Each Addl"])
-
-    # Builds the Veterinarian Services - Business Income block of MPVS
-    # Returns a dataframe
-    def buildVetBusinessIncome(self):
-        data = [("$25,000", "$32", "$17"), ("$50,000", "$49", "$32"), ("$100,000", "$65", "$49")]
-        return pd.DataFrame(data, columns=["Limit", "1st Worker", "Each Addl"])
+        psProfLiab = self.buildDataFrame("BP7_PetServicesProfessionalLiability").copy()
+        psProfLiab['Limits'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
+        psProfLiab = psProfLiab.sort_values(by='Limits').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
+        psProfLiab['Limits'] = psProfLiab['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        psProfLiab['Rate'] = psProfLiab['Rate'].apply(lambda x: "${0:,.0f}".format(x))
+        return psProfLiab.filter(items=['Limits', 'Rate'])
 
     # Merges the "Number of Units" column of the D&O table into its 2 bands
     # ("Under 51" / "51 or More" — Service only has 2, unlike Hab's 5).
@@ -383,7 +422,7 @@ class Service:
         ws.merge_cells('A4:C4')
 
     # Appends a series of (label, dataframe) blocks below ws's current
-    # content, each as a bolded section label row + bolded, bordered
+    # content, each as a bolded (unboxed) section label row + bolded, bordered
     # column-header row + bordered plain data rows, with one blank separator
     # row between blocks (and, if blank_before_first, before the first block
     # too — used by _formatPSSplzdEndo to separate the first block from the
@@ -415,18 +454,18 @@ class Service:
             label_row = row
             header_row = label_row + 1
             n_cols = len(df.columns)
-            ws.cell(row=label_row, column=1, value=label)
+            label_cell = ws.cell(row=label_row, column=1, value=label)
+            label_cell.font = boldFont
             for col, name in enumerate(df.columns, start=1):
                 ws.cell(row=header_row, column=col, value=name)
             for r_off, (_, data_row) in enumerate(df.iterrows()):
                 for col, val in enumerate(data_row, start=1):
                     ws.cell(row=header_row + 1 + r_off, column=col, value=val)
-            for r in (label_row, header_row):
-                for col in range(1, n_cols + 1):
-                    cell = ws.cell(row=r, column=col)
-                    cell.font = boldFont
-                    cell.border = _THIN_BORDER
-                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+            for col in range(1, n_cols + 1):
+                cell = ws.cell(row=header_row, column=col)
+                cell.font = boldFont
+                cell.border = _THIN_BORDER
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
             for r_off in range(len(df)):
                 for col in range(1, n_cols + 1):
                     cell = ws.cell(row=header_row + 1 + r_off, column=col)
@@ -434,69 +473,48 @@ class Service:
                     cell.border = _THIN_BORDER
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
             max_col = max(max_col, n_cols)
-            row = header_row + len(df)
+            row = header_row + len(df) + 1  # next empty row, so the following block gets its blank separator
         for col in range(1, max_col + 1):
             ws.column_dimensions[get_column_letter(col)].bestFit = True
 
     # Appends the Mobile Equipment, Business Income (BI) per Customized
     # Vehicle, and Business Income (BI) per Worker tables below the base
     # premium table on the same sheet (widened to span columns A-C, same
-    # merge as _formatRepairSpecializedEndorsement) — feedback fix: the PSS
-    # sheet was previously only appending the per-Worker table (mislabeled
-    # "Pet Services - Business Income", with "Limit"/"Each Addl" headers
-    # instead of "Limits (BI)"/"Each Additional"), dropping the Mobile
-    # Equipment and per-Customized-Vehicle tables entirely. The underlying
-    # data for those two matches buildPetServices()/buildPetServicesCustomized
-    # (the same MPVS/S Table 4.H blocks) exactly, just under PSS-specific
-    # column headers, so those are reused here rather than duplicated.
+    # merge as _formatRepairSpecializedEndorsement). All three blocks are
+    # driven by live ratebook data (buildPSMobileEquipment /
+    # buildPSBusinessIncomeVehicle / buildPSBusinessIncomeWorker), same as
+    # Retail's Table 4.E.
     def _formatPSSplzdEndo(self, ws, boldFont, font):
         ws.merge_cells('A3:C3')
         ws.merge_cells('A4:C4')
-        mobileDf = self.buildPetServices().rename(columns={"Limit": "Limits", "Mobile Equipment": "Rate"})
-        vehicleDf = self.buildPetServicesCustomized().rename(columns={"Limit": "Limits (BI)", "Each Addl": "Each Additional"})
-        workerDf = self.buildServiceBusinessIncome().rename(columns={"Limit": "Limits (BI)", "Each Addl": "Each Additional"})
         blocks = [
-            ("Mobile Equipment", mobileDf),
-            ("Business Income (BI) per Customized Vehicle", vehicleDf),
-            ("Business Income (BI) per Worker", workerDf),
+            ("Mobile Equipment", self.buildPSMobileEquipment()),
+            ("Business Income (BI) per Customized Vehicle", self.buildPSBusinessIncomeVehicle()),
+            ("Business Income (BI) per Worker", self.buildPSBusinessIncomeWorker()),
         ]
         self._appendLabeledBlocks(ws, boldFont, font, blocks, blank_before_first=True)
 
-    # Mobile Pet and Veterinarian Services Endorsement (MPVS) — a SIX-table
-    # sheet, the largest reconstruction of this kind in the BOP module.
+    # Mobile Pet and Veterinarian Services Endorsement (MPVS, S Table 4.H) —
     # generateWorksheet is called with an EMPTY dataframe for this table code
     # (just the title in A1), and this method builds the entire body from
-    # row 3 down: 6 blocks, each a bolded section label + bolded column
-    # header + plain data rows, separated by one blank row.
-    #
-    # The exact row positions below (label rows 3/10/16/22/29/35, blank
-    # separator rows 9/15/21/28/34) were derived by simulating the root
-    # tool's formatMPVS(), which inserts blank rows at those literal numbers
-    # (each insert_rows() shifts everything below it down by one, so by the
-    # time the 4th/5th/6th calls run they land past where their literal
-    # argument alone would suggest) into a sheet where all 6 tables had
-    # already been written back-to-back with no gaps by the (not present in
-    # this repo) generateWorksheet6tables. Reconstructing forward from row 3
-    # with one blank row between each block reproduces those exact same
-    # positions — see [[bop_retail_port]]'s _formatPSSplzdEndo for the same
-    # "no real ratebook to test against" caveat; this one is unverified
-    # against a real reference even more than that one was, given its size,
-    # so flag to the user to check the actual PDF output for S Table 4.H.
-    # the first time real data is available. Column widths (A-C) are now set
-    # via bestFit in _appendLabeledBlocks, rather than left at Excel's
-    # default — the root tool only ever set A and B explicitly, but that gap
-    # (and the missing data-row borders) was confirmed as a real formatting
-    # bug against a live ratebook rather than fidelity to keep.
+    # scratch: a "Pet Services" heading and a "Veterinarian Services" heading,
+    # each followed by the same three tables shown on the PSS sheet (S Table
+    # 4.F) — Mobile Equipment, BI per Customized Vehicle, BI per Worker — all
+    # driven by the ratebook (BP7_PetMobileServicesPetEquipment /
+    # BP7_PetMobileServicesBusinessIncome), filtered to Pet Services or
+    # Veterinarian. Office's Table 4.L.3 carries the Veterinarian half of this
+    # content.
     def _formatMPVS(self, ws, boldFont, font):
-        blocks = [
-            ("Pet Services", self.buildPetServices()),
-            ("Pet Services per Customized Vehicle", self.buildPetServicesCustomized()),
-            ("Pet Services - Business Income", self.buildServiceBusinessIncome()),
-            ("Veterinarian", self.buildVet()),
-            ("Veterinarian Services per Customized Vehicle", self.buildVetCustom()),
-            ("Veterinarian Services - Business Income", self.buildVetBusinessIncome()),
-        ]
-        self._appendLabeledBlocks(ws, boldFont, font, blocks)
+        for i, (heading, mobile, vehicle, worker) in enumerate((
+                ("Pet Services", self.buildPSMobileEquipment(), self.buildPSBusinessIncomeVehicle(), self.buildPSBusinessIncomeWorker()),
+                ("Veterinarian Services", self.buildVetMobileEquipment(), self.buildVetBusinessIncomeVehicle(), self.buildVetBusinessIncomeWorker()))):
+            # extra gap above the second heading, matching the rate page
+            ws.cell(row=ws.max_row + (2 if i else 1), column=1, value=heading).font = boldFont
+            self._appendLabeledBlocks(ws, boldFont, font, [
+                ("Mobile Equipment", mobile),
+                ("Business Income (BI) per Customized Vehicle", vehicle),
+                ("Business Income (BI) per Worker", worker),
+            ], blank_before_first=True)
 
     # Sets up the Service Excel file and creates a separate worksheet for
     # each of the given dataframes. progress_callback (optional) is called

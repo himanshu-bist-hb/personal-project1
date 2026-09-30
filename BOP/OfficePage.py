@@ -241,8 +241,8 @@ class Office:
     # "300,000/900,000" — no "$", matching the rate page), sorted by the
     # occurrence half numerically.
     # Returns a dataframe
-    def _buildVetSpecializedLiabByPet(self, petType):
-        vetLiab = self.buildDataFrame("BP7_VeterinarianSpecializedProfessional")
+    def _buildVetSpecializedLiabByPet(self, petType, tab="BP7_VeterinarianSpecializedProfessional"):
+        vetLiab = self.buildDataFrame(tab)
         filtered = vetLiab.query('PetType == @petType').copy()
         filtered['_occ'] = filtered['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
         filtered = filtered.sort_values(by='_occ')
@@ -426,45 +426,23 @@ class Office:
         ]})
 
     # Builds the veterinarian specialized endorsement base premium table (the
-    # first, single-value block of the VS sheet — see _formatVS)
+    # first, single-value block of the VS sheet — see _formatVS) from the
+    # ratebook's BP7_VeterinarianSpecialized tab
+    # (VeterinarianSpecializedBaseChargeWithoutProfLiabRate, Constant == "Y")
     # Returns a dataframe
     def buildVeterinarianSpecializedEndorsement(self):
-        return pd.DataFrame({"Base Premium for each Office Premises": ["$269.00"]})
+        vsRate = self.buildDataFrame("BP7_VeterinarianSpecialized")
+        rate = vsRate.query('Constant == "Y"')['VeterinarianSpecializedBaseChargeWithoutProfLiabRate'].iloc[0]
+        return pd.DataFrame({"Base premium per policy": ["${0:,.2f}".format(float(rate))]})
 
-    # Builds the veterinarian specialized endorsement business income table
-    # (the second, appended block of the VS sheet — see _formatVS)
-    # Returns a dataframe
-    def buildVeterinarianSpecializedEndorsementIncome(self):
-        data = [
-            ("$25,000", "$32", "$17"),
-            ("$50,000", "$49", "$32"),
-            ("$100,000", "$65", "$49"),
-        ]
-        return pd.DataFrame(data, columns=["Limits", "1st Worker", "Each Additional Worker"])
-
-    # Builds the household-pet veterinarian rate table (the first block of
-    # the VPL sheet — see _formatVPL)
-    # Returns a dataframe
+    # Household / Non Household Pet blocks of the VPL sheet (O Table 4.M.4),
+    # from the ratebook's BP7_VeterinarianProfessionalLiability tab (same
+    # columns as the VSPL tab)
     def buildVetProfLiabHousehold(self):
-        data = [
-            ("300,000/600,000", "$60"),
-            ("500,000/1,000,000", "$69"),
-            ("1,000,000/2,000,000", "$86"),
-            ("2,000,000/4,000,000", "$175"),
-        ]
-        return pd.DataFrame(data, columns=["Limits", "Rate"])
+        return self._buildVetSpecializedLiabByPet("HouseholdPet", "BP7_VeterinarianProfessionalLiability")
 
-    # Builds the non-household-pet veterinarian rate table (the second block
-    # of the VPL sheet — see _formatVPL)
-    # Returns a dataframe
     def buildVetProfLiabNonHousehold(self):
-        data = [
-            ("300,000/600,000", "$105"),
-            ("500,000/1,000,000", "$118"),
-            ("1,000,000/2,000,000", "$135"),
-            ("2,000,000/4,000,000", "$225"),
-        ]
-        return pd.DataFrame(data, columns=["Limits", "Rate"])
+        return self._buildVetSpecializedLiabByPet("OtherThanHouseholdPet", "BP7_VeterinarianProfessionalLiability")
 
     # Builds the Pet Services block of the Mobile Pet and Veterinarian
     # Services Endorsement sheet (MPVS) — Returns a dataframe
@@ -512,16 +490,19 @@ class Office:
         rate = pssRate.query('Constant == "Y"')['PetServicesSpecializedRate'].iloc[0]
         return pd.DataFrame({"Base premium per policy": ["${0:,.2f}".format(float(rate))]})
 
-    # Builds the table for Pet Services Professional Liability
+    # Builds the table for Pet Services Professional Liability from the
+    # ratebook's BP7_PetServicesProfessionalLiability tab — same as Service's
+    # 4.G: the rate page only shows the occurrence half of
+    # PerOccurrenceAggregateLimitCode (e.g. "300000/900000" -> $300,000),
+    # sorted numerically (the ratebook rows are in text order).
     # Returns a dataframe
     def buildPetServicesProfLiab(self):
-        data = [
-            ("300,000/600,000", "$43"),
-            ("500,000/1,000,000", "$56"),
-            ("1,000,000/2,000,000", "$68"),
-            ("2,000,000/4,000,000", "$83"),
-        ]
-        return pd.DataFrame(data, columns=["Limits", "Rate"])
+        psProfLiab = self.buildDataFrame("BP7_PetServicesProfessionalLiability").copy()
+        psProfLiab['Limits'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
+        psProfLiab = psProfLiab.sort_values(by='Limits').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
+        psProfLiab['Limits'] = psProfLiab['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        psProfLiab['Rate'] = psProfLiab['Rate'].apply(lambda x: "${0:,.0f}".format(x))
+        return psProfLiab.filter(items=['Limits', 'Rate'])
 
     # Merges the "Number of Units" column of the D&O table into its 2 bands
     # ("Under 51" / "51 or More" — Office only has 2, unlike Hab's 5).
@@ -614,7 +595,11 @@ class Office:
     def _formatVS(self, ws, boldFont, font):
         ws.merge_cells('A3:C3')
         ws.merge_cells('A4:C4')
-        blocks = [("Veterinarian Services - Business Income", self.buildVeterinarianSpecializedEndorsementIncome())]
+        blocks = [
+            ("Mobile Equipment", self.buildVetSpecializedMobileEquip()),
+            ("Business Income (BI) per Customized Vehicle", self.buildVetSpecializedBIVehicle()),
+            ("Business Income (BI) per Worker", self.buildVetSpecializedBIWorker()),
+        ]
         self._appendLabeledBlocks(ws, boldFont, font, blocks, blank_before_first=True)
 
     # Builds the two-table Veterinarian Professional Liability - Household /
@@ -627,6 +612,8 @@ class Office:
             ("Rate per Veterinarian - Non Household Pet", self.buildVetProfLiabNonHousehold()),
         ]
         self._appendLabeledBlocks(ws, boldFont, font, blocks)
+        noteRow = ws.max_row + 2
+        ws.cell(row=noteRow, column=1, value="This coverage does not charge on the basis of per employee, but veterinarians only").font = font
 
     # Mobile Pet and Veterinarian Services Endorsement (MPVS) — a SIX-table
     # sheet, content-identical to Service's own MPVS (same Pet Services /
@@ -669,11 +656,12 @@ class Office:
     # each of the given dataframes. progress_callback (optional) is called
     # with a short message before each sheet is built.
     # Returns the Excel workbook
-    def buildOfficePage(self, progress_callback=None):
-        companies = [c for c in self.rateTables.keys() if c != 'CW']
-
-        Office = ExcelSettingsBOP.Excel(state=self.state, programName='Office', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
-
+    # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
+    # Extracted from buildOfficePage so OfficePageAppetite can override it to
+    # insert Appetite-only sheets — same pattern as HabPage. Takes the Excel
+    # instance because several postFormat hooks (VSPL/VS/VPL/MPVS/PSS) close
+    # over its fonts.
+    def _sheetSpecs(self, Office):
         sheetSpecs = []
         # A company can be present in rateTables (its ratebook was uploaded)
         # without having filed its own base-rate tables — a deviation
@@ -713,14 +701,22 @@ class Office:
             ('HCS', 'O Table 4.K. Health Care Specialized Endorsement', self.buildHealthCareSpecializedEndorsement, False, True, 'AES', None),
             ('VS', 'O Table 4.L.3. Veterinarian Specialized Endorsement', self.buildVeterinarianSpecializedEndorsement, False, True, 'PSS',
              lambda ws: self._formatVS(ws, Office.fontBold, Office.font)),
-            ('VPL', 'O Table 4.M. Veterinarian Professional Liability', lambda: pd.DataFrame(), False, False, None,
+            ('VPL', 'O Table 4.M.4. Veterinarian Professional Liability', lambda: pd.DataFrame(), False, False, None,
              lambda ws: self._formatVPL(ws, Office.fontBold, Office.font)),
             ('MPVS', 'O Table 4.N. Mobile Pet and Veterinarian Services Endorsement', lambda: pd.DataFrame(), False, False, None,
              lambda ws: self._formatMPVS(ws, Office.fontBold, Office.font)),
             ('PSS', 'O Table 4.O. Pet Services Specialized Endorsement', self.buildPetServicesSpecializedEndorsement, False, True, None,
              lambda ws: self._formatPSSplzdEndo(ws, Office.fontBold, Office.font)),
-            ('PSPL', 'O Table 4.P. Pet Services Professional Liability', self.buildPetServicesProfLiab, False, True, 'PSPL_OFFICE', None),
+            ('PSPL', 'O Table 4.P. Pet Services Professional Liability', self.buildPetServicesProfLiab, False, True, None, lambda ws: ws.insert_rows(3)),
         ]
+        return sheetSpecs
+
+    def buildOfficePage(self, progress_callback=None):
+        companies = [c for c in self.rateTables.keys() if c != 'CW']
+
+        Office = ExcelSettingsBOP.Excel(state=self.state, programName='Office', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
+        sheetSpecs = self._sheetSpecs(Office)
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):

@@ -30,14 +30,18 @@ from . import AutoServicePage
 from . import AutoServicePageCurrent
 from . import RetailPage
 from . import RetailPageCurrent
+from . import RetailPageAppetite
 from . import ServicePage
 from . import ServicePageCurrent
+from . import ServicePageAppetite
 from . import OfficePage
 from . import OfficePageCurrent
+from . import OfficePageAppetite
 from . import WholesalePage
 from . import WholesalePageCurrent
 from . import FoodServicePage
 from . import FoodServicePageCurrent
+from . import FoodServicePageAppetite
 from . import OptionalCoveragesPage
 from . import RatingPlansPage
 from . import ClassModifierPage
@@ -68,6 +72,15 @@ VALID_VERSIONS = ("2.0", "pre2.0", "Default")
 # to the plain base-version class when `appetite=True` — see _version_cls().
 APPETITE_CLASSES = {
     ("Hab", "2.0"): HabPageAppetite.Hab,
+    ("Hab", "pre2.0"): HabPageAppetite.HabCurrent,
+    ("Retail", "2.0"): RetailPageAppetite.Retail,
+    ("Retail", "pre2.0"): RetailPageAppetite.RetailCurrent,
+    ("Service", "2.0"): ServicePageAppetite.Service,
+    ("Service", "pre2.0"): ServicePageAppetite.ServiceCurrent,
+    ("Office", "2.0"): OfficePageAppetite.Office,
+    ("Office", "pre2.0"): OfficePageAppetite.OfficeCurrent,
+    ("Food Service", "2.0"): FoodServicePageAppetite.Food,
+    ("Food Service", "pre2.0"): FoodServicePageAppetite.FoodCurrent,
 }
 
 
@@ -350,10 +363,13 @@ def run(
             )
             bop_workbook = rate_pages_obj.buildFoodPage(progress_callback=cb)
         elif prog == "Optional Coverages":
-            # No version split — same class regardless of `version`.
+            # No version split — same class regardless of `version`. Appetite
+            # here just gates which of the class's own tables get built (see
+            # OptionalCoverages._APPETITE_ONLY_CODES), not a subclass swap.
             rate_pages_obj = OptionalCoveragesPage.OptionalCoverages(
                 info.state_abb, rate_tables, cfg.class_codes,
                 info.n_effective, info.r_effective, eq_territory_defs,
+                appetite=appetite,
             )
             bop_workbook = rate_pages_obj.buildOptionalCoveragesPage(progress_callback=cb)
         elif prog == "Rating Plans":

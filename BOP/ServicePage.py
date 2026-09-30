@@ -520,11 +520,12 @@ class Service:
     # each of the given dataframes. progress_callback (optional) is called
     # with a short message before each sheet is built.
     # Returns the Excel workbook
-    def buildServicePage(self, progress_callback=None):
-        companies = [c for c in self.rateTables.keys() if c != 'CW']
-
-        Service = ExcelSettingsBOP.Excel(state=self.state, programName='Service', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
-
+    # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
+    # Extracted from buildServicePage so ServicePageAppetite can override it
+    # to insert/replace Appetite-only sheets — same pattern as HabPage. Takes
+    # the Excel instance because a couple of postFormat hooks (PSS/MPVS)
+    # close over its fonts.
+    def _sheetSpecs(self, Service):
         sheetSpecs = [
             ('DC', 'S Table 1.A.5.c. Dry Cleaners EXTRA Factor', self.buildDryCleanersFactor, False, True, None, self._formatDryCleanersFactor),
             ('DCEQ', 'S Table 1.A.5.d. Dry Cleaners EXTRA Earthquake Factor', self.buildDryCleanersEQFactor, False, True, None, None),
@@ -565,6 +566,14 @@ class Service:
             ('MPVS', 'S Table 4.H. Mobile Pet and Veterinarian Services Endorsement', lambda: pd.DataFrame(), False, False, None,
              lambda ws: self._formatMPVS(ws, Service.fontBold, Service.font)),
         ]
+        return sheetSpecs
+
+    def buildServicePage(self, progress_callback=None):
+        companies = [c for c in self.rateTables.keys() if c != 'CW']
+
+        Service = ExcelSettingsBOP.Excel(state=self.state, programName='Service', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
+        sheetSpecs = self._sheetSpecs(Service)
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):

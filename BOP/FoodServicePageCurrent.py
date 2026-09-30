@@ -242,11 +242,10 @@ class Food:
     # each of the given dataframes. progress_callback (optional) is called
     # with a short message before each sheet is built.
     # Returns the Excel workbook
-    def buildFoodPage(self, progress_callback=None):
-        companies = [c for c in self.rateTables.keys() if c != 'CW']
-
-        FoodService = ExcelSettingsBOP.Excel(state=self.state, programName='Food Service', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
-
+    # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
+    # Extracted from buildFoodPage so FoodServicePageAppetite can override it
+    # to insert/replace Appetite-only sheets — same pattern as HabPage.
+    def _sheetSpecs(self):
         sheetSpecs = []
         # A company can be present in rateTables (its ratebook was uploaded)
         # without having filed its own base-rate tables — a deviation
@@ -278,6 +277,14 @@ class Food:
             ('VAL', 'FS Table 4.B. Off Premises Valet Parking', self.buildValetParking, False, True, None, None),
             ('FR', 'FS Table 4.C. Franchise Upgrade Endorsement', self.buildFranchiseUpgradeEndorsement, False, True, None, None),
         ]
+        return sheetSpecs
+
+    def buildFoodPage(self, progress_callback=None):
+        companies = [c for c in self.rateTables.keys() if c != 'CW']
+
+        FoodService = ExcelSettingsBOP.Excel(state=self.state, programName='Food Service', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
+        sheetSpecs = self._sheetSpecs()
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):

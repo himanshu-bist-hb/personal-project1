@@ -226,11 +226,10 @@ class Hab:
     # the given dataframes. progress_callback (optional) is called with a
     # short message before each sheet is built.
     # Returns the Excel workbook
-    def buildHabPage(self, progress_callback=None):
-        companies = [c for c in self.rateTables.keys() if c != 'CW']
-
-        Hab = ExcelSettingsBOP.Excel(state=self.state, programName='Habitational', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
-
+    # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
+    # Extracted from buildHabPage so HabPageAppetite can override it to
+    # insert/replace Appetite-only sheets — same pattern as HabPage (BP-2.0).
+    def _sheetSpecs(self):
         sheetSpecs = []
         # A company can be present in rateTables (its ratebook was uploaded)
         # without having filed its own base-rate/related-exposures tables —
@@ -263,6 +262,14 @@ class Hab:
             ('ERP', 'H Table 4.A.3. Directors and Officers Liability Insurance - Extended Reporting Periods', self.buildDirsOfficersReportingPeriods, False, True, None, None),
             ('PLUS', 'H Table 4.B. Habitational PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
         ]
+        return sheetSpecs
+
+    def buildHabPage(self, progress_callback=None):
+        companies = [c for c in self.rateTables.keys() if c != 'CW']
+
+        Hab = ExcelSettingsBOP.Excel(state=self.state, programName='Habitational', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
+        sheetSpecs = self._sheetSpecs()
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):

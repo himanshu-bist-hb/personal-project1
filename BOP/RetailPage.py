@@ -489,11 +489,12 @@ class Retail:
     # each of the given dataframes. progress_callback (optional) is called
     # with a short message before each sheet is built.
     # Returns the Excel workbook
-    def buildRetailPage(self, progress_callback=None):
-        companies = [c for c in self.rateTables.keys() if c != 'CW']
-
-        Retail = ExcelSettingsBOP.Excel(state=self.state, programName='Retail', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
-
+    # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
+    # Extracted from buildRetailPage so RetailPageAppetite can override it to
+    # insert/replace Appetite-only sheets — same pattern as HabPage. Takes
+    # the Excel instance because a couple of postFormat hooks (PSS) close
+    # over its fonts.
+    def _sheetSpecs(self, Retail):
         sheetSpecs = [
             ('DC', 'R Table 1.A.5.c. Dry Cleaners EXTRA Factor', self.buildDryCleanersFactor, False, True, None, self._formatDryCleanersFactor),
             ('DCEQ', 'R Table 1.A.5.d. Dry Cleaners EXTRA Earthquake Factor', self.buildDryCleanersEQFactor, False, True, None, None),
@@ -535,6 +536,14 @@ class Retail:
                                                  self.buildPSBusinessIncomeVehicle(), self.buildPSBusinessIncomeWorker())),
             ('PSPL', 'R Table 4.F. Pet Services Professional Liability', self.buildPSProfLiab, False, True, 'PED', None),
         ]
+        return sheetSpecs
+
+    def buildRetailPage(self, progress_callback=None):
+        companies = [c for c in self.rateTables.keys() if c != 'CW']
+
+        Retail = ExcelSettingsBOP.Excel(state=self.state, programName='Retail', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
+        sheetSpecs = self._sheetSpecs(Retail)
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):

@@ -162,13 +162,23 @@ class OptionalCoverages:
     _EQ_CLASS_RATED_TABLES = ("BP7EarthquakeDvisionFiveLossCostBLDG", "BP7EarthquakeDvisionFiveLossCostBPP")
     _EQ_CLASS_RATED_TABLES_CA = ("BP7 Earthquake DvisionFiveLossCostBLDG_Ext2", "BP7 Earthquake DvisionFiveLossCostBPP_Ext2")
 
-    def __init__(self, state, rateTables, classCodes, nEffective, rEffective, eqTerritoryDefs) -> None:
+    # Table codes that only belong on the page when the Appetite add-on is
+    # checked (see buildOptionalCoveragesPage) — D.3.J.3/D.3.K.3/D.19.A.5.a/
+    # D.19.A.6/D.20.A.4/D.21.A.4/D.22.A.4/D.23.A.4/D.24.A.4/E.3.C.1. Unlike
+    # every other BOP program, Optional Coverages has no "2.0"/"pre2.0"
+    # split to layer Appetite subclasses on top of (see APPETITE_CLASSES in
+    # BOPRatePages.py) — Appetite here is just a flag gating which of this
+    # one class's own tables get built.
+    _APPETITE_ONLY_CODES = frozenset({'AIOLCS', 'AIOLCA', 'MPLER', 'SAPAE', 'EPLWHC', 'EPLTPP', 'BAEER'})
+
+    def __init__(self, state, rateTables, classCodes, nEffective, rEffective, eqTerritoryDefs, appetite=False) -> None:
         self.state = state
         self.rateTables = rateTables
         self.classCodes = classCodes
         self.nEffective = nEffective  # New business effective date
         self.rEffective = rEffective  # Renewal business effective date
         self.EQTerritoryDefs = eqTerritoryDefs
+        self.appetite = appetite
 
         self.currencyFormat = '$#,##0'
         self.currencywdecFormat = '$#,##0.00'
@@ -406,27 +416,14 @@ class OptionalCoverages:
     def buildAddInsuredOwnerLeaseContractor(self):
         # OC Table D.3.J.3. Additional Insured – Owners, Lessees or Contractors
         #  – Scheduled Person or Organization
+        data = self.buildDataFrame("BP7_Optional_Coverage_Base_Rates")
+        return data.query(f'`CoverageName` == "AdditionalInsrdGarageOperations"').rename(columns={'BaseRate': 'Rate'}).filter(items=['Rate'])
 
-        data = pd.DataFrame({"Rate":["$25"]})
-
-
-        # Below is an example of multiple columns in two different formats.
-        # VERSION 1
-        # data = [
-        #     {"Limit": "$100,000", "Factor": "0.95"},
-        #     {"Limit": "$150,000", "Factor": "0.96"},
-        #     {"Limit": "$250,000", "Factor": "0.97"},
-        #     {"Limit": "$500,000", "Factor": "0.98"},
-        #     {"Limit": "$1,000,000", "Factor": "0.99"}
-        # ]
-        #
-        # # Create the DataFrame
-        # formatted_df = pd.DataFrame(data)
-        # VERSION 2
-        # data = pd.DataFrame({"Limit": ["$100,000","$150,000","$250,000","$500,000","$1,000,000"],
-        #                      "Factor" : ["0.95","0.96","0.97","0.98","0.99"]})
-
-        return data
+    def buildAddInsuredOwnerLeaseContractorConstructionAgreement(self):
+        # OC Table D.3.K.3. Additional Insured – Owners, Lessees or Contractors
+        #  – Automatic Status When Required In A Written Construction Agreement With You
+        data = self.buildDataFrame("BP7_Optional_Coverage_Base_Rates")
+        return data.query(f'`CoverageName` == "BusinessIncomeOutsideSigns"').rename(columns={'BaseRate': 'Rate'}).filter(items=['Rate'])
 
     # Which EQ_CLASS_RATED_SPECS family applies to the current state.
     def _eqClassRatedFamily(self):
@@ -1061,13 +1058,125 @@ class OptionalCoverages:
         CarWashDed = self.buildDataFrame("BP7_Car_Wash_Deductible_Factor")
         return CarWashDed.rename(columns={'DeductibleFactor' : 'Factor'})
 
-    def buildEmploymentPracticesLiability(self):
-        data = pd.DataFrame({
-            "Limit": ["$25,000", "$50,000", "$100,000"],
-            "Factor ": ["0.07", "0.10", "0.10"]
-        })
+    # ── OC Table D.19.A.5.a. Miscellaneous Professional Liability ───────────
+    # A fully ratebook-driven, multi-block sheet (minimum premium, base
+    # premium, state multiplier, hazard class, increased limits, retention,
+    # prior acts) — see _formatMiscProfLiab below for the layout and
+    # [[ba_small_market_missing_companies_fix]]-style build/format split
+    # every other BOP program page here uses.
 
-        return data
+    # Returns the flat minimum premium dollar amount (a scalar, not a table —
+    # it's rendered inline in the formula sentence at the top of the sheet).
+    def buildMiscProfLiabMinPremium(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_MinPrem")
+        return data['MinimumPremium'].iloc[0]
+
+    # Revenue band -> rate per $1,000 of revenue.
+    _MISC_PROF_LIAB_REVENUE_LABELS = {
+        0: '$0 - $100k', 100001: '$100k - $250k', 250001: '$250k - $500k',
+        500001: '$500k - $750k', 750001: '$750k - $1M', 1000001: '$1M - $1.5M',
+        1500001: '$1.5M - $2M', 2000001: '$2M - $3M', 3000001: '$3M - $4M',
+        4000001: '$4M - $5M',
+    }
+
+    def buildMiscProfLiabBasePremium(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_Rate")
+        data = data.rename(columns={'MiscellaneousProfessionalLiabilityRatePer1000': 'Rate (per $1,000)'})
+        data['Revenue'] = data['RevenueRange'].map(self._MISC_PROF_LIAB_REVENUE_LABELS)
+        data['Rate (per $1,000)'] = data['Rate (per $1,000)'].apply(lambda x: "${0:,.2f}".format(x))
+        return data.filter(items=['Revenue', 'Rate (per $1,000)'])
+
+    # State multiplier — CA gets its own (higher) factor, every other state
+    # uses the blank/"All Others" row. Sorted descending by factor so CA
+    # (the only state whose factor isn't 1.000) lists first, same order the
+    # ratepage shows.
+    def buildMiscProfLiabStateMultiplier(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_State")
+        data = data.rename(columns={'BaseState': 'State Multiplier', 'BaseStateFactor': 'Factor'})
+        data['State Multiplier'] = data['State Multiplier'].replace('', np.nan).fillna('All Others')
+        return data.sort_values('Factor', ascending=False).reset_index(drop=True)
+
+    # Hazard class is rated per-NAICS code, but the ratepage only ever shows
+    # the (small, fixed) set of distinct factors that appear across all
+    # codes, labeled Low/Med/High by ascending value — the actual per-risk
+    # NAICS lookup happens at underwriting time, not on this page.
+    def buildMiscProfLiabHazardClass(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_HazardClass")
+        factors = sorted(data['HazardClassFactor'].unique())
+        labels = ['Low', 'Med', 'High'] if len(factors) == 3 else [f'Tier {i + 1}' for i in range(len(factors))]
+        return pd.DataFrame({'Hazard Class': labels, 'Factor': factors})
+
+    # Increased limits — sorted by (per-occurrence, aggregate) so ties on
+    # the per-occurrence limit (e.g. the three $1M/... rows) still land in
+    # ascending aggregate order, matching the ratepage.
+    def buildMiscProfLiabIncreasedLimits(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_IncreasedLimit")
+        data = data.rename(columns={'MiscProfLiabOccAggLimitCode': 'Increased Limits', 'IncreasedLimitFactor': 'Factor'})
+        limitParts = data['Increased Limits'].str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.split('/', expand=True).astype(float)
+        data = data.assign(_occ=limitParts[0], _agg=limitParts[1]).sort_values(['_occ', '_agg']).drop(columns=['_occ', '_agg']).reset_index(drop=True)
+        return data.filter(items=['Increased Limits', 'Factor'])
+
+    def buildMiscProfLiabRetention(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_Retention")
+        data = data.rename(columns={'MiscProfLiabRetention': 'Retention', 'RetentionFactor': 'Factor'})
+        data['_amt'] = data['Retention'].str.replace('$', '', regex=False).str.replace(',', '', regex=False).astype(float)
+        data = data.sort_values('_amt').drop(columns='_amt').reset_index(drop=True)
+        return data.filter(items=['Retention', 'Factor'])
+
+    # Prior acts years — the highest year value in the table is the open-
+    # ended "4+" band (ratebook stores it as 5, since 5+ years all get the
+    # same factor).
+    def buildMiscProfLiabPriorActs(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_ClaimsMade")
+        data = data.rename(columns={'PriorActsYears': 'Prior Acts (in Years)', 'ClaimsMadeFactor': 'Factor'})
+        data = data.sort_values('Prior Acts (in Years)').reset_index(drop=True)
+        maxYears = data['Prior Acts (in Years)'].max()
+        data['Prior Acts (in Years)'] = data['Prior Acts (in Years)'].apply(lambda x: '4+' if x == maxYears else str(int(x)))
+        return data.filter(items=['Prior Acts (in Years)', 'Factor'])
+
+    # ── OC Table D.19.A.6. Miscellaneous Professional Liability - Extended
+    # Reporting Coverage. WY is the only state offering the open-ended
+    # "Unlimited" duration; every other state's ratepage lists just the
+    # three fixed-year durations (see formatMiscProfLiabExtReporting for the
+    # boxed formula sentence + footnote wrapped around this table).
+    _MISC_PROF_LIAB_EXT_RPT_LABELS = {'12Months': '1 Year', '24Months': '2 Years', '36Months': '3 Years', 'Unlimited': 'Unlimited'}
+
+    def buildMiscProfLiabExtReporting(self):
+        data = self.buildDataFrame("BP7_MiscellaneousProfessionalLiability_SuppExtRptPrd_Pct")
+        data = data.rename(columns={'Duration': 'Years', 'MiscProLiabSuppExtRptPeriodPct': 'Factor*'})
+        data['Years'] = data['Years'].map(self._MISC_PROF_LIAB_EXT_RPT_LABELS)
+        order = ['1 Year', '2 Years', '3 Years'] + (['Unlimited'] if self.state == 'WY' else [])
+        data = data[data['Years'].isin(order)].copy()
+        data['Years'] = pd.Categorical(data['Years'], categories=order, ordered=True)
+        return data.sort_values('Years').reset_index(drop=True).filter(items=['Years', 'Factor*'])
+
+    # OC Table D.24.A.4. Sexual and/or Physical Abuse Exclusion - Specified
+    # Professional Services. The ratebook carries this factor per
+    # PerilTypeCode/BuildingClassCode combination, but every row has the
+    # same value — the ratepage shows one flat factor, so any row works.
+    def buildSexualAbuseExclusion(self):
+        data = self.buildDataFrame("BP7_Peril SexualAndOrPhysicalAbuseExclusion_Factor")
+        return data.rename(columns={'SexualAndOrPhysicalAbuseExclusionFactor': 'Factor'}).filter(items=['Factor']).iloc[[0]].reset_index(drop=True)
+
+    # OC Table D.20.A.4. Amendment of Coverage Territory - Worldwide
+    # Coverage. The ratebook's "Rate" is an additional percentage charge
+    # against Product/Completed Operations premium; the ratepage shows it
+    # as a straight multiplier (1 + Rate). MinimumPremium is used as-is.
+    def buildWorldwideCoverageFactor(self):
+        data = self.buildDataFrame("BP7_WorldwideCoverage_Rate")
+        return pd.DataFrame({'Factor*': [1 + data['Rate'].iloc[0]]})
+
+    def buildWorldwideCoverageMinPremium(self):
+        data = self.buildDataFrame("BP7_WorldwideCoverage_Rate")
+        return pd.DataFrame({'Minimum Premium': [data['MinimumPremium'].iloc[0]]})
+
+    # OC Table D.21.A.4 Wage and Hour Claims Expenses - Employment Practices
+    # Liability. The ratebook's $0 limit row is the "no coverage" baseline
+    # (factor 0) and isn't shown on the ratepage.
+    def buildEmploymentPracticesLiability(self):
+        data = self.buildDataFrame("BP7_EmploymentPracticesLiability_WageAndHourCoverage_Factor")
+        data = data.query('WageAndHourLimitOfLiability != 0').rename(columns={'WageAndHourLimitOfLiability': 'Limit', 'WageAndHourCoverageFactor': 'Factor'})
+        return data.sort_values('Limit').reset_index(drop=True).filter(items=['Limit', 'Factor'])
 
     def buildEmploymentTypeFactor(self):
 
@@ -1210,6 +1319,19 @@ class OptionalCoverages:
         AdvantageILF = AdvantageILF.rename(columns={'LimitofInsurance' : 'Limit of Insurance', 'Class_Code_Min' : 'Program', 'IncreasedLimitFactor' : 'Increased Limit Factor'}).filter(items=['Limit of Insurance', 'Program', 'Increased Limit Factor']).replace({'Program': self.classCodes}).replace({'Program' : {'Hab' : 'Habitational', 'Food' : 'Food Service', 'Auto' : 'Auto Service'}})
         pivotedAdvantageILF = AdvantageILF.pivot(index='Limit of Insurance', columns='Program', values='Increased Limit Factor').reset_index('Limit of Insurance')
         return pivotedAdvantageILF
+
+    # OC Table E.3.C.1. Businessowners - Essential, Enhanced, or Advanced
+    # Endorsement Rate. The ratebook keys this by ClassCodeMin/Max band
+    # (same bands classCodes already maps to a program name elsewhere in
+    # this file, e.g. buildOrdinanceLoss/buildAdvantageRate) x Tier
+    # (Essential/Enhanced/Advanced); the ratepage pivots Tier into columns,
+    # one row per program.
+    def buildBusinessownersAdvantageEndorsement(self):
+        data = self.buildDataFrame("BP7_BusinessownersAdvantageNonHabitational_Rate")
+        data = data.rename(columns={'BusinessownersAdvantageNonHabitationalRate': 'Rate'})
+        data['Program'] = data['ClassCodeMin'].replace(self.classCodes).replace({'Hab': 'Habitational', 'Food': 'Food Service', 'Auto': 'Auto Service'})
+        pivoted = data.pivot(index='Program', columns='Tier', values='Rate').reset_index()
+        return pivoted.sort_values('Program').reset_index(drop=True).filter(items=['Program', 'Essential', 'Enhanced', 'Advanced'])
 
     # Builds the Accounts Receivable base rate table
     # Returns a dataframe
@@ -1769,8 +1891,16 @@ class OptionalCoverages:
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
-                if col == 1: 
+                if col == 1:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+
+    def formatAddInsuredOwnerLeaseContractor(self, ws):
+        for col in range(1, ws.max_column + 1):
+            char = get_column_letter(col) # Letter representing the current column
+            for row in range(4, ws.max_row + 1):
+                cell = ws[char + str(row)]
+                if col == 1:
+                    cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
 
     def formatEmployeeBodilyInj(self, ws, boldFont):
         for col in range(1, ws.max_column + 1):
@@ -1973,10 +2103,12 @@ class OptionalCoverages:
         ws["A4"] = "endorsement premium"
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
-            for row in range(4, ws.max_row + 1):
+            for row in range(7, ws.max_row + 1):
                 cell = ws[char + str(row)]
                 if col == 1:
                     cell.number_format = self.currencyFormat # Applying currency formatting
+                elif col == 2:
+                    cell.number_format = self.twodecimal # Factor, e.g. 0.07 / 0.10
 
     def formatEmploymentPracticesLiabilityNamedIndCont(self, ws):
         t = Side(style='thin', color='C1C1C1');
@@ -2120,8 +2252,117 @@ class OptionalCoverages:
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
-                if col == 1: 
+                if col == 1:
                     cell.number_format = self.noDecimalFormat # Applying currency formatting to columns A
+
+    _MISC_PROF_LIAB_BORDER = Border(left=Side(border_style='thin', color='C1C1C1'),
+                                     right=Side(border_style='thin', color='C1C1C1'),
+                                     top=Side(border_style='thin', color='C1C1C1'),
+                                     bottom=Side(border_style='thin', color='C1C1C1'))
+
+    # Writes one (label, dataframe) block at an explicit (row, col) anchor —
+    # label row (bold, unboxed) then a bordered/bold header row and bordered
+    # data rows below it. Used instead of a shared "append below current
+    # content" helper (as Office/Service's _appendLabeledBlocks do) because
+    # the Miscellaneous Professional Liability page needs Base Premium and
+    # State Multiplier placed side by side at the SAME row, not stacked.
+    # Returns (next_free_row, last_col) so the caller can place a sibling
+    # block beside it or continue stacking below the taller of two siblings.
+    def _writeMiscProfLiabBlock(self, ws, boldFont, font, label, df, row, col):
+        ws.cell(row=row, column=col, value=label).font = boldFont
+        header_row = row + 1
+        for c, name in enumerate(df.columns, start=col):
+            cell = ws.cell(row=header_row, column=c, value=name)
+            cell.font = boldFont
+            cell.border = self._MISC_PROF_LIAB_BORDER
+            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        for r_off, (_, data_row) in enumerate(df.iterrows()):
+            for c, val in enumerate(data_row, start=col):
+                cell = ws.cell(row=header_row + 1 + r_off, column=c, value=val)
+                cell.font = font
+                cell.border = self._MISC_PROF_LIAB_BORDER
+                cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        return header_row + 1 + len(df) + 1, col + len(df.columns) - 1
+
+    # Builds the whole OC Table D.19.A.5.a sheet from scratch —
+    # generateWorksheet is called with an EMPTY dataframe (just the title in
+    # A1), same pattern as Office/Service's MPVS. Layout (see the reference
+    # ratepage): a boxed formula sentence (with the ratebook-driven minimum
+    # premium spliced in), then Base Premium and State Multiplier side by
+    # side, then Hazard Class, Increased Limits, Retention and Prior Acts
+    # stacked below, each fully ratebook-driven.
+    def formatMiscProfLiab(self, ws, boldFont, font):
+        minPremium = self.buildMiscProfLiabMinPremium()
+        formulaText = (f"Final Premium = Base Premium (subject to a minimum of ${minPremium:,.0f}) x Hazard Class Factor "
+                       f"x Increased Limits Factor x Retention Factor x State Multiplier")
+        ws.cell(row=3, column=1, value=formulaText).font = font
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=6)
+        for col in range(1, 7):
+            ws.cell(row=3, column=col).border = self._MISC_PROF_LIAB_BORDER
+        ws.cell(row=3, column=1).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.row_dimensions[3].height = 30
+
+        row = 5
+        rowAfterBasePremium, lastCol = self._writeMiscProfLiabBlock(ws, boldFont, font, "Base Premium", self.buildMiscProfLiabBasePremium(), row, 1)
+        rowAfterStateMult, _ = self._writeMiscProfLiabBlock(ws, boldFont, font, "State Multiplier", self.buildMiscProfLiabStateMultiplier(), row, lastCol + 2)
+        row = max(rowAfterBasePremium, rowAfterStateMult) + 1
+
+        row, _ = self._writeMiscProfLiabBlock(ws, boldFont, font, "Hazard Class", self.buildMiscProfLiabHazardClass(), row, 1)
+        row += 1
+        row, _ = self._writeMiscProfLiabBlock(ws, boldFont, font, "Increased Limits", self.buildMiscProfLiabIncreasedLimits(), row, 1)
+        row += 1
+        row, _ = self._writeMiscProfLiabBlock(ws, boldFont, font, "Retention", self.buildMiscProfLiabRetention(), row, 1)
+        row += 1
+        self._writeMiscProfLiabBlock(ws, boldFont, font, "Prior Acts", self.buildMiscProfLiabPriorActs(), row, 1)
+
+        for col in range(1, ws.max_column + 1):
+            ws.column_dimensions[get_column_letter(col)].bestFit = True
+
+    # Wraps the D.19.A.6 Extended Reporting Coverage table (already written
+    # by generateWorksheet at A3) with the boxed formula sentence above it
+    # and the interpolation footnote below it — same boxed-sentence pattern
+    # as formatMiscProfLiab, but the table itself comes from the standard
+    # generateWorksheet single-table path since there's only one block here.
+    def formatMiscProfLiabExtReporting(self, ws, font):
+        ws.insert_rows(3)
+        ws.cell(row=3, column=1, value="Premium = Final Miscellaneous Professional Liability Premium x Extended Reporting Factor").font = font
+        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=6)
+        for col in range(1, 7):
+            ws.cell(row=3, column=col).border = self._MISC_PROF_LIAB_BORDER
+        ws.cell(row=3, column=1).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+        ws.row_dimensions[3].height = 30
+
+        for row in range(5, ws.max_row + 1):
+            ws.cell(row=row, column=2).number_format = '0.000'
+
+        footnoteRow = ws.max_row + 2
+        ws.cell(row=footnoteRow, column=1, value="* Use interpolation for intermediate coverage periods").font = font
+
+    def formatSexualAbuseExclusion(self, ws):
+        for row in range(4, ws.max_row + 1):
+            ws.cell(row=row, column=1).number_format = '0.000'
+
+    # Builds the whole D.20.A.4 sheet from scratch — generateWorksheet is
+    # called with an EMPTY dataframe (just the title in A1), same pattern as
+    # formatMiscProfLiab. Two standalone single-cell boxed tables (Factor,
+    # Minimum Premium) stacked with a blank row between, plus the italic
+    # footnote below — matching the reference ratepage.
+    def formatWorldwideCoverage(self, ws, boldFont, italicFont):
+        factor = self.buildWorldwideCoverageFactor().iloc[0, 0]
+        minPremium = self.buildWorldwideCoverageMinPremium().iloc[0, 0]
+
+        ws.cell(row=3, column=1, value='Factor*').font = boldFont
+        ws.cell(row=4, column=1, value=factor).number_format = '0.000'
+        ws.cell(row=6, column=1, value='Minimum Premium').font = boldFont
+        ws.cell(row=7, column=1, value=minPremium).number_format = self.currencywdecFormat
+
+        for row in (3, 4, 6, 7):
+            cell = ws.cell(row=row, column=1)
+            cell.border = self._MISC_PROF_LIAB_BORDER
+            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+
+        ws.cell(row=9, column=1, value='*This factor applies to Product/Completed Operations premium only.').font = italicFont
+        ws.column_dimensions['A'].width = self.pixelsToInches(150)
 
     def formatAdvantageRate(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -2138,6 +2379,24 @@ class OptionalCoverages:
                 cell = ws[char + str(row)]
                 if col == 1: 
                     cell.number_format = self.currencyFormat # Applying currency formatting to columns A
+
+    # Adds the merged "Rates" sub-header spanning Essential/Enhanced/Advanced
+    # (columns B-D) above the column-header row — same insert-a-row-then-
+    # merge pattern as formatBackupSewerILF's "Increased Limit Increments" /
+    # "Total Limit" sub-header.
+    def formatBusinessownersAdvantageEndorsement(self, ws, boldFont):
+        ws.insert_rows(3)
+        ws['B3'] = 'Rates'
+        ws.merge_cells('B3:D3')
+        for cell in ws['3:3']:
+            cell.border = self._MISC_PROF_LIAB_BORDER
+            cell.font = boldFont
+            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+
+        for col in range(2, ws.max_column + 1):
+            char = get_column_letter(col)
+            for row in range(5, ws.max_row + 1):
+                ws[char + str(row)].number_format = self.currencywdecFormat
 
     def formatCyberSuite(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -2312,7 +2571,8 @@ class OptionalCoverages:
             ('AISPP', 'OC Table D.3.E.3.a-b. Additional Insured – Services Performed On Premises of Additional Insured', self.buildAdditionalServices, self.formatAdditionalServices),
             ('AIV', 'OC Table D.3.F.3. Additional Insured – Vendors', self.buildAdditionalVendors, self.formatAdditionalVendors),
             ('AIDPO', 'OC Table D.3.I.3. Additional Insured – Designated Person or Organization', self.buildAdditionalDesignated, self.formatAdditionalDesignated),
-            ('AIOLCS', 'OC Table D.3.J.3. Additional Insured – Owners, Lessees or Contractors – Scheduled Person or Organization', self.buildAddInsuredOwnerLeaseContractor, None),
+            ('AIOLCS', 'OC Table D.3.J.3. Additional Insured – Owners, Lessees or Contractors – Scheduled Person or Organization', self.buildAddInsuredOwnerLeaseContractor, self.formatAddInsuredOwnerLeaseContractor),
+            ('AIOLCA', 'OC Table D.3.K.3. Additional Insured – Owners, Lessees or Contractors – Automatic Status When Required In A Written Construction Agreement With You', self.buildAddInsuredOwnerLeaseContractorConstructionAgreement, self.formatAddInsuredOwnerLeaseContractor),
             ('EBL', 'OC Table D.6.D.1. Employee Benefits Liability', self.buildEmployeeBenefitsLiab, self.formatEmployeeBenefitsLiab),
             ('EBERP', 'OC Table D.6.E.3. Employee Benefits Liability - Extended Reporting Period Option  % of Annual Premium', self.buildEmployeeBenefitsLiabExt, None),  # formatEmployeeBenefitsLiabExt disabled in source
             ('GKBR', 'OC Table D.8.C.1. Garage Keepers Coverage - Base Rate', self.buildGarageKeepersBase, self.formatGarageKeepersBase),
@@ -2333,15 +2593,23 @@ class OptionalCoverages:
             ('ERPSE', 'OC Table D.14.G.2. Employee Related Practices Liability - Supplemental ERP Premium', self.buildEmployeeRelatedSuppERP, self.formatEmployeeRelatedSuppERP),
             ('CWLR', 'OC Table D.15.C. Car Wash Damage to Customers Autos - Liability Rate', self.buildCarWashLiab, self.formatCarWashLiab),
             ('CWDF', 'OC Table D.15.D. Car Wash Damage to Customers Autos - Deductible Factor', self.buildCarWashDed, self.formatCarWashDed),
+            ('MPLER', 'OC Table D.19.A.6. Miscellaneous Professional Liability - Extended Reporting Coverage', self.buildMiscProfLiabExtReporting, lambda ws: self.formatMiscProfLiabExtReporting(ws, OC.font)),
+            ('SAPAE', 'OC Table D.24.A.4. Sexual and/or Physical Abuse Exclusion - Specified Professional Services', self.buildSexualAbuseExclusion, self.formatSexualAbuseExclusion),
             ('EPLWHC', 'OC Table D.21.A.4 Wage and Hour Claims Expenses - Employment Practices Liability', self.buildEmploymentPracticesLiability, self.formatEmploymentPracticesLiability),
             ('EPLTPP', 'OC Table D.23.A.4 Employment Practices Liability Coverage for Third Party Practices', self.buildEmploymentPracticesLiabilityThirdParty, self.formatEmploymentPracticesLiabilityThirdParty),
             ('UAVL', 'OC Table D.25.B.4. Limited Coverage for Designated Unmanned Aircraft', self.buildLimitedCoverageUnmannedAircraft, self.formatLimitedCoverageUnmannedAircraft),
             ('BAR', 'OC Table E.1.D.1. Businessowners ADVANTAGE Rate', self.buildAdvantageRate, self.formatAdvantageRate),
             ('BAILF', 'OC Table E.1.D.2. Businessowners ADVANTAGE - Increased Limit Factor', self.buildAdvantageILF, self.formatAdvantageILF),
             ('CSC', 'OC Table E.3.A.5. Cyber Suite Coverage', self.buildCyberSuite, self.formatCyberSuite),
+            ('BAEER', 'OC Table E.3.C.1. Businessowners - Essential, Enhanced, or Advanced Endorsement Rate', self.buildBusinessownersAdvantageEndorsement, lambda ws: self.formatBusinessownersAdvantageEndorsement(ws, boldFont)),
         ]
+        if not self.appetite:
+            singleTableSheets = [spec for spec in singleTableSheets if spec[0] not in self._APPETITE_ONLY_CODES]
 
-        total = len(singleTableSheets) + 7  # + the 6 multi-table sheets + ECR
+        # 5 always-on multi-table sheets (MSIL/USIBI/EBIAE/LLFSR/CSCTP) + ECR,
+        # plus the 3 Appetite-only custom sheets (EPLNIC/MPLD19A5A/WWCOV)
+        # when Appetite is checked.
+        total = len(singleTableSheets) + 6 + (3 if self.appetite else 0)
         i = 0
         for tableCode, title, build, postFormat in singleTableSheets:
             i += 1
@@ -2376,12 +2644,15 @@ class OptionalCoverages:
                                                      [self.buildLiquorLiabFood1(), self.buildLiquorLiabFood2(), self.buildLiquorLiabFood3()], False, True)
         self.formatLiquorLiabFood(wsLLFSR, boldFont)
 
-        i += 1
-        if progress_callback: progress_callback(f"Building sheet {i}/{total}: EPLNIC...")
-        _, wsEPLNIC = OC.generateMultiTableWorksheet('EPLNIC', 'OC Table D.22.A.4 Employment Practices Liability Coverage For Injury To Named Independent Contractors',
-                                                      [self.buildEmploymentTypeFactor(), self.buildDefenseInside(), self.buildDefesneWithin(),
-                                                       self.buildMatchingDefense(), self.buildEmploymentPractFactor(), self.buildEmploymentPracticesLiabilityState()], False, True)
-        self.formatEmploymentPracticesLiabilityNamedIndCont(wsEPLNIC)
+        # OC Table D.22.A.4 is one of the Appetite-only tables (see
+        # _APPETITE_ONLY_CODES) — only built when the Appetite add-on is checked.
+        if self.appetite:
+            i += 1
+            if progress_callback: progress_callback(f"Building sheet {i}/{total}: EPLNIC...")
+            _, wsEPLNIC = OC.generateMultiTableWorksheet('EPLNIC', 'OC Table D.22.A.4 Employment Practices Liability Coverage For Injury To Named Independent Contractors',
+                                                          [self.buildEmploymentTypeFactor(), self.buildDefenseInside(), self.buildDefesneWithin(),
+                                                           self.buildMatchingDefense(), self.buildEmploymentPractFactor(), self.buildEmploymentPracticesLiabilityState()], False, True)
+            self.formatEmploymentPracticesLiabilityNamedIndCont(wsEPLNIC)
 
         i += 1
         if progress_callback: progress_callback(f"Building sheet {i}/{total}: CSCTP...")
@@ -2396,6 +2667,22 @@ class OptionalCoverages:
         starts, wsECR = OC.generateMultiTableWorksheet('ECR', 'OC Table C.4.F.1.a. Earthquake and Volcanic Eruption - Class Rated',
                                                         [df for _label, df in blocks], False, True, reserved_header_rows=2)
         self._formatEQClassRatedBlocks(wsECR, boldFont, starts, blocks)
+
+        # ── Miscellaneous Professional Liability (D.19.A.5.a) and Amendment
+        # of Coverage Territory - Worldwide Coverage (D.20.A.4) — both
+        # Appetite-only (see _APPETITE_ONLY_CODES), fully custom ratebook-
+        # driven layouts built from an empty dataframe like the
+        # EQClassRated/MPVS sheets. ──────────────────────────────────────
+        if self.appetite:
+            i += 1
+            if progress_callback: progress_callback(f"Building sheet {i}/{total}: MPLD19A5A...")
+            wsMPL = OC.generateWorksheet('MPLD19A5A', 'OC Table D.19.A.5.a. Miscellaneous Professional Liability', pd.DataFrame(), False, False)
+            self.formatMiscProfLiab(wsMPL, boldFont, OC.font)
+
+            i += 1
+            if progress_callback: progress_callback(f"Building sheet {i}/{total}: WWCOV...")
+            wsWWCOV = OC.generateWorksheet('WWCOV', 'OC Table D.20.A.4 Amendment of Coverage Territory – Worldwide Coverage', pd.DataFrame(), False, False)
+            self.formatWorldwideCoverage(wsWWCOV, boldFont, OC.fontItalic)
 
         if progress_callback:
             progress_callback("Building Index sheet...")

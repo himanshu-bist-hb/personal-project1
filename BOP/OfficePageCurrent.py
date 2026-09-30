@@ -254,11 +254,12 @@ class Office:
     # each of the given dataframes. progress_callback (optional) is called
     # with a short message before each sheet is built.
     # Returns the Excel workbook
-    def buildOfficePage(self, progress_callback=None):
-        companies = [c for c in self.rateTables.keys() if c != 'CW']
-
-        Office = ExcelSettingsBOP.Excel(state=self.state, programName='Office', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
-
+    # (tab name, page title, builder callable, useIndex, useHeader, layout_key, post-format hook)
+    # Extracted from buildOfficePage so OfficePageAppetite can override it to
+    # insert Appetite-only sheets — same pattern as HabPage. Takes the Excel
+    # instance for parity with OfficePage's own _sheetSpecs, even though none
+    # of pre-2.0's own postFormat hooks currently need it.
+    def _sheetSpecs(self, Office):
         sheetSpecs = []
         # A company can be present in rateTables (its ratebook was uploaded)
         # without having filed its own base-rate tables — a deviation
@@ -292,6 +293,14 @@ class Office:
             ('PLUS', 'O Table 4.D. Office PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
             ('FR', 'O Table 4.E. Franchise Upgrade Endorsement', self.buildFranchiseUpgradeEndorsement, False, True, None, None),
         ]
+        return sheetSpecs
+
+    def buildOfficePage(self, progress_callback=None):
+        companies = [c for c in self.rateTables.keys() if c != 'CW']
+
+        Office = ExcelSettingsBOP.Excel(state=self.state, programName='Office', nEffective=self.nEffective, rEffective=self.rEffective, companyList=companies)
+
+        sheetSpecs = self._sheetSpecs(Office)
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):

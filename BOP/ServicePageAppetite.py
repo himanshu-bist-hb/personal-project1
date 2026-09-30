@@ -33,8 +33,14 @@ class _ServiceAppetiteMixin:
     # already present in both versions; kept here only so the mixin's
     # _sheetSpecs insert list is self-documenting (the insert is a no-op).
     def buildBarberProfLiab(self):
-        BarberProfLiab = self.buildDataFrame("BP7_BarberBeautySpaProfessionalLiability")
-        return BarberProfLiab.rename(columns={'BarberBeautySpaProfessionalLiabilityRate': 'Rate'})
+        barberProfLiab = self.buildDataFrame("BP7_ProfLiabarbersBeauticians_Rate")
+        barberProfLiab['Occurrence'] = barberProfLiab['LiabilityLimit'].apply(lambda x: "${0:,.0f}".format(x))
+        barberProfLiab['Aggregate'] = barberProfLiab['AggregateLimit'].apply(lambda x: "${0:,.0f}".format(x))
+        barberProfLiab['Occurrence / Aggregate'] = barberProfLiab['Occurrence'] + ' / ' + barberProfLiab['Aggregate']
+        pivotedBarberProf = barberProfLiab.pivot(index=['LiabilityLimit', 'Occurrence / Aggregate'], columns='ProfessionType', values='BaseRate').reset_index(['LiabilityLimit', 'Occurrence / Aggregate']). \
+                rename(columns={'Barber': 'Each Barber', 'Beautician': 'Each Beautician', 'Manicurist': 'Each Manicurist'}).sort_values(by=['LiabilityLimit'])
+        del pivotedBarberProf['LiabilityLimit']
+        return pivotedBarberProf
 
     # S Table 4.E. Repair Services Specialized Endorsement — copied verbatim
     # from ServicePage.Service (BP-2.0).

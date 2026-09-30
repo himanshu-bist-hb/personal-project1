@@ -87,6 +87,10 @@ BOP_ALL_KEYS = BOP_REQUIRED + BOP_OPTIONAL
 
 for k in BOP_ALL_KEYS:
     st.session_state.setdefault(f"bop_file_{k}", None)
+st.session_state.setdefault("bop_mode",         "individual")  # "individual" | "small_market"
+st.session_state.setdefault("bop_sm_upload_reset", 0)
+for k in ("SM", "ATA", "CW"):
+    st.session_state.setdefault(f"bop_sm_file_{k}", None)
 st.session_state.setdefault("bop_save_dir",     "")
 st.session_state.setdefault("bop_run_status",   "idle")
 st.session_state.setdefault("bop_run_msg",      "")
@@ -2288,501 +2292,593 @@ elif active_lob == "Farm Auto":
 # ─── BOP (Business Owners Policy — All Programs) ─────────────────────────────
 elif active_lob == "Business Owners Policy":
 
-    def _bop_valid(k):
-        v = st.session_state.get(f"bop_file_{k}")
-        return v is not None and "error" not in v
-
-    def n_bop_req():   return sum(1 for k in BOP_REQUIRED if _bop_valid(k))
-    def all_bop_req(): return n_bop_req() == len(BOP_REQUIRED)
-
-    # ── Version toggle ──────────────────────────────────────────────────────
-    # Mirrors the two "Create BP2.0 / Create Pre 2.0" buttons in the old
-    # desktop tool. Both versions have a working backend now.
-    st.markdown('<div class="sec-label">&#128209; &nbsp;Rate Page Version</div>', unsafe_allow_html=True)
-    vc0, vc1, vc2, vc4, _ = st.columns([2, 2, 2, 3, 5])
-    with vc0:
-        if st.button("Default", key="bop_ver_default", use_container_width=True,
-                     type="primary" if st.session_state.bop_version == "Default" else "secondary"):
-            if st.session_state.bop_version != "Default":
-                st.session_state.bop_version = "Default"; st.rerun()
-    with vc1:
-        if st.button("BP-2.0", key="bop_ver_20", use_container_width=True,
-                     type="primary" if st.session_state.bop_version == "2.0" else "secondary"):
-            if st.session_state.bop_version != "2.0":
-                st.session_state.bop_version = "2.0"; st.session_state.bop_appetite = True; st.rerun()
-    with vc2:
-        if st.button("Pre 2.0", key="bop_ver_pre", use_container_width=True,
-                     type="primary" if st.session_state.bop_version == "pre2.0" else "secondary"):
-            if st.session_state.bop_version != "pre2.0":
-                st.session_state.bop_version = "pre2.0"; st.session_state.bop_appetite = True; st.rerun()
-    with vc4:
-        is_default = st.session_state.bop_version == "Default"
-        if is_default:
-            st.session_state.bop_appetite = False
-        st.checkbox("Add Appetite pages", key="bop_appetite", disabled=is_default,
-                     help="Add each program's Appetite-only pages on top of the selected version.")
-    if st.session_state.bop_version == "Default":
-        st.markdown('<p class="f-hint">Version and Appetite are chosen automatically per state from the "Version By State" tab in BOP Input File.xlsx.</p>', unsafe_allow_html=True)
-    spacer(10)
-
-    # ── Program selection ────────────────────────────────────────────────────
-    # Check one or more programs; "Select all" overrides the individual boxes.
-    # Every checked program is built in ONE run (the ratebooks are opened and
-    # extracted once), each saved as its own xlsx.
-    st.markdown('<div class="sec-label">&#128218; &nbsp;Programs to Build</div>', unsafe_allow_html=True)
-    st.markdown('<div class="bop-prog-grid">', unsafe_allow_html=True)
-
-    sel_all_col, _ = st.columns([2, 10])
-    with sel_all_col:
-        sel_all = st.checkbox("Select all", key="bop_prog_select_all",
-                              value=st.session_state.bop_sel_all_store,
-                              help="Build every available program in one run")
-    st.session_state.bop_sel_all_store = sel_all
-
-    # Wrapped in fixed-size rows (not one row of len(programs) columns) so
-    # each checkbox keeps enough width for its label to stay on one line
-    # regardless of how many programs exist.
-    PROGS_PER_ROW = 7
-    individually_checked = []
-    for row_start in range(0, len(BOP_AVAILABLE_PROGRAMS), PROGS_PER_ROW):
-        row_progs = BOP_AVAILABLE_PROGRAMS[row_start:row_start + PROGS_PER_ROW]
-        row_cols = st.columns(PROGS_PER_ROW)
-        for col, prog_name in zip(row_cols, row_progs):
-            with col:
-                chk = st.checkbox(prog_name, key=f"bop_prog_chk_{prog_name.replace(' ', '_')}",
-                                  value=(prog_name in st.session_state.bop_programs_store),
-                                  disabled=sel_all)
-            if chk:
-                individually_checked.append(prog_name)
-    st.markdown('</div>', unsafe_allow_html=True)
-    # Individual picks survive toggling "Select all" off again.
-    st.session_state.bop_programs_store = individually_checked
-    st.session_state.bop_programs = list(BOP_AVAILABLE_PROGRAMS) if sel_all else individually_checked
-    if not st.session_state.bop_programs:
-        st.markdown('<p class="f-hint">&#9888; Select at least one program to build.</p>', unsafe_allow_html=True)
+    # ── Mode toggle ───────────────────────────────────────────────────────────
+    # Mirrors Business Auto's "Individual State" / "Small & Middle Market"
+    # toggle. "Individual Company" is the existing BOP flow below, unchanged.
+    # "Small Market" is a frontend-only shell for now (3 uploaders) — no
+    # backend wiring yet; that comes in a later change.
+    bop_mode = st.session_state.bop_mode
+    bmc1, bmc2, _ = st.columns([2, 2, 8])
+    with bmc1:
+        if st.button("Individual Company", key="bop_btn_ind", use_container_width=True,
+                     type="primary" if bop_mode == "individual" else "secondary"):
+            if bop_mode != "individual":
+                st.session_state.bop_mode = "individual"; st.rerun()
+    with bmc2:
+        if st.button("Small Market", key="bop_btn_sm", use_container_width=True,
+                     type="primary" if bop_mode == "small_market" else "secondary"):
+            if bop_mode != "small_market":
+                st.session_state.bop_mode = "small_market"; st.rerun()
     spacer(16)
 
-    L, R = st.columns([13, 7], gap="large")
-
-    with L:
-        st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
-        st.markdown('<p class="f-hint">All programs listed below as <b>Available</b> can be built today.</p>', unsafe_allow_html=True)
+    # ══════════════════════════════════════════════════════════════════════════
+    # SMALL MARKET MODE — frontend shell only (see module docstring above)
+    # ══════════════════════════════════════════════════════════════════════════
+    if bop_mode == "small_market":
+        st.markdown('<div class="sec-label">&#128194; &nbsp;Small Market Ratebooks</div>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint">Upload the <b>Small Market</b> ratebook and the <b>Applies to All / State</b> ratebook (both required), plus the <b>Countrywide</b> ratebook (optional — falls back to the default network copy if not uploaded, same as Individual Company).</p>', unsafe_allow_html=True)
         spacer(4)
 
-        uploaded = st.file_uploader(
-            "Select all ratebook files at once — filenames must contain the company code (NGIC, CW, MM, NACO, …)",
+        uploaded_bop_sm = st.file_uploader(
+            "Select the Small Market ratebook file",
             type=["xlsx", "xlsm", "xls"],
-            accept_multiple_files=True,
-            key=f"bop_multi_up_{st.session_state.bop_upload_reset}",
+            accept_multiple_files=False,
+            key=f"bop_sm_upload_{st.session_state.bop_sm_upload_reset}",
         )
+        if uploaded_bop_sm:
+            st.session_state["bop_sm_file_SM"] = {"name": uploaded_bop_sm.name, "bytes": uploaded_bop_sm.read()}
 
-        # ── Auto-detect & assign ───────────────────────────────────────────
-        if uploaded:
-            grouped = {}
-            for f in uploaded:
-                name_up = f.name.upper()
-                matched = next((k for k in BOP_DETECT_ORDER if k in name_up), None)
-                grouped.setdefault(matched or "NGIC", []).append(f)
-            for key in BOP_ALL_KEYS:
-                files = grouped.get(key, [])
-                if len(files) == 1:
-                    st.session_state[f"bop_file_{key}"] = {"name": files[0].name, "bytes": files[0].read()}
-                elif len(files) > 1:
-                    st.session_state[f"bop_file_{key}"] = {"error": "multiple", "names": [f.name for f in files]}
+        spacer(4)
+        uploaded_bop_ata = st.file_uploader(
+            "Select the Applies to All / State ratebook file",
+            type=["xlsx", "xlsm", "xls"],
+            accept_multiple_files=False,
+            key=f"bop_sm_ata_upload_{st.session_state.bop_sm_upload_reset}",
+        )
+        if uploaded_bop_ata:
+            st.session_state["bop_sm_file_ATA"] = {"name": uploaded_bop_ata.name, "bytes": uploaded_bop_ata.read()}
 
-        # ── Assignment table ────────────────────────────────────────────────
-        # CW falls back to a static network copy (BOP_CW_RATEBOOK_DEFAULT) if
-        # not uploaded, same as Business Auto — so it's optional, not required.
-        LABELS = {"NGIC": "Required", "CW": "Optional"}
-        rows_html = ""; n_ok = n_err = 0
-        for key in BOP_ALL_KEYS:
-            val = st.session_state.get(f"bop_file_{key}")
-            bh = '<span class="ab-req">Required</span>' if LABELS.get(key) == "Required" else ('<span class="ab-opt">Optional</span>' if LABELS.get(key) == "Optional" else "")
-            if val is None:
-                rows_html += f'<div class="arow arow-empty"><span class="aco">{key} {bh}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
-            elif "error" in val:
-                n_err += 1
-                rows_html += f'<div class="arow arow-error"><span class="aco">{key} {bh}</span><span class="afile afile-err">&#9888;&nbsp; Multiple files: {", ".join(val["names"])}</span><span class="astat astat-err">&#10005;</span></div>'
-            else:
-                n_ok += 1
-                rows_html += f'<div class="arow arow-ok"><span class="aco">{key} {bh}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
-        summary = f'{n_ok} assigned' + (f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err>1 else ""}</span>' if n_err else '')
-        st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>', unsafe_allow_html=True)
+        spacer(4)
+        uploaded_bop_cw = st.file_uploader(
+            "Select the Countrywide ratebook file (optional)",
+            type=["xlsx", "xlsm", "xls"],
+            accept_multiple_files=False,
+            key=f"bop_sm_cw_upload_{st.session_state.bop_sm_upload_reset}",
+        )
+        if uploaded_bop_cw:
+            st.session_state["bop_sm_file_CW"] = {"name": uploaded_bop_cw.name, "bytes": uploaded_bop_cw.read()}
 
-        if any(st.session_state[f"bop_file_{k}"] for k in BOP_ALL_KEYS):
-            spacer(8)
-            _, clr = st.columns([5, 1])
-            with clr:
-                if st.button("Clear all", type="secondary", key="bop_clear_btn"):
-                    for k in BOP_ALL_KEYS: st.session_state[f"bop_file_{k}"] = None
-                    st.session_state.bop_upload_reset += 1
-                    st.session_state.bop_run_status = "idle"
-                    st.rerun()
+        sm_val  = st.session_state.get("bop_sm_file_SM")
+        ata_val = st.session_state.get("bop_sm_file_ATA")
+        cw_val  = st.session_state.get("bop_sm_file_CW")
+        n_ok_bop_sm = sum(1 for v in [sm_val, ata_val, cw_val] if v)
 
-        # ── Programs ─────────────────────────────────────────────────────────
-        # The BOP programs from the old desktop tool, shown for visibility.
-        # Available ones are driven by the checkboxes above; the rest are
-        # read-only status rows until they're built out. (The old tool's
-        # "Individual Programs" option is superseded by "Select all".)
-        spacer(14)
-        BOP_PROGRAMS = [
-            ("All Programs",         True,  "Available"),
-            ("All Peril",            True,  "Available"),
-            ("Hab",                  True,  "Available"),
-            ("Auto Service",         True,  "Available"),
-            ("Food Service",         True,  "Available"),
-            ("Office",               True,  "Available"),
-            ("Retail",               True,  "Available"),
-            ("Service",              True,  "Available"),
-            ("Wholesale",            True,  "Available"),
-            ("Optional Coverages",   True,  "Available"),
-            ("Rating Plans",         True,  "Available"),
-            ("Class Modifier",       True,  "Available"),
-            ("Common Rules",         True,  "Available"),
-            ("Additional Rules",     True,  "Available"),
-        ]
-        prog_rows = ""
-        for name, active, note in BOP_PROGRAMS:
-            if active and name in st.session_state.bop_programs:
-                prog_rows += f'<div class="arow arow-ok"><span class="aco">{name}</span><span class="afile afile-assigned">Selected — will be built</span><span class="astat astat-ok">&#10003;</span></div>'
-            elif active:
-                prog_rows += f'<div class="arow arow-ok"><span class="aco">{name}</span><span class="afile afile-assigned">Available — tick its checkbox above</span><span class="astat astat-ok">&#10003;</span></div>'
-            else:
-                prog_rows += f'<div class="arow arow-empty"><span class="aco">{name}</span><span class="afile">{note}</span><span class="astat astat-empty">—</span></div>'
-        n_avail = sum(1 for _, a, _ in BOP_PROGRAMS if a)
-        st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>Programs</span><span>{n_avail} of {len(BOP_PROGRAMS)} available</span></div>{prog_rows}</div>', unsafe_allow_html=True)
+        def _bop_sm_row(label, val, required=True):
+            badge = '<span class="ab-req">Required</span>' if required else '<span class="ab-opt">Optional</span>'
+            if val:
+                return f'<div class="arow arow-ok"><span class="aco">{label} {badge}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+            return f'<div class="arow arow-empty"><span class="aco">{label} {badge}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
 
-    with R:
-        st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
-        st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
-        typed = st.text_input("bop_save_path", value=st.session_state.bop_save_dir, placeholder="Paste path or click Browse", label_visibility="collapsed")
-        if typed != st.session_state.bop_save_dir: st.session_state.bop_save_dir = typed
-        if st.button("Browse", key="bop_browse_btn"):
-            folder = browse_folder()
-            if folder: st.session_state.bop_save_dir = folder; st.rerun()
-        if st.session_state.bop_save_dir:
-            p = st.session_state.bop_save_dir
-            st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
-        else:
-            st.markdown('<p class="f-hint">Browse your device or paste the full folder path</p>', unsafe_allow_html=True)
-
-        spacer(6)
-        st.markdown('<p class="f-label">&#128202; &nbsp;IRPM Credit / Debit</p>', unsafe_allow_html=True)
-        st.markdown('<p class="f-hint">Feeds Rating Plans\' State Individual Risk Premium Modification Plan table (RPMP) — ignored unless Rating Plans is selected above.</p>', unsafe_allow_html=True)
-        ic1, ic2 = st.columns(2)
-        with ic1:
-            st.number_input("IRPM Credit %", min_value=0.0, max_value=100.0, step=0.1, key="bop_irpm_credit")
-        with ic2:
-            st.number_input("IRPM Debit %", min_value=0.0, max_value=100.0, step=0.1, key="bop_irpm_debit")
-
-        spacer(6)
-        st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
-        save_ok = bool(st.session_state.bop_save_dir)
-        nr_now = n_bop_req()
-        req_sub = f"All {len(BOP_REQUIRED)} required ratebooks uploaded" if all_bop_req() else f"{nr_now} of {len(BOP_REQUIRED)} required ratebooks uploaded"
-        sdv = st.session_state.bop_save_dir
-        save_sub = (("…"+sdv[-36:]) if len(sdv)>38 else sdv) if save_ok else "Not yet selected"
-        progs_ok = bool(st.session_state.bop_programs)
-        progs_sub = ", ".join(st.session_state.bop_programs) if progs_ok else "Not yet selected"
-
-        def rdy(ok, title, sub):
-            d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
-            return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
-
-        st.markdown('<div class="rdy-card">'
-            + rdy(progs_ok, f'Program(s) Selected &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{len(st.session_state.bop_programs)}/{len(BOP_AVAILABLE_PROGRAMS)}</span>', progs_sub)
-            + rdy(all_bop_req(), f'Required Ratebooks &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{nr_now}/{len(BOP_REQUIRED)}</span>', req_sub)
-            + rdy(save_ok, "Save location", save_sub)
+        st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{n_ok_bop_sm} assigned</span></div>'
+            + _bop_sm_row("Small Market", sm_val) + _bop_sm_row("Applies to All / State", ata_val) + _bop_sm_row("Countrywide", cw_val, required=False)
             + '</div>', unsafe_allow_html=True)
 
-        ready = all_bop_req() and save_ok and bool(st.session_state.bop_programs)
-
-        if st.session_state.bop_confirm_step == "idle":
-            if ready:
-                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                if st.button("Create Rate Pages", key="bop_run_btn", use_container_width=True):
-                    st.session_state.bop_confirm_step = "confirm"; st.session_state.bop_run_status = "idle"; st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                missing = (["NGIC ratebook"] if not _bop_valid("NGIC") else []) \
-                        + (["save location"] if not save_ok else []) \
-                        + (["program selection"] if not st.session_state.bop_programs else [])
-                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-                st.button(f"Waiting — {', '.join(missing)}", key="bop_run_btn_dis", use_container_width=True, disabled=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-
-        elif st.session_state.bop_confirm_step == "confirm":
-            st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-            st.button("Create Rate Pages", key="bop_run_btn_cfm", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
+        if sm_val or ata_val or cw_val:
             spacer(8)
-            bc1, bc2 = st.columns(2)
-            with bc1:
-                if st.button("Cancel", key="bop_cancel_btn", use_container_width=True, type="secondary"):
-                    st.session_state.bop_confirm_step = "idle"; st.rerun()
-            with bc2:
-                if st.button("Proceed", key="bop_proceed_btn", use_container_width=True, type="primary"):
-                    st.session_state.bop_confirm_step = "processing"; st.rerun()
+            _, bop_sm_clr = st.columns([5, 1])
+            with bop_sm_clr:
+                if st.button("Clear all", type="secondary", key="bop_sm_clear"):
+                    st.session_state["bop_sm_file_SM"] = None
+                    st.session_state["bop_sm_file_ATA"] = None
+                    st.session_state["bop_sm_file_CW"] = None
+                    st.session_state.bop_sm_upload_reset += 1
+                    st.rerun()
 
-        elif st.session_state.bop_confirm_step == "processing":
-            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-            st.button("Processing Excel...", key="bop_run_btn_proc", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            loader_ph = st.empty()
-            def update_progress(msg):
-                loader_ph.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Creating Excel rate pages…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
-            update_progress("Please wait while the workbooks are processed.")
-            from BOP.BOPRatePages import run as run_bop_rate_pages
-            try:
-                def _rb(k):
-                    f = st.session_state.get(f"bop_file_{k}")
-                    return io.BytesIO(f["bytes"]) if f and "error" not in f else None
-                built_programs = list(st.session_state.bop_programs)
-                xlsx_outs, pdf_outs, resolved_version, resolved_appetite = run_bop_rate_pages(
-                    NGICRatebook=_rb("NGIC"), CWRatebook=_rb("CW"), MMRatebook=_rb("MM"),
-                    NACORatebook=_rb("NACO"), NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"),
-                    HICNJRatebook=_rb("HICNJ"),
-                    folder_selected=st.session_state.bop_save_dir,
-                    progress_callback=update_progress, skip_pdf=True,
-                    version=st.session_state.bop_version,
-                    appetite=st.session_state.bop_appetite,
-                    program=built_programs,
-                    irpm_credit=st.session_state.bop_irpm_credit / 100.0,
-                    irpm_debit=st.session_state.bop_irpm_debit / 100.0)
-                st.session_state.bop_xlsx_paths = xlsx_outs; st.session_state.bop_pdf_paths = pdf_outs
-                st.session_state.bop_built_programs = built_programs
-                # Store the *resolved* version/appetite (e.g. "Default" ->
-                # "2.0"/True for that state's ratebook) — the PDF step's
-                # TRDEF-exclusion check below needs the actual version
-                # built, not "Default".
-                st.session_state.bop_built_version = resolved_version
-                st.session_state.bop_built_appetite = resolved_appetite
-                st.session_state.bop_run_status = "success"; st.session_state.bop_pdf_status = "idle"
-                st.session_state.bop_pdf_final_paths = []
-                st.session_state.bop_terr_pdf_status = "idle"; st.session_state.bop_terr_pdf_paths = []
-            except Exception as e:
-                import traceback; traceback.print_exc()
-                st.session_state.bop_run_status = "error"; st.session_state.bop_run_msg = str(e)
-            st.session_state.bop_confirm_step = "idle"; st.rerun()
+        spacer(16)
+        st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+        st.button("Create Rate Pages — backend coming soon", key="bop_sm_run_dis", use_container_width=True, disabled=True)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        elif st.session_state.bop_confirm_step == "pdf_processing":
-            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-            st.button("Generating PDF...", key="bop_pdf_btn_proc", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            loader_ph2 = st.empty()
-            def update_pdf_progress(msg):
-                loader_ph2.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting to PDF…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
-            from BOP.BOPRatePages import generate_pdf_only, TERRITORY_DEFS_SHEET
-            try:
-                n_pdf = len(st.session_state.bop_xlsx_paths)
-                built_programs = st.session_state.bop_built_programs
-                built_version = st.session_state.bop_built_version
-                max_mb = st.session_state.bop_pdf_max_mb_store
-                final_paths = []
-                for i, (xp, pp) in enumerate(zip(st.session_state.bop_xlsx_paths, st.session_state.bop_pdf_paths), start=1):
-                    def _cb(msg, _i=i, _n=n_pdf):
-                        update_pdf_progress(f"[{_i}/{_n}] {msg}" if _n > 1 else msg)
-                    # The "All Programs" (2.0) workbook's Territory Definitions
-                    # sheet is huge and optional — leave it out of the main
-                    # PDF here; the user can generate it separately below.
-                    prog_name = built_programs[i - 1] if i - 1 < len(built_programs) else None
-                    exclude = [TERRITORY_DEFS_SHEET] if (prog_name == "All Programs" and built_version == "2.0") else None
-                    final_paths.extend(generate_pdf_only(xp, pp, progress_callback=_cb,
-                                                          exclude_sheets=exclude, max_pdf_mb=max_mb))
-                st.session_state.bop_pdf_final_paths = final_paths
-                st.session_state.bop_pdf_status = "success"
-            except Exception as e:
-                import traceback; traceback.print_exc()
-                st.session_state.bop_pdf_status = "error"; st.session_state.bop_run_msg = str(e)
-            st.session_state.bop_confirm_step = "idle"; st.rerun()
+    # ══════════════════════════════════════════════════════════════════════════
+    # INDIVIDUAL COMPANY MODE — existing BOP flow, unchanged
+    # ══════════════════════════════════════════════════════════════════════════
+    else:
 
-        elif st.session_state.bop_confirm_step == "terr_pdf_processing":
-            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-            st.button("Generating Territory Definitions PDF...", key="bop_terr_pdf_btn_proc", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            loader_ph3 = st.empty()
-            def update_terr_progress(msg):
-                loader_ph3.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting Territory Definitions…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
-            from BOP.BOPRatePages import generate_territory_defs_pdf
-            try:
-                idx = st.session_state.bop_built_programs.index("All Programs")
-                xp = st.session_state.bop_xlsx_paths[idx]
-                out_pdfs = generate_territory_defs_pdf(xp, progress_callback=update_terr_progress,
-                                                        max_pdf_mb=st.session_state.bop_pdf_max_mb_store)
-                st.session_state.bop_terr_pdf_paths = out_pdfs
-                st.session_state.bop_terr_pdf_status = "success"
-            except Exception as e:
-                import traceback; traceback.print_exc()
-                st.session_state.bop_terr_pdf_status = "error"; st.session_state.bop_terr_pdf_msg = str(e)
-            st.session_state.bop_confirm_step = "idle"; st.rerun()
+        def _bop_valid(k):
+            v = st.session_state.get(f"bop_file_{k}")
+            return v is not None and "error" not in v
 
-        if st.session_state.bop_run_status == "success":
-            spacer(10)
-            for xp in st.session_state.bop_xlsx_paths:
-                st.success(f"&#10003;  Excel created: {Path(xp).name}")
-            if st.session_state.bop_pdf_status != "success":
-                n_files = len(st.session_state.bop_xlsx_paths)
-                pdf_label = "Generate PDF Documents" if n_files > 1 else "Generate PDF Document"
-                st.markdown('<p class="f-label">&#128202; &nbsp;Max PDF Size (MB, optional)</p>', unsafe_allow_html=True)
-                st.markdown('<p class="f-hint">Leave blank to generate a single PDF, as today. If a generated PDF ends up larger than this, it\'s split into "_part1", "_part2", etc., each under the limit — a sheet\'s pages stay together in one part whenever they fit.</p>', unsafe_allow_html=True)
-                st.number_input(
-                    "Max PDF size (MB)", min_value=0.1, step=1.0,
-                    key="bop_pdf_max_mb", label_visibility="collapsed",
-                    placeholder="No limit — single PDF",
-                )
-                # Mirror into the plain (non-widget) store every run this
-                # renders — see the setdefault comment above for why reading
-                # bop_pdf_max_mb directly, later, isn't safe.
-                st.session_state.bop_pdf_max_mb_store = st.session_state.bop_pdf_max_mb
-                spacer(6)
-                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                if st.button(pdf_label, key="bop_gen_pdf_btn", use_container_width=True):
-                    st.session_state.bop_confirm_step = "pdf_processing"; st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-                if st.session_state.bop_pdf_status == "error":
-                    st.error(f"PDF Error: {st.session_state.bop_run_msg}")
-            else:
-                for pp in st.session_state.bop_pdf_final_paths:
-                    st.success(f"&#10003;  PDF created: {Path(pp).name}")
+        def n_bop_req():   return sum(1 for k in BOP_REQUIRED if _bop_valid(k))
+        def all_bop_req(): return n_bop_req() == len(BOP_REQUIRED)
 
-                # Territory Definitions ("TRDEF") — All Programs, 2.0 only.
-                # Left out of the PDF above (82k rows, dominates export time);
-                # optional, so it's offered here rather than bundled in.
-                if ("All Programs" in st.session_state.bop_built_programs
-                        and st.session_state.bop_built_version == "2.0"):
-                    spacer(10)
-                    if st.session_state.bop_terr_pdf_status == "success":
-                        for tp in st.session_state.bop_terr_pdf_paths:
-                            st.success(f"&#10003;  Territory Definitions PDF created: {Path(tp).name}")
-                    else:
-                        st.markdown('<p class="f-hint">Territory Definitions is the last sheet of the All Programs workbook &mdash; its PDF is optional and generated separately since it can take longer.</p>', unsafe_allow_html=True)
-                        st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-                        if st.button("Generate Territory Definitions PDF (optional)", key="bop_terr_pdf_btn", use_container_width=True):
-                            st.session_state.bop_confirm_step = "terr_pdf_processing"; st.rerun()
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        if st.session_state.bop_terr_pdf_status == "error":
-                            st.error(f"Territory Definitions PDF Error: {st.session_state.bop_terr_pdf_msg}")
-        elif st.session_state.bop_run_status == "error":
-            spacer(10); st.error(st.session_state.bop_run_msg)
-
-        spacer(24)
-        st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BOP Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
-
-    # ── All Programs Consistency Check ──────────────────────────────────────
-    # Checks every rating table printed under "All Programs" (see
-    # BOP/audit_all_programs_split.py) to confirm — straight from the
-    # uploaded ratebooks — whether the factors are really the same across
-    # all 7 BOP programs, only differ for Hab, or split further and belong
-    # in an individual program section instead. Uses the same ratebook
-    # uploads as "Create Rate Pages" above; only NGIC is required.
-    spacer(20)
-    st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"></div>', unsafe_allow_html=True)
-    spacer(10)
-    st.markdown('<div class="sec-label">&#128269; &nbsp;All Programs Consistency Check</div>', unsafe_allow_html=True)
-    st.markdown('<p class="f-hint">Confirms, from the uploaded ratebooks, whether each All Programs rating table really is the same across all 7 BOP programs (Hab, Auto, Food, Retail, Office, Service, Wholesale) &mdash; or whether it splits and belongs somewhere else in the manual.</p>', unsafe_allow_html=True)
-    spacer(6)
-
-    audit_ready = _bop_valid("NGIC")
-    ac1, _ac2 = st.columns([3, 9])
-    run_audit_clicked = False
-    with ac1:
-        if audit_ready:
-            st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
-            run_audit_clicked = st.button("Run Consistency Check", key="bop_audit_btn", use_container_width=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
-            st.button("Waiting — NGIC ratebook", key="bop_audit_btn_dis", use_container_width=True, disabled=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    if run_audit_clicked:
-        st.session_state.bop_audit_status = "processing"; st.rerun()
-
-    if st.session_state.bop_audit_status == "processing":
-        with st.spinner("Checking every All Programs rating table against the uploaded ratebooks..."):
-            from BOP.audit_all_programs_split import load_and_audit, to_excel_bytes
-            try:
-                def _rb_audit(k):
-                    f = st.session_state.get(f"bop_file_{k}")
-                    return io.BytesIO(f["bytes"]) if f and "error" not in f else None
-                summary_df, detail_df, completeness_df = load_and_audit(
-                    ngic=_rb_audit("NGIC"), naco=_rb_audit("NACO"), naff=_rb_audit("NAFF"),
-                    nicof=_rb_audit("NICOF"), hicnj=_rb_audit("HICNJ"), cw=_rb_audit("CW"),
-                )
-                st.session_state.bop_audit_summary = summary_df
-                st.session_state.bop_audit_detail = detail_df
-                st.session_state.bop_audit_completeness = completeness_df
-                st.session_state.bop_audit_report_bytes = to_excel_bytes(summary_df, detail_df, completeness_df)
-                st.session_state.bop_audit_status = "success"
-            except Exception as e:
-                import traceback; traceback.print_exc()
-                st.session_state.bop_audit_status = "error"; st.session_state.bop_audit_msg = str(e)
-        st.rerun()
-
-    if st.session_state.bop_audit_status == "success" and st.session_state.bop_audit_summary is not None:
-        summary_df = st.session_state.bop_audit_summary
+        # ── Version toggle ──────────────────────────────────────────────────────
+        # Mirrors the two "Create BP2.0 / Create Pre 2.0" buttons in the old
+        # desktop tool. Both versions have a working backend now.
+        st.markdown('<div class="sec-label">&#128209; &nbsp;Rate Page Version</div>', unsafe_allow_html=True)
+        vc0, vc1, vc2, vc4, _ = st.columns([2, 2, 2, 3, 5])
+        with vc0:
+            if st.button("Default", key="bop_ver_default", use_container_width=True,
+                         type="primary" if st.session_state.bop_version == "Default" else "secondary"):
+                if st.session_state.bop_version != "Default":
+                    st.session_state.bop_version = "Default"; st.rerun()
+        with vc1:
+            if st.button("BP-2.0", key="bop_ver_20", use_container_width=True,
+                         type="primary" if st.session_state.bop_version == "2.0" else "secondary"):
+                if st.session_state.bop_version != "2.0":
+                    st.session_state.bop_version = "2.0"; st.session_state.bop_appetite = True; st.rerun()
+        with vc2:
+            if st.button("Pre 2.0", key="bop_ver_pre", use_container_width=True,
+                         type="primary" if st.session_state.bop_version == "pre2.0" else "secondary"):
+                if st.session_state.bop_version != "pre2.0":
+                    st.session_state.bop_version = "pre2.0"; st.session_state.bop_appetite = True; st.rerun()
+        with vc4:
+            is_default = st.session_state.bop_version == "Default"
+            if is_default:
+                st.session_state.bop_appetite = False
+            st.checkbox("Add Appetite pages", key="bop_appetite", disabled=is_default,
+                         help="Add each program's Appetite-only pages on top of the selected version.")
+        if st.session_state.bop_version == "Default":
+            st.markdown('<p class="f-hint">Version and Appetite are chosen automatically per state from the "Version By State" tab in BOP Input File.xlsx.</p>', unsafe_allow_html=True)
         spacer(10)
 
-        FINDING_COLORS = {
-            "SINGLE":               "#E6F4EA",
-            "HAB_SPLIT":            "#E6F0FA",
-            "SPLIT_NOT_HAB":        "#FFF4E0",
-            "MULTI_SPLIT":          "#FCE4E4",
-            "NO_PROGRAM_DIMENSION": "#F1F1F1",
-            "TABLE_NOT_FOUND":      "#F1F1F1",
-        }
+        # ── Program selection ────────────────────────────────────────────────────
+        # Check one or more programs; "Select all" overrides the individual boxes.
+        # Every checked program is built in ONE run (the ratebooks are opened and
+        # extracted once), each saved as its own xlsx.
+        st.markdown('<div class="sec-label">&#128218; &nbsp;Programs to Build</div>', unsafe_allow_html=True)
+        st.markdown('<div class="bop-prog-grid">', unsafe_allow_html=True)
 
-        def _row_style(row):
-            color = FINDING_COLORS.get(row["Finding"], "")
-            return [f"background-color: {color}"] * len(row)
+        sel_all_col, _ = st.columns([2, 10])
+        with sel_all_col:
+            sel_all = st.checkbox("Select all", key="bop_prog_select_all",
+                                  value=st.session_state.bop_sel_all_store,
+                                  help="Build every available program in one run")
+        st.session_state.bop_sel_all_store = sel_all
 
-        counts = summary_df["Finding"].value_counts().to_dict()
-        def _badge(label, n, color):
-            return f'<span style="background:{color};border-radius:4px;padding:2px 8px;margin-right:6px;font-size:12px;">{label}: {n}</span>'
-        st.markdown(
-            _badge("Single", counts.get("SINGLE", 0), FINDING_COLORS["SINGLE"])
-            + _badge("Hab split", counts.get("HAB_SPLIT", 0), FINDING_COLORS["HAB_SPLIT"])
-            + _badge("Split, not Hab", counts.get("SPLIT_NOT_HAB", 0), FINDING_COLORS["SPLIT_NOT_HAB"])
-            + _badge("3+ way split", counts.get("MULTI_SPLIT", 0), FINDING_COLORS["MULTI_SPLIT"])
-            + _badge("No program data / not found",
-                     counts.get("NO_PROGRAM_DIMENSION", 0) + counts.get("TABLE_NOT_FOUND", 0),
-                     FINDING_COLORS["NO_PROGRAM_DIMENSION"]),
-            unsafe_allow_html=True,
-        )
+        # Wrapped in fixed-size rows (not one row of len(programs) columns) so
+        # each checkbox keeps enough width for its label to stay on one line
+        # regardless of how many programs exist.
+        PROGS_PER_ROW = 7
+        individually_checked = []
+        for row_start in range(0, len(BOP_AVAILABLE_PROGRAMS), PROGS_PER_ROW):
+            row_progs = BOP_AVAILABLE_PROGRAMS[row_start:row_start + PROGS_PER_ROW]
+            row_cols = st.columns(PROGS_PER_ROW)
+            for col, prog_name in zip(row_cols, row_progs):
+                with col:
+                    chk = st.checkbox(prog_name, key=f"bop_prog_chk_{prog_name.replace(' ', '_')}",
+                                      value=(prog_name in st.session_state.bop_programs_store),
+                                      disabled=sel_all)
+                if chk:
+                    individually_checked.append(prog_name)
+        st.markdown('</div>', unsafe_allow_html=True)
+        # Individual picks survive toggling "Select all" off again.
+        st.session_state.bop_programs_store = individually_checked
+        st.session_state.bop_programs = list(BOP_AVAILABLE_PROGRAMS) if sel_all else individually_checked
+        if not st.session_state.bop_programs:
+            st.markdown('<p class="f-hint">&#9888; Select at least one program to build.</p>', unsafe_allow_html=True)
+        spacer(16)
+
+        L, R = st.columns([13, 7], gap="large")
+
+        with L:
+            st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">All programs listed below as <b>Available</b> can be built today.</p>', unsafe_allow_html=True)
+            spacer(4)
+
+            uploaded = st.file_uploader(
+                "Select all ratebook files at once — filenames must contain the company code (NGIC, CW, MM, NACO, …)",
+                type=["xlsx", "xlsm", "xls"],
+                accept_multiple_files=True,
+                key=f"bop_multi_up_{st.session_state.bop_upload_reset}",
+            )
+
+            # ── Auto-detect & assign ───────────────────────────────────────────
+            if uploaded:
+                grouped = {}
+                for f in uploaded:
+                    name_up = f.name.upper()
+                    matched = next((k for k in BOP_DETECT_ORDER if k in name_up), None)
+                    grouped.setdefault(matched or "NGIC", []).append(f)
+                for key in BOP_ALL_KEYS:
+                    files = grouped.get(key, [])
+                    if len(files) == 1:
+                        st.session_state[f"bop_file_{key}"] = {"name": files[0].name, "bytes": files[0].read()}
+                    elif len(files) > 1:
+                        st.session_state[f"bop_file_{key}"] = {"error": "multiple", "names": [f.name for f in files]}
+
+            # ── Assignment table ────────────────────────────────────────────────
+            # CW falls back to a static network copy (BOP_CW_RATEBOOK_DEFAULT) if
+            # not uploaded, same as Business Auto — so it's optional, not required.
+            LABELS = {"NGIC": "Required", "CW": "Optional"}
+            rows_html = ""; n_ok = n_err = 0
+            for key in BOP_ALL_KEYS:
+                val = st.session_state.get(f"bop_file_{key}")
+                bh = '<span class="ab-req">Required</span>' if LABELS.get(key) == "Required" else ('<span class="ab-opt">Optional</span>' if LABELS.get(key) == "Optional" else "")
+                if val is None:
+                    rows_html += f'<div class="arow arow-empty"><span class="aco">{key} {bh}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
+                elif "error" in val:
+                    n_err += 1
+                    rows_html += f'<div class="arow arow-error"><span class="aco">{key} {bh}</span><span class="afile afile-err">&#9888;&nbsp; Multiple files: {", ".join(val["names"])}</span><span class="astat astat-err">&#10005;</span></div>'
+                else:
+                    n_ok += 1
+                    rows_html += f'<div class="arow arow-ok"><span class="aco">{key} {bh}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+            summary = f'{n_ok} assigned' + (f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err>1 else ""}</span>' if n_err else '')
+            st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>', unsafe_allow_html=True)
+
+            if any(st.session_state[f"bop_file_{k}"] for k in BOP_ALL_KEYS):
+                spacer(8)
+                _, clr = st.columns([5, 1])
+                with clr:
+                    if st.button("Clear all", type="secondary", key="bop_clear_btn"):
+                        for k in BOP_ALL_KEYS: st.session_state[f"bop_file_{k}"] = None
+                        st.session_state.bop_upload_reset += 1
+                        st.session_state.bop_run_status = "idle"
+                        st.rerun()
+
+            # ── Programs ─────────────────────────────────────────────────────────
+            # The BOP programs from the old desktop tool, shown for visibility.
+            # Available ones are driven by the checkboxes above; the rest are
+            # read-only status rows until they're built out. (The old tool's
+            # "Individual Programs" option is superseded by "Select all".)
+            spacer(14)
+            BOP_PROGRAMS = [
+                ("All Programs",         True,  "Available"),
+                ("All Peril",            True,  "Available"),
+                ("Hab",                  True,  "Available"),
+                ("Auto Service",         True,  "Available"),
+                ("Food Service",         True,  "Available"),
+                ("Office",               True,  "Available"),
+                ("Retail",               True,  "Available"),
+                ("Service",              True,  "Available"),
+                ("Wholesale",            True,  "Available"),
+                ("Optional Coverages",   True,  "Available"),
+                ("Rating Plans",         True,  "Available"),
+                ("Class Modifier",       True,  "Available"),
+                ("Common Rules",         True,  "Available"),
+                ("Additional Rules",     True,  "Available"),
+            ]
+            prog_rows = ""
+            for name, active, note in BOP_PROGRAMS:
+                if active and name in st.session_state.bop_programs:
+                    prog_rows += f'<div class="arow arow-ok"><span class="aco">{name}</span><span class="afile afile-assigned">Selected — will be built</span><span class="astat astat-ok">&#10003;</span></div>'
+                elif active:
+                    prog_rows += f'<div class="arow arow-ok"><span class="aco">{name}</span><span class="afile afile-assigned">Available — tick its checkbox above</span><span class="astat astat-ok">&#10003;</span></div>'
+                else:
+                    prog_rows += f'<div class="arow arow-empty"><span class="aco">{name}</span><span class="afile">{note}</span><span class="astat astat-empty">—</span></div>'
+            n_avail = sum(1 for _, a, _ in BOP_PROGRAMS if a)
+            st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>Programs</span><span>{n_avail} of {len(BOP_PROGRAMS)} available</span></div>{prog_rows}</div>', unsafe_allow_html=True)
+
+        with R:
+            st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
+            typed = st.text_input("bop_save_path", value=st.session_state.bop_save_dir, placeholder="Paste path or click Browse", label_visibility="collapsed")
+            if typed != st.session_state.bop_save_dir: st.session_state.bop_save_dir = typed
+            if st.button("Browse", key="bop_browse_btn"):
+                folder = browse_folder()
+                if folder: st.session_state.bop_save_dir = folder; st.rerun()
+            if st.session_state.bop_save_dir:
+                p = st.session_state.bop_save_dir
+                st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
+            else:
+                st.markdown('<p class="f-hint">Browse your device or paste the full folder path</p>', unsafe_allow_html=True)
+
+            spacer(6)
+            st.markdown('<p class="f-label">&#128202; &nbsp;IRPM Credit / Debit</p>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Feeds Rating Plans\' State Individual Risk Premium Modification Plan table (RPMP) — ignored unless Rating Plans is selected above.</p>', unsafe_allow_html=True)
+            ic1, ic2 = st.columns(2)
+            with ic1:
+                st.number_input("IRPM Credit %", min_value=0.0, max_value=100.0, step=0.1, key="bop_irpm_credit")
+            with ic2:
+                st.number_input("IRPM Debit %", min_value=0.0, max_value=100.0, step=0.1, key="bop_irpm_debit")
+
+            spacer(6)
+            st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
+            save_ok = bool(st.session_state.bop_save_dir)
+            nr_now = n_bop_req()
+            req_sub = f"All {len(BOP_REQUIRED)} required ratebooks uploaded" if all_bop_req() else f"{nr_now} of {len(BOP_REQUIRED)} required ratebooks uploaded"
+            sdv = st.session_state.bop_save_dir
+            save_sub = (("…"+sdv[-36:]) if len(sdv)>38 else sdv) if save_ok else "Not yet selected"
+            progs_ok = bool(st.session_state.bop_programs)
+            progs_sub = ", ".join(st.session_state.bop_programs) if progs_ok else "Not yet selected"
+
+            def rdy(ok, title, sub):
+                d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
+                return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
+
+            st.markdown('<div class="rdy-card">'
+                + rdy(progs_ok, f'Program(s) Selected &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{len(st.session_state.bop_programs)}/{len(BOP_AVAILABLE_PROGRAMS)}</span>', progs_sub)
+                + rdy(all_bop_req(), f'Required Ratebooks &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{nr_now}/{len(BOP_REQUIRED)}</span>', req_sub)
+                + rdy(save_ok, "Save location", save_sub)
+                + '</div>', unsafe_allow_html=True)
+
+            ready = all_bop_req() and save_ok and bool(st.session_state.bop_programs)
+
+            if st.session_state.bop_confirm_step == "idle":
+                if ready:
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button("Create Rate Pages", key="bop_run_btn", use_container_width=True):
+                        st.session_state.bop_confirm_step = "confirm"; st.session_state.bop_run_status = "idle"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    missing = (["NGIC ratebook"] if not _bop_valid("NGIC") else []) \
+                            + (["save location"] if not save_ok else []) \
+                            + (["program selection"] if not st.session_state.bop_programs else [])
+                    st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                    st.button(f"Waiting — {', '.join(missing)}", key="bop_run_btn_dis", use_container_width=True, disabled=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            elif st.session_state.bop_confirm_step == "confirm":
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                st.button("Create Rate Pages", key="bop_run_btn_cfm", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
+                spacer(8)
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("Cancel", key="bop_cancel_btn", use_container_width=True, type="secondary"):
+                        st.session_state.bop_confirm_step = "idle"; st.rerun()
+                with bc2:
+                    if st.button("Proceed", key="bop_proceed_btn", use_container_width=True, type="primary"):
+                        st.session_state.bop_confirm_step = "processing"; st.rerun()
+
+            elif st.session_state.bop_confirm_step == "processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Processing Excel...", key="bop_run_btn_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph = st.empty()
+                def update_progress(msg):
+                    loader_ph.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Creating Excel rate pages…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                update_progress("Please wait while the workbooks are processed.")
+                from BOP.BOPRatePages import run as run_bop_rate_pages
+                try:
+                    def _rb(k):
+                        f = st.session_state.get(f"bop_file_{k}")
+                        return io.BytesIO(f["bytes"]) if f and "error" not in f else None
+                    built_programs = list(st.session_state.bop_programs)
+                    xlsx_outs, pdf_outs, resolved_version, resolved_appetite = run_bop_rate_pages(
+                        NGICRatebook=_rb("NGIC"), CWRatebook=_rb("CW"), MMRatebook=_rb("MM"),
+                        NACORatebook=_rb("NACO"), NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"),
+                        HICNJRatebook=_rb("HICNJ"),
+                        folder_selected=st.session_state.bop_save_dir,
+                        progress_callback=update_progress, skip_pdf=True,
+                        version=st.session_state.bop_version,
+                        appetite=st.session_state.bop_appetite,
+                        program=built_programs,
+                        irpm_credit=st.session_state.bop_irpm_credit / 100.0,
+                        irpm_debit=st.session_state.bop_irpm_debit / 100.0)
+                    st.session_state.bop_xlsx_paths = xlsx_outs; st.session_state.bop_pdf_paths = pdf_outs
+                    st.session_state.bop_built_programs = built_programs
+                    # Store the *resolved* version/appetite (e.g. "Default" ->
+                    # "2.0"/True for that state's ratebook) — the PDF step's
+                    # TRDEF-exclusion check below needs the actual version
+                    # built, not "Default".
+                    st.session_state.bop_built_version = resolved_version
+                    st.session_state.bop_built_appetite = resolved_appetite
+                    st.session_state.bop_run_status = "success"; st.session_state.bop_pdf_status = "idle"
+                    st.session_state.bop_pdf_final_paths = []
+                    st.session_state.bop_terr_pdf_status = "idle"; st.session_state.bop_terr_pdf_paths = []
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.bop_run_status = "error"; st.session_state.bop_run_msg = str(e)
+                st.session_state.bop_confirm_step = "idle"; st.rerun()
+
+            elif st.session_state.bop_confirm_step == "pdf_processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Generating PDF...", key="bop_pdf_btn_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph2 = st.empty()
+                def update_pdf_progress(msg):
+                    loader_ph2.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting to PDF…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                from BOP.BOPRatePages import generate_pdf_only, TERRITORY_DEFS_SHEET
+                try:
+                    n_pdf = len(st.session_state.bop_xlsx_paths)
+                    built_programs = st.session_state.bop_built_programs
+                    built_version = st.session_state.bop_built_version
+                    max_mb = st.session_state.bop_pdf_max_mb_store
+                    final_paths = []
+                    for i, (xp, pp) in enumerate(zip(st.session_state.bop_xlsx_paths, st.session_state.bop_pdf_paths), start=1):
+                        def _cb(msg, _i=i, _n=n_pdf):
+                            update_pdf_progress(f"[{_i}/{_n}] {msg}" if _n > 1 else msg)
+                        # The "All Programs" (2.0) workbook's Territory Definitions
+                        # sheet is huge and optional — leave it out of the main
+                        # PDF here; the user can generate it separately below.
+                        prog_name = built_programs[i - 1] if i - 1 < len(built_programs) else None
+                        exclude = [TERRITORY_DEFS_SHEET] if (prog_name == "All Programs" and built_version == "2.0") else None
+                        final_paths.extend(generate_pdf_only(xp, pp, progress_callback=_cb,
+                                                              exclude_sheets=exclude, max_pdf_mb=max_mb))
+                    st.session_state.bop_pdf_final_paths = final_paths
+                    st.session_state.bop_pdf_status = "success"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.bop_pdf_status = "error"; st.session_state.bop_run_msg = str(e)
+                st.session_state.bop_confirm_step = "idle"; st.rerun()
+
+            elif st.session_state.bop_confirm_step == "terr_pdf_processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Generating Territory Definitions PDF...", key="bop_terr_pdf_btn_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph3 = st.empty()
+                def update_terr_progress(msg):
+                    loader_ph3.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting Territory Definitions…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                from BOP.BOPRatePages import generate_territory_defs_pdf
+                try:
+                    idx = st.session_state.bop_built_programs.index("All Programs")
+                    xp = st.session_state.bop_xlsx_paths[idx]
+                    out_pdfs = generate_territory_defs_pdf(xp, progress_callback=update_terr_progress,
+                                                            max_pdf_mb=st.session_state.bop_pdf_max_mb_store)
+                    st.session_state.bop_terr_pdf_paths = out_pdfs
+                    st.session_state.bop_terr_pdf_status = "success"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.bop_terr_pdf_status = "error"; st.session_state.bop_terr_pdf_msg = str(e)
+                st.session_state.bop_confirm_step = "idle"; st.rerun()
+
+            if st.session_state.bop_run_status == "success":
+                spacer(10)
+                for xp in st.session_state.bop_xlsx_paths:
+                    st.success(f"&#10003;  Excel created: {Path(xp).name}")
+                if st.session_state.bop_pdf_status != "success":
+                    n_files = len(st.session_state.bop_xlsx_paths)
+                    pdf_label = "Generate PDF Documents" if n_files > 1 else "Generate PDF Document"
+                    st.markdown('<p class="f-label">&#128202; &nbsp;Max PDF Size (MB, optional)</p>', unsafe_allow_html=True)
+                    st.markdown('<p class="f-hint">Leave blank to generate a single PDF, as today. If a generated PDF ends up larger than this, it\'s split into "_part1", "_part2", etc., each under the limit — a sheet\'s pages stay together in one part whenever they fit.</p>', unsafe_allow_html=True)
+                    st.number_input(
+                        "Max PDF size (MB)", min_value=0.1, step=1.0,
+                        key="bop_pdf_max_mb", label_visibility="collapsed",
+                        placeholder="No limit — single PDF",
+                    )
+                    # Mirror into the plain (non-widget) store every run this
+                    # renders — see the setdefault comment above for why reading
+                    # bop_pdf_max_mb directly, later, isn't safe.
+                    st.session_state.bop_pdf_max_mb_store = st.session_state.bop_pdf_max_mb
+                    spacer(6)
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button(pdf_label, key="bop_gen_pdf_btn", use_container_width=True):
+                        st.session_state.bop_confirm_step = "pdf_processing"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    if st.session_state.bop_pdf_status == "error":
+                        st.error(f"PDF Error: {st.session_state.bop_run_msg}")
+                else:
+                    for pp in st.session_state.bop_pdf_final_paths:
+                        st.success(f"&#10003;  PDF created: {Path(pp).name}")
+
+                    # Territory Definitions ("TRDEF") — All Programs, 2.0 only.
+                    # Left out of the PDF above (82k rows, dominates export time);
+                    # optional, so it's offered here rather than bundled in.
+                    if ("All Programs" in st.session_state.bop_built_programs
+                            and st.session_state.bop_built_version == "2.0"):
+                        spacer(10)
+                        if st.session_state.bop_terr_pdf_status == "success":
+                            for tp in st.session_state.bop_terr_pdf_paths:
+                                st.success(f"&#10003;  Territory Definitions PDF created: {Path(tp).name}")
+                        else:
+                            st.markdown('<p class="f-hint">Territory Definitions is the last sheet of the All Programs workbook &mdash; its PDF is optional and generated separately since it can take longer.</p>', unsafe_allow_html=True)
+                            st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                            if st.button("Generate Territory Definitions PDF (optional)", key="bop_terr_pdf_btn", use_container_width=True):
+                                st.session_state.bop_confirm_step = "terr_pdf_processing"; st.rerun()
+                            st.markdown('</div>', unsafe_allow_html=True)
+                            if st.session_state.bop_terr_pdf_status == "error":
+                                st.error(f"Territory Definitions PDF Error: {st.session_state.bop_terr_pdf_msg}")
+            elif st.session_state.bop_run_status == "error":
+                spacer(10); st.error(st.session_state.bop_run_msg)
+
+            spacer(24)
+            st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; BOP Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
+
+        # ── All Programs Consistency Check ──────────────────────────────────────
+        # Checks every rating table printed under "All Programs" (see
+        # BOP/audit_all_programs_split.py) to confirm — straight from the
+        # uploaded ratebooks — whether the factors are really the same across
+        # all 7 BOP programs, only differ for Hab, or split further and belong
+        # in an individual program section instead. Uses the same ratebook
+        # uploads as "Create Rate Pages" above; only NGIC is required.
+        spacer(20)
+        st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"></div>', unsafe_allow_html=True)
+        spacer(10)
+        st.markdown('<div class="sec-label">&#128269; &nbsp;All Programs Consistency Check</div>', unsafe_allow_html=True)
+        st.markdown('<p class="f-hint">Confirms, from the uploaded ratebooks, whether each All Programs rating table really is the same across all 7 BOP programs (Hab, Auto, Food, Retail, Office, Service, Wholesale) &mdash; or whether it splits and belongs somewhere else in the manual.</p>', unsafe_allow_html=True)
         spacer(6)
 
-        st.dataframe(summary_df.style.apply(_row_style, axis=1), use_container_width=True, hide_index=True)
-
-        needs_review = summary_df[summary_df["Finding"].isin(["SPLIT_NOT_HAB", "MULTI_SPLIT"])]
-        if not needs_review.empty:
-            detail_df = st.session_state.bop_audit_detail
-            with st.expander(f"⚠ {len(needs_review)} table(s) need a closer look — program groupings"):
-                st.dataframe(detail_df[detail_df["Table"].isin(needs_review["Table"])], use_container_width=True, hide_index=True)
-
-        completeness_df = st.session_state.get("bop_audit_completeness")
-        if completeness_df is not None and not completeness_df.empty:
-            missing_df = completeness_df[completeness_df["Flag"] == "MISSING"]
-            spacer(10)
-            st.markdown('<div class="sec-label">Class Code Completeness &mdash; every Peril TypeCode (except allperil) checked against all 7 program bands</div>', unsafe_allow_html=True)
-            if missing_df.empty:
-                st.success("Every Peril TypeCode has a row for all 7 programs (Hab, Auto, Food, Retail, Office, Service, Wholesale) in every table checked.")
+        audit_ready = _bop_valid("NGIC")
+        ac1, _ac2 = st.columns([3, 9])
+        run_audit_clicked = False
+        with ac1:
+            if audit_ready:
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                run_audit_clicked = st.button("Run Consistency Check", key="bop_audit_btn", use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.error(f"{len(missing_df)} (table, Peril TypeCode) pair(s) are missing at least one program's Class_Code_Min band:")
-                st.dataframe(
-                    missing_df.style.apply(lambda row: ["background-color: #FCE4E4"] * len(row), axis=1),
-                    use_container_width=True, hide_index=True,
-                )
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Waiting — NGIC ratebook", key="bop_audit_btn_dis", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        spacer(8)
-        st.download_button(
-            "Download Full Report (.xlsx)",
-            data=st.session_state.bop_audit_report_bytes,
-            file_name="BOP All Programs Split Audit.xlsx",
-            key="bop_audit_download_btn",
-        )
-    elif st.session_state.bop_audit_status == "error":
-        spacer(10); st.error(f"Consistency check failed: {st.session_state.bop_audit_msg}")
+        if run_audit_clicked:
+            st.session_state.bop_audit_status = "processing"; st.rerun()
+
+        if st.session_state.bop_audit_status == "processing":
+            with st.spinner("Checking every All Programs rating table against the uploaded ratebooks..."):
+                from BOP.audit_all_programs_split import load_and_audit, to_excel_bytes
+                try:
+                    def _rb_audit(k):
+                        f = st.session_state.get(f"bop_file_{k}")
+                        return io.BytesIO(f["bytes"]) if f and "error" not in f else None
+                    summary_df, detail_df, completeness_df = load_and_audit(
+                        ngic=_rb_audit("NGIC"), naco=_rb_audit("NACO"), naff=_rb_audit("NAFF"),
+                        nicof=_rb_audit("NICOF"), hicnj=_rb_audit("HICNJ"), cw=_rb_audit("CW"),
+                    )
+                    st.session_state.bop_audit_summary = summary_df
+                    st.session_state.bop_audit_detail = detail_df
+                    st.session_state.bop_audit_completeness = completeness_df
+                    st.session_state.bop_audit_report_bytes = to_excel_bytes(summary_df, detail_df, completeness_df)
+                    st.session_state.bop_audit_status = "success"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.bop_audit_status = "error"; st.session_state.bop_audit_msg = str(e)
+            st.rerun()
+
+        if st.session_state.bop_audit_status == "success" and st.session_state.bop_audit_summary is not None:
+            summary_df = st.session_state.bop_audit_summary
+            spacer(10)
+
+            FINDING_COLORS = {
+                "SINGLE":               "#E6F4EA",
+                "HAB_SPLIT":            "#E6F0FA",
+                "SPLIT_NOT_HAB":        "#FFF4E0",
+                "MULTI_SPLIT":          "#FCE4E4",
+                "NO_PROGRAM_DIMENSION": "#F1F1F1",
+                "TABLE_NOT_FOUND":      "#F1F1F1",
+            }
+
+            def _row_style(row):
+                color = FINDING_COLORS.get(row["Finding"], "")
+                return [f"background-color: {color}"] * len(row)
+
+            counts = summary_df["Finding"].value_counts().to_dict()
+            def _badge(label, n, color):
+                return f'<span style="background:{color};border-radius:4px;padding:2px 8px;margin-right:6px;font-size:12px;">{label}: {n}</span>'
+            st.markdown(
+                _badge("Single", counts.get("SINGLE", 0), FINDING_COLORS["SINGLE"])
+                + _badge("Hab split", counts.get("HAB_SPLIT", 0), FINDING_COLORS["HAB_SPLIT"])
+                + _badge("Split, not Hab", counts.get("SPLIT_NOT_HAB", 0), FINDING_COLORS["SPLIT_NOT_HAB"])
+                + _badge("3+ way split", counts.get("MULTI_SPLIT", 0), FINDING_COLORS["MULTI_SPLIT"])
+                + _badge("No program data / not found",
+                         counts.get("NO_PROGRAM_DIMENSION", 0) + counts.get("TABLE_NOT_FOUND", 0),
+                         FINDING_COLORS["NO_PROGRAM_DIMENSION"]),
+                unsafe_allow_html=True,
+            )
+            spacer(6)
+
+            st.dataframe(summary_df.style.apply(_row_style, axis=1), use_container_width=True, hide_index=True)
+
+            needs_review = summary_df[summary_df["Finding"].isin(["SPLIT_NOT_HAB", "MULTI_SPLIT"])]
+            if not needs_review.empty:
+                detail_df = st.session_state.bop_audit_detail
+                with st.expander(f"⚠ {len(needs_review)} table(s) need a closer look — program groupings"):
+                    st.dataframe(detail_df[detail_df["Table"].isin(needs_review["Table"])], use_container_width=True, hide_index=True)
+
+            completeness_df = st.session_state.get("bop_audit_completeness")
+            if completeness_df is not None and not completeness_df.empty:
+                missing_df = completeness_df[completeness_df["Flag"] == "MISSING"]
+                spacer(10)
+                st.markdown('<div class="sec-label">Class Code Completeness &mdash; every Peril TypeCode (except allperil) checked against all 7 program bands</div>', unsafe_allow_html=True)
+                if missing_df.empty:
+                    st.success("Every Peril TypeCode has a row for all 7 programs (Hab, Auto, Food, Retail, Office, Service, Wholesale) in every table checked.")
+                else:
+                    st.error(f"{len(missing_df)} (table, Peril TypeCode) pair(s) are missing at least one program's Class_Code_Min band:")
+                    st.dataframe(
+                        missing_df.style.apply(lambda row: ["background-color: #FCE4E4"] * len(row), axis=1),
+                        use_container_width=True, hide_index=True,
+                    )
+
+            spacer(8)
+            st.download_button(
+                "Download Full Report (.xlsx)",
+                data=st.session_state.bop_audit_report_bytes,
+                file_name="BOP All Programs Split Audit.xlsx",
+                key="bop_audit_download_btn",
+            )
+        elif st.session_state.bop_audit_status == "error":
+            spacer(10); st.error(f"Consistency check failed: {st.session_state.bop_audit_msg}")
 
 
 # ─── OTHER LOBs ───────────────────────────────────────────────────────────────

@@ -71,6 +71,7 @@ class Excel:
         "Wholesale": "W",
         "Food Service": "FS",
         "Retail": "R",
+        "Optional Coverages": "OC",
     }
 
     def __init__(self, state, programName, nEffective, rEffective, companyList) -> None:
@@ -314,9 +315,13 @@ class Excel:
         ws["A2"] = ""
         block_start_rows = []
         for df in dataframes:
+            if reserved_header_rows and block_start_rows:
+                ws.append([])  # blank spacer row between blocks
             for _ in range(reserved_header_rows):
                 ws.append([])
-            block_start_rows.append(ws.max_row + 1 - reserved_header_rows if reserved_header_rows
+            # ws.max_row doesn't count the empty reserved rows (append([])
+            # only advances the write cursor), so use the cursor for them.
+            block_start_rows.append(ws._current_row + 1 - reserved_header_rows if reserved_header_rows
                                      else ws.max_row + 1)
             self._write_df_block(ws, df, useIndex, useHeader, index_cell=f"A{ws.max_row + 1}")
         self.format_table(ws, layout_key or table_code)

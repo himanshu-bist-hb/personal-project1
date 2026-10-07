@@ -66,6 +66,8 @@
 # scratch (not verbatim) for the same reason — see
 # _formatEQClassRatedBlocks's docstring.
 
+from copy import copy
+
 import numpy as np
 import pandas as pd
 from openpyxl.styles import Alignment, Font
@@ -1338,7 +1340,7 @@ class OptionalCoverages:
     def buildCyberSuite(self):
         CyberSuite = self.buildDataFrame("BP7_Cyber_Suite_Premium")
         filteredCyberSuite = CyberSuite.rename(columns={'ProgramCodeDisplay Name' : 'Program', 'DeductibleAnnualAggrLimit' : 'Aggregate Limit / Deductible', 'CyberSuiteCovPremium' : 'Premium'}).filter(items=['Program', 'Aggregate Limit / Deductible', 'Premium'])
-        pivotedCyberSuite = filteredCyberSuite.pivot(index='Aggregate Limit / Deductible', columns='Program', values='Premium').reset_index('Aggregate Limit / Deductible').replace({'Aggregate Limit / Deductible' : {50000 : '$50,000 / $1,000', 100000 : '100,000 / 1,000', 250000 : '250,000 / 1,000', 500000 : '500,000 / 5,000', 1000000 : '1,000,000 / 10,000'}})
+        pivotedCyberSuite = filteredCyberSuite.pivot(index='Aggregate Limit / Deductible', columns='Program', values='Premium').reset_index('Aggregate Limit / Deductible').replace({'Aggregate Limit / Deductible' : {50000 : '$50,000 / $1,000', 100000 : '$100,000 / $1,000', 250000 : '$250,000 / $1,000', 500000 : '$500,000 / $5,000', 1000000 : '$1,000,000 / $10,000'}})
         return pivotedCyberSuite.rename(columns={'Auto Service' : 'Auto', 'Food Service' : 'Food'})
     
     # Builds the Accounts Receivable base rate table
@@ -1388,31 +1390,35 @@ class OptionalCoverages:
                 if col == 1: 
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
-    def formatMoneyILF(self, ws, boldFont):
-        for cell in ws['22:22']:
-            cell.border = None
-            #cell.font = boldFont
-            #cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for cell in ws['23:23']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-                                right=Side(border_style='thin', color='C1C1C1'), 
-                                top=Side(border_style='thin', color='C1C1C1'), 
-                                bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        
+    # Two boxed tables (Inside / Outside) with a blank row between them.
+    # `blocks` is [(headerRow, dataRowCount)] as written back to back by
+    # generateMultiTableWorksheet. Headers bold, values plain.
+    def formatMoneyILF(self, ws, boldFont, blocks):
+        regularFont = Font(name=boldFont.name, size=boldFont.size)
+        thinBorder = Border(left=Side(border_style='thin', color='C1C1C1'),
+                            right=Side(border_style='thin', color='C1C1C1'),
+                            top=Side(border_style='thin', color='C1C1C1'),
+                            bottom=Side(border_style='thin', color='C1C1C1'))
+        centered = Alignment(horizontal='center', vertical='center', wrap_text=False)
+
+        for blockIdx in range(len(blocks) - 1, 0, -1):
+            ws.insert_rows(blocks[blockIdx][0])
+        for blockIdx, (headerRow, nData) in enumerate(blocks):
+            headerRow += blockIdx
+            for rowNum in range(headerRow, headerRow + nData + 1):
+                for col in range(1, ws.max_column + 1):
+                    cell = self._privateCell(ws, rowNum, col)
+                    cell.border = thinBorder
+                    cell.alignment = centered
+                    if rowNum == headerRow:
+                        cell.font = boldFont
+                        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True) # long headers wrap onto two lines
+                    else:
+                        cell.font = regularFont
+                        cell.number_format = self.currencywdecFormat
+
         for col in range(1, ws.max_column + 1):
-            char = get_column_letter(col) # Letter representing the current column
-            if col <= 3:
-                ws.column_dimensions[char].width = self.pixelsToInches(110)
-            for row in range(4, ws.max_row + 1):
-                cell = ws[char + str(row)]
-                if col < 3: 
-                    cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
-            for row in range(4, ws.max_row + 1):
-                cell = ws[char + str(row)]
-                if col >= 3: 
-                    cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+            ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(125 if col <= 3 else 110)
 
     def formatOutdoorSignsILF(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -1533,15 +1539,43 @@ class OptionalCoverages:
                     cell.number_format = self.twodecimal # Applying currency formatting to columns A-B
         ws.column_dimensions['A'].width = self.pixelsToInches(140)
 
-    def formatEQSprinkler(self, ws):
+    # Widen the Coverage column so 'Package Discount Factor' stays on one line
+    # (shared by C.4.D.1 and C.4.D.5 — identical Coverage/Factor layout)
+    def formatEQotherthanfunctional(self, ws):
+        ws.column_dimensions['A'].width = self.pixelsToInches(200)
+
+    # Widen the Building Valuation column so each valuation label stays on one line
+    def formatEQUndamagedLoss(self, ws):
+        ws.column_dimensions['A'].width = self.pixelsToInches(240)
+
+    # The Building row has no Susceptibility Grade, so its blank cell is left
+    # without a border by the generic table formatting. Box every cell in the
+    # table (header row 3 through the last row) so the grid is complete.
+    def formatEQSprinklerLeakEQExt(self, ws):
+        side = Side(border_style='thin', color='C1C1C1')
+        for row in ws.iter_rows(min_row=3, max_row=ws.max_row, min_col=1, max_col=ws.max_column):
+            for cell in row:
+                cell.border = Border(left=side, right=side, top=side, bottom=side)
+
+    # Widen the Flood Zone column so the long High-hazard zone list
+    # ("A, AH, AO, A1-A30, A99, AE, AR") fits on one line. Located by header (row 3).
+    def formatFloodBaseRates(self, ws):
         for col in range(1, ws.max_column + 1):
-            char = get_column_letter(col) # Letter representing the current column
+            if ws.cell(row=3, column=col).value == 'Flood Zone':
+                ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(230)
+
+    def formatEQSprinkler(self, ws):
+        # Only the Deductible Amount column is a dollar amount; every other
+        # column (the factor) must not carry a $ sign. Located by header (row 3)
+        # rather than position, since the ratebook table's column order isn't fixed.
+        for col in range(1, ws.max_column + 1):
+            isDollars = ws.cell(row=3, column=col).value == 'Deductible Amount'
             for row in range(4, ws.max_row + 1):
-                cell = ws[char + str(row)]
-                if col == 1: 
-                    cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
+                ws.cell(row=row, column=col).number_format = self.currencyFormat if isDollars else self.twodecimal
 
     def formatEQDeductibleOptions(self, ws):
+        # Widen Building Classes so lists like "3C, 4C, 4D, 5B, 5C, 5AA" don't wrap
+        ws.column_dimensions['B'].width = self.pixelsToInches(190)
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -1613,26 +1647,55 @@ class OptionalCoverages:
     # generateMultiTableWorksheet returns (reserved_header_rows=2), so it's
     # correct by construction for whatever row each block actually lands on.
     # Needs a visual check against a real state's rendered page.
+    # format_table stamps SHARED StyleArrays onto data cells, so restyling a
+    # cell in place would change every cell sharing it — copy first.
+    def _privateCell(self, ws, row, col):
+        cell = ws.cell(row=row, column=col)
+        cell._style = copy(cell._style)
+        return cell
+
     def _formatEQClassRatedBlocks(self, ws, boldFont, starts, blocks):
         border = Border(left=Side(border_style='thin', color='C1C1C1'),
                          right=Side(border_style='thin', color='C1C1C1'),
                          top=Side(border_style='thin', color='C1C1C1'),
                          bottom=Side(border_style='thin', color='C1C1C1'))
-        align = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for start, (label, _df) in zip(starts, blocks):
-            titleRow, subRow = start, start + 1
+        align = Alignment(horizontal='center', vertical='center', wrap_text=False)
+        lastCol = ws.max_column
+        # Rows outside the boxed tables (the title's row, the reserved label
+        # rows and the spacer rows) get the generic table styling from
+        # format_table — clear it so only the real boxes show.
+        for start in starts:
+            for r in (start - 1, start, start + 1):
+                for col in range(1, lastCol + 1):
+                    self._privateCell(ws, r, col).border = Border()
+        for col in range(1, lastCol + 1):
+            self._privateCell(ws, 3, col).border = Border()
+
+        for start, (label, df) in zip(starts, blocks):
+            titleRow, subRow, headerRow = start, start + 1, start + 2
             ws[f'C{titleRow}'] = f'Territory {label} Loss Costs'
-            ws.merge_cells(f'C{titleRow}:G{titleRow}')
+            ws.merge_cells(f'C{titleRow}:{get_column_letter(lastCol)}{titleRow}')
             ws[f'D{subRow}'] = 'Contents Grade'
-            ws.merge_cells(f'D{subRow}:G{subRow}')
-            for r in (titleRow, subRow):
-                for cell in ws[f'{r}:{r}']:
+            ws.merge_cells(f'D{subRow}:{get_column_letter(lastCol)}{subRow}')
+            for r, firstCol in ((titleRow, 3), (subRow, 4)):
+                for col in range(firstCol, lastCol + 1):
+                    cell = self._privateCell(ws, r, col)
                     cell.border = border
                     cell.font = boldFont
                     cell.alignment = align
+            for col in range(1, lastCol + 1):
+                cell = self._privateCell(ws, headerRow, col)
+                cell.border = border
+                cell.font = boldFont
+                cell.alignment = align
+
+        ws.column_dimensions['A'].width = self.pixelsToInches(100)
+        ws.column_dimensions['B'].width = self.pixelsToInches(115)
+        for col in range(3, lastCol + 1):
+            ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(85)
 
     def formatEQLCM(self, ws):
-        ws.column_dimensions['A'].width = self.pixelsToInches(225)
+        ws.column_dimensions['A'].width = self.pixelsToInches(340)
 
     def formatEQSprinklerLeakCoinsurance(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -1779,8 +1842,10 @@ class OptionalCoverages:
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
                 if col == 1: 
-                    cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
-        ws['B4'] = '(per $100)'
+                    # "(per $100)" lives inside the rate cell as part of the number format,
+                    # so the value stays numeric but displays e.g. "$2.00 (per $100)"
+                    cell.number_format = self.currencywdecFormat + ' "(per $100)"'
+        ws.column_dimensions['A'].width = self.pixelsToInches(150)
 
     def formatVehicleDamBase(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -1807,6 +1872,8 @@ class OptionalCoverages:
                     cell.number_format = self.twodecimal # Applying currency formatting to columns A-B
 
     def formatFloodBLDGConstruction(self, ws):
+        # Widen Construction so "Masonry Non-Combustible" / "Modified Fire-Resistive" stay on one line
+        ws.column_dimensions['A'].width = self.pixelsToInches(190)
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -1815,6 +1882,10 @@ class OptionalCoverages:
                     cell.number_format = self.twodecimal # Applying currency formatting to columns A-B
 
     def formatFloodBPP(self, ws):
+        # Widen Description so "Second Floor or Higher" stays on one line (located by header, row 3)
+        for col in range(1, ws.max_column + 1):
+            if ws.cell(row=3, column=col).value == 'Description':
+                ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(180)
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -1827,10 +1898,16 @@ class OptionalCoverages:
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
-                if col == 2: 
+                if col == 1:
+                    cell.number_format = self.currencyFormat # $ on Deductible Amount
+                elif col == 2: 
                     cell.number_format = self.twodecimal # Applying currency formatting to columns A-B
 
     def formatFloodMinAdjRate(self, ws):
+        # Widen Flood Zone so the long High-hazard zone list fits on one line (located by header, row 3)
+        for col in range(1, ws.max_column + 1):
+            if ws.cell(row=3, column=col).value == 'Flood Zone':
+                ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(230)
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -1839,6 +1916,8 @@ class OptionalCoverages:
                     cell.number_format = self.twodecimal # Applying currency formatting to columns A-B
 
     def formatFloodAggLimit(self, ws):
+        # Widen Aggregate Limit so "1x the Occurrence Limit" / "2x the Occurrence Limit" stay on one line
+        ws.column_dimensions['A'].width = self.pixelsToInches(190)
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -1853,6 +1932,7 @@ class OptionalCoverages:
                 cell = ws[char + str(row)]
                 if col == 3: 
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+        ws.column_dimensions['B'].width = self.pixelsToInches(230) # Widen Flood Zone column
 
     def formatAmendmentAdditional(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -1867,16 +1947,18 @@ class OptionalCoverages:
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
-                if col == 2: 
+                if col == 2:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+        ws.column_dimensions['A'].width = self.pixelsToInches(230) # Widen Coverage column
 
     def formatAdditionalServices(self, ws):
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
-                if col == 2: 
+                if col == 2:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+        ws.column_dimensions['A'].width = self.pixelsToInches(230) # Widen Coverage column
 
     def formatAdditionalVendors(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -1895,6 +1977,15 @@ class OptionalCoverages:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
     def formatAddInsuredOwnerLeaseContractor(self, ws):
+        # The full title is so wide that fit-to-width shrinks the table to a
+        # tiny size, so the "– Automatic Status ..." part moves to row 2 (the
+        # blank row under the title), styled like the title.
+        head, sep, tail = ws['A1'].value.partition(' – Automatic Status')
+        if sep:
+            ws['A1'] = head
+            ws['A2'] = '– Automatic Status' + tail
+            ws['A2'].font = copy(ws['A1'].font)
+            ws['A2'].alignment = copy(ws['A1'].alignment)
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -1903,25 +1994,35 @@ class OptionalCoverages:
                     cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
 
     def formatEmployeeBodilyInj(self, ws, boldFont):
-        for col in range(1, ws.max_column + 1):
-            char = get_column_letter(col) # Letter representing the current column
-            for row in range(7, ws.max_row + 1):
-                cell = ws[char + str(row)]
-                if col == 1: 
-                    cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+        # Two separate boxed tables: Rate (rows 3-4), a blank spacer row, then
+        # Minimum Premium. The two blocks are written back to back (header at
+        # row 5), so push the second one down a row.
+        ws.insert_rows(5)
+        thinBorder = Border(left=Side(border_style='thin', color='C1C1C1'),
+                            right=Side(border_style='thin', color='C1C1C1'),
+                            top=Side(border_style='thin', color='C1C1C1'),
+                            bottom=Side(border_style='thin', color='C1C1C1'))
+        for rowNum in (6, 7):
+            cell = ws.cell(row=rowNum, column=1)
+            cell._style = copy(cell._style) # data cells share StyleArrays; take a private copy before restyling
+            cell.border = thinBorder
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
+            if rowNum == 6:
+                cell.font = boldFont
+            else:
+                cell.number_format = self.currencywdecFormat
 
-        for cell in ws['5:5']:
-            cell.border = None
+        ws.column_dimensions['A'].width = self.pixelsToInches(125) # Sized for "Minimum Premium"
 
-        for cell in ws['6:6']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+    def formatEmployeeBenefitsLiabExt(self, ws):
+        ws.column_dimensions['A'].width = self.pixelsToInches(160) # Keep "% of Annual Premium" header on one line
 
     def formatEmployeeBenefitsLiab(self, ws):
+        # "Total Property Limit" sub-header (row 3, B:E) comes from the Sub
+        # Headers config; here "Number of Employees" (row 4) is merged up into
+        # row 3 so it spans both header rows.
+        ws['A3'] = ws['A4'].value
+        ws.merge_cells('A3:A4')
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -1981,81 +2082,41 @@ class OptionalCoverages:
                 if col > 1: 
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
-    def formatLiquorLiabFood(self, ws, boldFont):
-        for col in range(1, ws.max_column + 1):
-            char = get_column_letter(col) # Letter representing the current column
-            for row in range(13, 14):
-                cell = ws[char + str(row)]
-                if col == 1: 
-                    cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+    # Three separately boxed tables (Coverage/Rate, Rate, Liability Limit/Factor)
+    # with one blank row between them. `blocks` is [(headerRow, dataRowCount)]
+    # for the three tables as written back to back by generateMultiTableWorksheet.
+    def formatLiquorLiabFood(self, ws, boldFont, blocks):
+        regularFont = Font(name=boldFont.name, size=boldFont.size)
+        thinBorder = Border(left=Side(border_style='thin', color='C1C1C1'),
+                            right=Side(border_style='thin', color='C1C1C1'),
+                            top=Side(border_style='thin', color='C1C1C1'),
+                            bottom=Side(border_style='thin', color='C1C1C1'))
+        centered = Alignment(horizontal='center', vertical='center', wrap_text=False)
 
-            for row in range(18, ws.max_row + 1):
-                cell = ws[char + str(row)]
-                if col == 1: 
-                    cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
+        # Insert the spacer rows bottom-up so earlier block positions stay valid
+        for blockIdx in range(len(blocks) - 1, 0, -1):
+            ws.insert_rows(blocks[blockIdx][0])
+        for blockIdx, (headerRow, nData) in enumerate(blocks):
+            headerRow += blockIdx
+            for rowNum in range(headerRow, headerRow + nData + 1):
+                for col in range(1, ws.max_column + 1):
+                    cell = ws.cell(row=rowNum, column=col)
+                    if cell.value is None:
+                        continue
+                    cell._style = copy(cell._style) # data cells share StyleArrays; take a private copy before restyling
+                    cell.border = thinBorder
+                    cell.alignment = centered
+                    cell.font = boldFont if rowNum == headerRow else regularFont
+                    if rowNum != headerRow:
+                        if blockIdx == 0 and col == 2:
+                            cell.number_format = self.currencywdecFormat
+                        elif blockIdx == 1 and col == 1:
+                            cell.number_format = self.currencywdecFormat
+                        elif blockIdx == 2:
+                            cell.number_format = self.currencywdecFormat
 
-        for cell in ws['3:3']:
-            cell.border = None
-        for cell in ws['4:4']:
-            cell.border = None
-        for cell in ws['10:10']:
-            cell.border = None
-        for cell in ws['11:11']:
-            cell.border = None
-        for cell in ws['15:15']:
-            cell.border = None
-        for cell in ws['16:16']:
-            cell.border = None
-
-        for cell in ws['3:3']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='left', vertical='bottom', wrap_text=True)
-
-        for cell in ws['5:5']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-
-        for cell in ws['10:10']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='left', vertical='bottom', wrap_text=True)
-
-        for cell in ws['12:12']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        
-        for cell in ws['15:15']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='left', vertical='bottom', wrap_text=True)
-
-        for cell in ws['17:17']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-
-        ws.column_dimensions['A'].width = self.pixelsToInches(175)
+        ws.column_dimensions['A'].width = self.pixelsToInches(190)
+        ws.column_dimensions['B'].width = self.pixelsToInches(200)
 
     def formatLiquorLiabAllOther(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -2104,7 +2165,7 @@ class OptionalCoverages:
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(7, ws.max_row + 1):
-                cell = ws[char + str(row)]
+                cell = self._privateCell(ws, row, col) # data cells share StyleArrays, so a plain number_format would hit both columns
                 if col == 1:
                     cell.number_format = self.currencyFormat # Applying currency formatting
                 elif col == 2:
@@ -2248,12 +2309,9 @@ class OptionalCoverages:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
     def formatCarWashDed(self, ws):
-        for col in range(1, ws.max_column + 1):
-            char = get_column_letter(col) # Letter representing the current column
-            for row in range(4, ws.max_row + 1):
-                cell = ws[char + str(row)]
-                if col == 1:
-                    cell.number_format = self.noDecimalFormat # Applying currency formatting to columns A
+        for row in range(4, ws.max_row + 1):
+            self._privateCell(ws, row, 1).number_format = self.currencyFormat # data cells share StyleArrays, so copy before restyling
+        ws.column_dimensions['A'].width = self.pixelsToInches(150) # Widen Deductible Amount column
 
     _MISC_PROF_LIAB_BORDER = Border(left=Side(border_style='thin', color='C1C1C1'),
                                      right=Side(border_style='thin', color='C1C1C1'),
@@ -2324,15 +2382,12 @@ class OptionalCoverages:
     # as formatMiscProfLiab, but the table itself comes from the standard
     # generateWorksheet single-table path since there's only one block here.
     def formatMiscProfLiabExtReporting(self, ws, font):
-        ws.insert_rows(3)
+        # Formula sentence on one unboxed line, a blank row, then the table
+        ws.insert_rows(3, 2)
         ws.cell(row=3, column=1, value="Premium = Final Miscellaneous Professional Liability Premium x Extended Reporting Factor").font = font
-        ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=6)
-        for col in range(1, 7):
-            ws.cell(row=3, column=col).border = self._MISC_PROF_LIAB_BORDER
-        ws.cell(row=3, column=1).alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        ws.row_dimensions[3].height = 30
+        ws.cell(row=3, column=1).alignment = Alignment(horizontal='left', vertical='center', wrap_text=False)
 
-        for row in range(5, ws.max_row + 1):
+        for row in range(6, ws.max_row + 1):
             ws.cell(row=row, column=2).number_format = '0.000'
 
         footnoteRow = ws.max_row + 2
@@ -2393,6 +2448,11 @@ class OptionalCoverages:
             cell.font = boldFont
             cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
 
+        # "Program" spans both header rows, centered
+        ws['A3'] = ws['A4'].value
+        ws.merge_cells('A3:A4')
+        ws['A3'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
         for col in range(2, ws.max_column + 1):
             char = get_column_letter(col)
             for row in range(5, ws.max_row + 1):
@@ -2405,6 +2465,9 @@ class OptionalCoverages:
                 cell = ws[char + str(row)]
                 if col > 1: 
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A
+        ws.column_dimensions['A'].width = self.pixelsToInches(150) # Aggregate Limit / Deductible on one line
+        for col in range(2, ws.max_column + 1):
+            ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(90)
 
     def formatCyberSuiteThird(self, ws, boldFont):
         for col in range(1, ws.max_column + 1):
@@ -2524,10 +2587,10 @@ class OptionalCoverages:
             ('CCUOC', 'OC Table C.3.C.2.a. Condominium Commercial Unit-Owners Optional Coverages', self.buildCondo, self.formatCondo),
             ('EPDF', 'OC Table C.4.B.1. Earthquake and Volcanic Eruption - Property Deductible Factor', self.buildEQPropertyDed, self.formatEQPropertyDed),
             ('ESLPD', 'OC Table C.4.B.2. Earthquake and Volcanic Eruption - Earthquake Sprinkler Leakage Property Deductible Factor', self.buildEQSprinkler, self.formatEQSprinkler),
-            ('EXFBV', 'OC Table C.4.D.1. Earthquake and Volcanic Eruption - Earthquake, other than Functional Building Valuation ', self.buildEQotherthanfunctional, None),  # formatEQotherthanfunctional disabled in source
+            ('EXFBV', 'OC Table C.4.D.1. Earthquake and Volcanic Eruption - Earthquake, other than Functional Building Valuation ', self.buildEQotherthanfunctional, self.formatEQotherthanfunctional),
             ('EFBV', 'OC Table C.4.D.2. Earthquake and Volcanic Eruption - Functional Building Valuation', self.buildEQFunctional, None),  # formatEQFunctional disabled in source
-            ('ELU', 'OC Table C.4.D.3.a. Earthquake and Volcanic Eruption - Coverage for Loss to the undamaged portion of the Building', self.buildEQUndamagedLoss, None),  # formatEQUndamagedLoss disabled in source
-            ('ESL', 'OC Table C.4.D.5. Earthquake and Volcanic Eruption - Earthquake Sprinkler Leakage Only', self.buildEQSprinklerLeakage, None),  # formatEQSprinklerLeakage disabled in source
+            ('ELU', 'OC Table C.4.D.3.a. Earthquake and Volcanic Eruption - Coverage for Loss to the undamaged portion of the Building', self.buildEQUndamagedLoss, self.formatEQUndamagedLoss),
+            ('ESL', 'OC Table C.4.D.5. Earthquake and Volcanic Eruption - Earthquake Sprinkler Leakage Only', self.buildEQSprinklerLeakage, self.formatEQotherthanfunctional),
             ('EDO', 'OC Table C.4.E.2.c.3 Earthquake and Volcanic Eruption - Earthquake Deductible Options', self.buildEQDeductibleOptions, self.formatEQDeductibleOptions),
             ('ETD', 'OC Table C.4.E.3 Earthquake Territory Definitions', self.buildEQTerritoryDefinitions, self.formatEQTerritoryDefs),
             ('EMVL', 'OC Table C.4.E.4.c. Earthquake and Volcanic Eruption - Masonry Veneer Limitation', self.buildEQMasonryVeneer, self.formatEQMasonryVeneer),
@@ -2536,7 +2599,7 @@ class OptionalCoverages:
             ('EBH', 'OC Table C.4.E.8 Earthquake and Volcanic Eruption - Building Height', self.buildEQBuildingHeight, lambda ws: self.formatEQBuildingHeight(ws, boldFont)),
             ('ELCM', 'OC Table C.4.F.1.b. Earthquake and Volcanic Eruption - Loss Cost Multiplier', self.buildEQLCM, self.formatEQLCM),
             ('ESLC', 'OC Table C.4.H.2.c. Earthquake and Volcanic Eruption - Earthquake Sprinkler Leakage Only - Coinsurance', self.buildEQSprinklerLeakCoinsurance, self.formatEQSprinklerLeakCoinsurance),
-            ('ESLEE', 'OC Table C.4.H.3.d. Earthquake and Volcanic Eruption - Earthquake Sprinkler Leakage only - Earthquake Extension', self.buildEQSprinklerLeakEQExt, None),  # formatEQSprinklerLeakEQExt disabled in source
+            ('ESLEE', 'OC Table C.4.H.3.d. Earthquake and Volcanic Eruption - Earthquake Sprinkler Leakage only - Earthquake Extension', self.buildEQSprinklerLeakEQExt, self.formatEQSprinklerLeakEQExt),
             ('ED', 'OC Table C.5.D.2. Employee Dishonesty', self.buildEmployeeDishonesty, lambda ws: self.formatEmployeeDishonesty(ws, boldFont)),
             ('EDECE', 'OC Table C.5.E. Employee Dishonesty - ERISA Compliance Endorsement', self.buildEmployeeDishonestyERISA, None),  # formatEmployeeDishonestyERISA disabled in source
             ('BIIPI', 'OC Table C.7.C. Extended Business Income - Increased Period of Indemnity', self.buildExtendedBusinessIncome, self.formatExtendedBusinessIncome),
@@ -2557,7 +2620,7 @@ class OptionalCoverages:
             ('WHRSA', 'OC Table C.21.A.3. Windstorm or Hail Losses to Roof Surfacing - Actual Cash Value Loss Settlement', self.buildWindhailACVSettlement, self.formatExclusionRoofSiding),
             ('ACVRS', 'OC Table C.21.B.3. Actual Cash Value for Roof Surfacing', self.buildACVRoof, self.formatExclusionRoofSiding),
             ('FP', 'OC Table C.22.C. False Pretense', self.buildFalsePretense, self.formatVehicleDamBase),
-            ('FBR', 'OC Table C.23.G.1. Flood Base Rates', self.buildFloodBaseRates, None),  # formatFloodBaseRates disabled in source
+            ('FBR', 'OC Table C.23.G.1. Flood Base Rates', self.buildFloodBaseRates, self.formatFloodBaseRates),
             ('FSA', 'OC Table C.23.G.2.c. Flood Sub-Limit Adjustment', self.buildFloodSubLimit, self.formatFloodSubLimit),
             ('FBCF', 'OC Table C.23.G.3.a. Flood Building Construction Factor', self.buildFloodBLDGConstruction, self.formatFloodBLDGConstruction),
             ('FPPCV', 'OC Table C.23.G.3.b. Flood Business Personal Property of Concentration of Values', self.buildFloodBPP, self.formatFloodBPP),
@@ -2574,7 +2637,7 @@ class OptionalCoverages:
             ('AIOLCS', 'OC Table D.3.J.3. Additional Insured – Owners, Lessees or Contractors – Scheduled Person or Organization', self.buildAddInsuredOwnerLeaseContractor, self.formatAddInsuredOwnerLeaseContractor),
             ('AIOLCA', 'OC Table D.3.K.3. Additional Insured – Owners, Lessees or Contractors – Automatic Status When Required In A Written Construction Agreement With You', self.buildAddInsuredOwnerLeaseContractorConstructionAgreement, self.formatAddInsuredOwnerLeaseContractor),
             ('EBL', 'OC Table D.6.D.1. Employee Benefits Liability', self.buildEmployeeBenefitsLiab, self.formatEmployeeBenefitsLiab),
-            ('EBERP', 'OC Table D.6.E.3. Employee Benefits Liability - Extended Reporting Period Option  % of Annual Premium', self.buildEmployeeBenefitsLiabExt, None),  # formatEmployeeBenefitsLiabExt disabled in source
+            ('EBERP', 'OC Table D.6.E.3. Employee Benefits Liability - Extended Reporting Period Option  % of Annual Premium', self.buildEmployeeBenefitsLiabExt, self.formatEmployeeBenefitsLiabExt),
             ('GKBR', 'OC Table D.8.C.1. Garage Keepers Coverage - Base Rate', self.buildGarageKeepersBase, self.formatGarageKeepersBase),
             ('GKTM', 'OC Table D.8.C.2.a. Garage Keepers Coverage - Territory Multipliers', self.buildGarageKeepersTerritoryMult, self.formatGarageKeepersTerritoryMult),
             ('GKDF', 'OC Table D.8.C.2.b. Garage Keepers Coverage - Deductible Factors', self.buildGarageKeepersDed, self.formatGarageKeepersDed),
@@ -2622,9 +2685,10 @@ class OptionalCoverages:
         # ── Multi-table sheets ──────────────────────────────────────────────
         i += 1
         if progress_callback: progress_callback(f"Building sheet {i}/{total}: MSIL...")
-        _, wsMSIL = OC.generateMultiTableWorksheet('MSIL', 'OC Table B.3.D.1. Money and Securities - Increased Limit',
-                                                    [self.buildMoneyInside(), self.buildMoneyOutside()], False, True)
-        self.formatMoneyILF(wsMSIL, boldFont)
+        msilTables = [self.buildMoneyInside(), self.buildMoneyOutside()]
+        msilStarts, wsMSIL = OC.generateMultiTableWorksheet('MSIL', 'OC Table B.3.D.1. Money and Securities - Increased Limit',
+                                                            msilTables, False, True)
+        self.formatMoneyILF(wsMSIL, boldFont, [(start, len(df)) for start, df in zip(msilStarts, msilTables)])
 
         i += 1
         if progress_callback: progress_callback(f"Building sheet {i}/{total}: USIBI...")
@@ -2640,9 +2704,10 @@ class OptionalCoverages:
 
         i += 1
         if progress_callback: progress_callback(f"Building sheet {i}/{total}: LLFSR...")
-        _, wsLLFSR = OC.generateMultiTableWorksheet('LLFSR', 'OC Table D.10.A.4.a. Liquor Liability Coverage - Food Service Program Risks Only',
-                                                     [self.buildLiquorLiabFood1(), self.buildLiquorLiabFood2(), self.buildLiquorLiabFood3()], False, True)
-        self.formatLiquorLiabFood(wsLLFSR, boldFont)
+        llfsrTables = [self.buildLiquorLiabFood1(), self.buildLiquorLiabFood2(), self.buildLiquorLiabFood3()]
+        llfsrStarts, wsLLFSR = OC.generateMultiTableWorksheet('LLFSR', 'OC Table D.10.A.4.a. Liquor Liability Coverage - Food Service Program Risks Only',
+                                                               llfsrTables, False, True)
+        self.formatLiquorLiabFood(wsLLFSR, boldFont, [(start, len(df)) for start, df in zip(llfsrStarts, llfsrTables)])
 
         # OC Table D.22.A.4 is one of the Appetite-only tables (see
         # _APPETITE_ONLY_CODES) — only built when the Appetite add-on is checked.

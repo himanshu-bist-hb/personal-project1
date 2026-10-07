@@ -142,7 +142,8 @@ def build():
         ["BCEG_MULTI", 1, 1, 73], ["BCEG_MULTI", 2, 2, 66], ["BCEG_MULTI", 3, 3, 82], ["BCEG_MULTI", 4, "REST", 53],
         ["BCEG_SINGLE", 1, 1, 82], ["BCEG_SINGLE", 2, "REST", 53],
         ["TIB", 1, 1, 82], ["TIB", 2, 2, 68],
-        ["EBL", 1, "REST", 180],
+        ["EBL", 1, 1, 180],
+        ["EBL", 2, "REST", 170],
         ["EBD", 1, 1, 145], ["EBD", 2, 2, 68],
         ["MD", 1, 1, 180], ["MD", 2, 2, 68],
         ["TR", 1, 1, 100], ["TR", 2, 2, 150], ["TR", 3, 6, 80],
@@ -453,7 +454,7 @@ def build():
         ["AIBG", 3, "1:4", "A:B", "Building Limit", "C:REST", ""],
         ["AIPP", 3, "1:4", "A:B", "Building Limit", "C:REST", ""],
         ["BCEG_SINGLE", 3, "1:4", "B:REST", "Entire State", "", ""],
-        ["EBL", 3, "1:4", "A:B", "Total Property Limit", "", ""],
+        ["EBL", 3, "1:4", "B:E", "Total Property Limit", "", ""],
         ["WHOBG_CURRENT", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Wind-Hail Deductible"],
         ["WHOPP_CURRENT", 3, "1:4", "B:D", "Amount of Insurance", "E:REST", "Wind-Hail Deductible"],
         # All Peril (*_AP) — see the Table Layout note.
@@ -500,6 +501,12 @@ def build():
         # prefix too and inherit fit_width_landscape, which isn't what it needs.
         # Explicit here so it keeps today's default (fit_single_page) either way.
         ["PDLD", "fit_single_page"],
+        # OC Table C.4.B.1 (EQ Property Deductible Factor) — one very long table.
+        ["EPDF", "fit_width_repeat_header"],
+        # OC Table C.4.E.3 (EQ Territory Definitions) — one row per zip code.
+        ["ETD", "fit_width_repeat_header"],
+        # OC Table D.14.F (Employee Related Practices Liability NAICS Factor) — ~100 rows.
+        ["ERPNF", "fit_width_repeat_header"],
         # Property Deductible Factor (All Programs / All Peril) — has far more
         # peril columns than the Named Storm sheets above (up to 18 vs ~9).
         # disable_fit_to_page (tried first) let it print at full scale but also

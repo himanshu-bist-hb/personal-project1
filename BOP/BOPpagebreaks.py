@@ -64,6 +64,16 @@ def _handle_fit_width_landscape(ws, dest_filename):
     fit_width_only(ws)
 
 
+def _handle_fit_width_repeat_header(ws, dest_filename):
+    # One page wide, rows flow down across as many pages as needed, with the
+    # column-header row (row 3: A1 = title, A2 = blank) repeated at the top of
+    # every page — for long single tables (e.g. OC Table C.4.B.1 EQ Property
+    # Deductible Factor, ~100+ rows) that were unreadable when forced onto
+    # one page by the default fit_single_page.
+    fit_width_only(ws)
+    ws.print_title_rows = "3:3"
+
+
 # Rule name (as written in the "Page Break Rules" tab) -> handler function.
 _RULE_HANDLERS = {
     "index": _handle_index,
@@ -71,6 +81,7 @@ _RULE_HANDLERS = {
     "fit_width_only": _handle_fit_width_only,
     "disable_fit_to_page": _handle_disable_fit_to_page,
     "fit_width_landscape": _handle_fit_width_landscape,
+    "fit_width_repeat_header": _handle_fit_width_repeat_header,
 }
 
 

@@ -54,7 +54,7 @@ def build():
         ["HeaderFontName", "Arial"],
         ["HeaderFontSize", 10],
         ["FooterFontName", "Arial"],
-        ["FooterFontSize", 10],
+        ["FooterFontSize", 8],
         ["LeftMargin", 0.25],
         ["RightMargin", 0.25],
         ["TopMargin", 1.25],

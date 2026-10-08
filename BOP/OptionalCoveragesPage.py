@@ -1348,14 +1348,14 @@ class OptionalCoverages:
     def buildCyberSuiteThird(self):
         CyberSuiteThird = self.buildDataFrame("BP7_Cyber_Suite_3Party_Premium")
         filteredCyberSuiteThird = CyberSuiteThird.rename(columns={'ProgramCodeDisplay Name' : 'Program', 'DeductibleAnnualAggrLimit' : 'Aggregate Limit / Deductible', 'CyberSuiteCovPremium' : 'Premium'}).filter(items=['Program', 'Aggregate Limit / Deductible', 'Premium'])
-        pivotedCyberSuiteThird = filteredCyberSuiteThird.pivot(index='Aggregate Limit / Deductible', columns='Program', values='Premium').reset_index('Aggregate Limit / Deductible').replace({'Aggregate Limit / Deductible' : {50000 : '$50,000 / $1,000', 100000 : '100,000 / 1,000', 250000 : '250,000 / 1,000', 500000 : '500,000 / 5,000', 1000000 : '1,000,000 / 10,000'}})
+        pivotedCyberSuiteThird = filteredCyberSuiteThird.pivot(index='Aggregate Limit / Deductible', columns='Program', values='Premium').reset_index('Aggregate Limit / Deductible').replace({'Aggregate Limit / Deductible' : {50000 : '$50,000 / $1,000', 100000 : '$100,000 / $1,000', 250000 : '$250,000 / $1,000', 500000 : '$500,000 / $5,000', 1000000 : '$1,000,000 / $10,000'}})
         return pivotedCyberSuiteThird.rename(columns={'Auto Service' : 'Auto', 'Food Service' : 'Food'})
     
 
     # Builds the Forgery and Alteration factor table
     # Returns a dataframe
     def buildCyberSuiteSubLimit1(self):
-        data = {'Aggregate Limit/Deductible' : ['$50,000 / $1,000', '100,000 / 1,000', '250,000 / 1,000', '500,000 / 5,000', '1,000,000 / 10,000'], 'Forensic IT Review, Legal Review, Regulatory Fines & Penalties, PCI Fines & Penalties' : ['$25,000', '$50,000', '$125,000', '$250,000', '$500,000'], 'DC RE' : ['$5,000', '$5,000', '$5,000', '$5,000', '$5,000'], 'CA' : ['$5,000', '$5,000', '$5,000', '$5,000', '$5,000'], 'Cyber Extortion' : ['$10,000', '$10,000', '$25,000', '$25,000', '$25,000'], 'Misdirected Payment Fraud' : ['$10,000', '$10,000', '$25,000', '$25,000', '$25,000'], 'Computer Fraud' : ['$10,000', '$10,000', '$25,000', '$25,000', '$25,000']}
+        data = {'Aggregate Limit/Deductible' : ['$50,000 / $1,000', '$100,000 / $1,000', '$250,000 / $1,000', '$500,000 / $5,000', '$1,000,000 / $10,000'], 'Forensic IT Review, Legal Review, Regulatory Fines & Penalties, PCI Fines & Penalties' : ['$25,000', '$50,000', '$125,000', '$250,000', '$500,000'], 'DC RE' : ['$5,000', '$5,000', '$5,000', '$5,000', '$5,000'], 'CA' : ['$5,000', '$5,000', '$5,000', '$5,000', '$5,000'], 'Cyber Extortion' : ['$10,000', '$10,000', '$25,000', '$25,000', '$25,000'], 'Misdirected Payment Fraud' : ['$10,000', '$10,000', '$25,000', '$25,000', '$25,000'], 'Computer Fraud' : ['$10,000', '$10,000', '$25,000', '$25,000', '$25,000']}
         CyberSuiteSubLimit1  = pd.DataFrame(data)
         return CyberSuiteSubLimit1
     
@@ -1763,78 +1763,66 @@ class OptionalCoverages:
                 if col == 1: 
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
-    def formatUtilityServices(self, ws, boldFont):
-        ws.insert_rows(3)
-        ws['A3'] = 'Communication Supply and Power Supply Property'
-        ws.insert_rows(4)
-        ws['B4'] = 'Not including overhead transmission lines'
-        ws.insert_rows(9)
-        ws['B9'] = 'Including overhead transmission lines'
-        ws.insert_rows(14)
-        ws['A14'] = 'Water Supply Property'
+    # Three separately boxed tables, each with a title above it. `blocks` is
+    # [(headerRow, dataRowCount)] as written back to back by
+    # generateMultiTableWorksheet. Layout (Communication/Power x Excluding,
+    # Communication/Power x Including, Water Supply Factor):
+    #   title + "Not including..." sub-header | table 1 | blank
+    #   "Including..." sub-header             | table 2 | blank
+    #   "Water Supply Property" title         | table 3
+    # Everything is positioned from `blocks`, so it follows the ratebook row
+    # counts instead of hardcoded row numbers.
+    def formatUtilityServices(self, ws, boldFont, blocks):
+        regularFont = Font(name=boldFont.name, size=boldFont.size)
+        thinBorder = Border(left=Side(border_style='thin', color='C1C1C1'),
+                            right=Side(border_style='thin', color='C1C1C1'),
+                            top=Side(border_style='thin', color='C1C1C1'),
+                            bottom=Side(border_style='thin', color='C1C1C1'))
+        centered = Alignment(horizontal='center', vertical='center', wrap_text=False)
 
-        ws.merge_cells('A3:C3')
-        ws.merge_cells('B4:C4')
-        ws.merge_cells('B9:C9')
-        ws.merge_cells('A14:B14')
+        # Rows inserted above each block's header: (title+sub-header), (blank+sub-header), (blank+title).
+        # Bottom-up so earlier block positions stay valid.
+        for blockIdx in range(len(blocks) - 1, -1, -1):
+            ws.insert_rows(blocks[blockIdx][0], 2)
 
-        for cell in ws['3:3']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for cell in ws['4:4']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-                                right=Side(border_style='thin', color='C1C1C1'), 
-                                top=Side(border_style='thin', color='C1C1C1'), 
-                                bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for cell in ws['9:9']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-                                right=Side(border_style='thin', color='C1C1C1'), 
-                                top=Side(border_style='thin', color='C1C1C1'), 
-                                bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for cell in ws['10:10']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-                                right=Side(border_style='thin', color='C1C1C1'), 
-                                top=Side(border_style='thin', color='C1C1C1'), 
-                                bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for cell in ws['14:14']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        for cell in ws['15:15']:
-            cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-                                right=Side(border_style='thin', color='C1C1C1'), 
-                                top=Side(border_style='thin', color='C1C1C1'), 
-                                bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        titles = ['Communication Supply and Power Supply Property', None, 'Water Supply Property']
+        subHeaders = ['Not including overhead transmission lines', 'Including overhead transmission lines', None]
+        for blockIdx, (headerRow, nData) in enumerate(blocks):
+            headerRow += 2 * (blockIdx + 1)
+            nCols = 2 if blockIdx == 2 else 3
 
-        for col in range(1, ws.max_column + 1):
-            char = get_column_letter(col) # Letter representing the current column
-            if col <= 1:
-                ws.column_dimensions[char].width = self.pixelsToInches(110)
-            elif col > 1: 
-                ws.column_dimensions[char].width = self.pixelsToInches(150)
+            # Block rows: header + data (all boxed, centred, numbers to 3 decimals)
+            for rowNum in range(headerRow, headerRow + nData + 1):
+                for col in range(1, nCols + 1):
+                    cell = ws.cell(row=rowNum, column=col)
+                    cell._style = copy(cell._style) # data cells share StyleArrays; take a private copy before restyling
+                    cell.border = thinBorder
+                    cell.alignment = centered
+                    cell.font = boldFont if rowNum == headerRow else regularFont
+                    if rowNum != headerRow and col > 1:
+                        cell.number_format = '0.000'
 
-        for cell in ws['8:8']:
-            cell.border = None
-        for cell in ws['13:13']:
-            cell.border = None
-        for row in range(15, ws.max_row + 1):
-            cell = ws['C' + str(row)]
-            cell.border = None # Applying no decimal formatting for column A
+            # Title row (unboxed, centred over the table) and/or boxed sub-header spanning the value columns
+            if titles[blockIdx]:
+                titleRow = headerRow - 2 if blockIdx != 2 else headerRow - 1
+                ws.cell(row=titleRow, column=1, value=titles[blockIdx])
+                ws.merge_cells(start_row=titleRow, start_column=1, end_row=titleRow, end_column=nCols)
+                titleCell = ws.cell(row=titleRow, column=1)
+                titleCell.font = boldFont
+                titleCell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=False)
+            if subHeaders[blockIdx]:
+                subRow = headerRow - 1
+                ws.cell(row=subRow, column=2, value=subHeaders[blockIdx])
+                for col in range(1, nCols + 1):
+                    cell = ws.cell(row=subRow, column=col)
+                    cell.border = thinBorder
+                    cell.font = boldFont
+                    cell.alignment = centered
+                ws.merge_cells(start_row=subRow, start_column=2, end_row=subRow, end_column=nCols)
+
+        ws.column_dimensions['A'].width = self.pixelsToInches(150)
+        ws.column_dimensions['B'].width = self.pixelsToInches(170)
+        ws.column_dimensions['C'].width = self.pixelsToInches(170)
 
     def formatScheduledPropFloater(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -2093,11 +2081,17 @@ class OptionalCoverages:
                             bottom=Side(border_style='thin', color='C1C1C1'))
         centered = Alignment(horizontal='center', vertical='center', wrap_text=False)
 
-        # Insert the spacer rows bottom-up so earlier block positions stay valid
-        for blockIdx in range(len(blocks) - 1, 0, -1):
-            ws.insert_rows(blocks[blockIdx][0])
+        # Section labels, each followed by a blank row before its table. The
+        # first block gets 2 rows (label + blank); later blocks get 3 (blank
+        # gap after the previous table + label + blank). Insert bottom-up so
+        # earlier block positions stay valid.
+        labels = ['State Base Rates', 'Minimum Premium', 'Liquor Liability Limit Factor']
+        for blockIdx in range(len(blocks) - 1, -1, -1):
+            ws.insert_rows(blocks[blockIdx][0], 2 if blockIdx == 0 else 3)
         for blockIdx, (headerRow, nData) in enumerate(blocks):
-            headerRow += blockIdx
+            headerRow += 2 + 3 * blockIdx
+            labelCell = ws.cell(row=headerRow - 2, column=1, value=labels[blockIdx])
+            labelCell.font = boldFont
             for rowNum in range(headerRow, headerRow + nData + 1):
                 for col in range(1, ws.max_column + 1):
                     cell = ws.cell(row=rowNum, column=col)
@@ -2109,11 +2103,13 @@ class OptionalCoverages:
                     cell.font = boldFont if rowNum == headerRow else regularFont
                     if rowNum != headerRow:
                         if blockIdx == 0 and col == 2:
-                            cell.number_format = self.currencywdecFormat
+                            cell.number_format = '$#,##0.000'
                         elif blockIdx == 1 and col == 1:
                             cell.number_format = self.currencywdecFormat
-                        elif blockIdx == 2:
-                            cell.number_format = self.currencywdecFormat
+                        elif blockIdx == 2 and col == 1:
+                            cell.number_format = self.currencyFormat
+                        elif blockIdx == 2 and col == 2:
+                            cell.number_format = '0.000'
 
         ws.column_dimensions['A'].width = self.pixelsToInches(190)
         ws.column_dimensions['B'].width = self.pixelsToInches(200)
@@ -2469,57 +2465,50 @@ class OptionalCoverages:
         for col in range(2, ws.max_column + 1):
             ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(90)
 
-    def formatCyberSuiteThird(self, ws, boldFont):
-        for col in range(1, ws.max_column + 1):
-            char = get_column_letter(col) # Letter representing the current column
-            for row in range(4, ws.max_row + 1):
-                cell = ws[char + str(row)]
-                if col > 1: 
-                    cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A
+    # Three separately boxed tables (premiums by program, Cyber Suite sublimits,
+    # Identity Recovery sublimits). `blocks` is [(headerRow, dataRowCount)] as
+    # written back to back by generateMultiTableWorksheet. The 2nd and 3rd
+    # tables get a bold label above them, with a blank row either side of the
+    # label (and a blank row between each table and the next label).
+    def formatCyberSuiteThird(self, ws, boldFont, blocks):
+        regularFont = Font(name=boldFont.name, size=boldFont.size)
+        thinBorder = Border(left=Side(border_style='thin', color='C1C1C1'),
+                            right=Side(border_style='thin', color='C1C1C1'),
+                            top=Side(border_style='thin', color='C1C1C1'),
+                            bottom=Side(border_style='thin', color='C1C1C1'))
+        centered = Alignment(horizontal='center', vertical='center', wrap_text=False)
+        headerAlign = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-        for cell in ws['9:9']:
-            cell.border = None
-        for cell in ws['16:16']:
-            cell.border = None
+        labels = [None, 'Cyber Suite Sublimit Table', 'Identity Recovery Sublimit Table']
+        # blank + label + blank inserted above blocks 2 and 3, bottom-up so earlier positions stay valid
+        for blockIdx in range(len(blocks) - 1, 0, -1):
+            ws.insert_rows(blocks[blockIdx][0], 3)
 
-        for cell in ws['10:10']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        for blockIdx, (headerRow, nData) in enumerate(blocks):
+            headerRow += 3 * blockIdx
+            nCols = len(blocks) and (ws.max_column if blockIdx == 0 else (7 if blockIdx == 1 else 4))
+            if labels[blockIdx]:
+                ws.cell(row=headerRow - 2, column=1, value=labels[blockIdx]).font = boldFont
+            for rowNum in range(headerRow, headerRow + nData + 1):
+                for col in range(1, nCols + 1):
+                    cell = ws.cell(row=rowNum, column=col)
+                    cell._style = copy(cell._style) # data cells share StyleArrays; take a private copy before restyling
+                    cell.border = thinBorder
+                    if rowNum == headerRow:
+                        cell.font = boldFont
+                        cell.alignment = headerAlign
+                    else:
+                        cell.font = regularFont
+                        cell.alignment = centered
+                        if col > 1 or blockIdx == 2:
+                            cell.number_format = self.currencywdecFormat if blockIdx == 0 else self.currencyFormat
+            # Fixed header heights so wrapped headers render the same in Excel and the PDF
+            ws.row_dimensions[headerRow].height = [18, 66, 36][blockIdx] if blockIdx else 18
 
-        for cell in ws['17:17']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-
-        ws.insert_rows(9)
-        ws.insert_rows(10)
-        ws['A10'] = 'Cyber Suite Sublimit Table'
-        ws.insert_rows(18)
-        ws.insert_rows(19)
-        ws['A19'] = '- Identity Recovery Sublimit Table'
-
-        for cell in ws['10:10']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            #cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-
-        for cell in ws['19:19']:
-            #cell.border = Border(left=Side(border_style='thin', color='C1C1C1'), 
-            #                    right=Side(border_style='thin', color='C1C1C1'), 
-            #                    top=Side(border_style='thin', color='C1C1C1'), 
-            #                    bottom=Side(border_style='thin', color='C1C1C1'))
-            cell.font = boldFont
-            #cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        ws.column_dimensions['A'].width = self.pixelsToInches(150) # "$1,000,000 / $10,000" on one line
+        ws.column_dimensions['B'].width = self.pixelsToInches(190) # Forensic IT Review, ... wraps in this column
+        for col in range(3, ws.max_column + 1):
+            ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(110)
 
     def formatGarageKeepersTerritoryMult(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(175)
@@ -2692,9 +2681,10 @@ class OptionalCoverages:
 
         i += 1
         if progress_callback: progress_callback(f"Building sheet {i}/{total}: USIBI...")
-        _, wsUSIBI = OC.generateMultiTableWorksheet('USIBI', 'OC Table C.15.D.1. Utility Services Additional Coverage - Including Business Income',
-                                                     [self.buildUtilityServices1(), self.buildUtilityServices2(), self.buildUtilityServices3()], False, True)
-        self.formatUtilityServices(wsUSIBI, boldFont)
+        usibiTables = [self.buildUtilityServices1(), self.buildUtilityServices2(), self.buildUtilityServices3()]
+        usibiStarts, wsUSIBI = OC.generateMultiTableWorksheet('USIBI', 'OC Table C.15.D.1. Utility Services Additional Coverage - Including Business Income',
+                                                               usibiTables, False, True)
+        self.formatUtilityServices(wsUSIBI, boldFont, [(start, len(df)) for start, df in zip(usibiStarts, usibiTables)])
 
         i += 1
         if progress_callback: progress_callback(f"Building sheet {i}/{total}: EBIAE...")
@@ -2721,9 +2711,10 @@ class OptionalCoverages:
 
         i += 1
         if progress_callback: progress_callback(f"Building sheet {i}/{total}: CSCTP...")
-        _, wsCSCTP = OC.generateMultiTableWorksheet('CSCTP', 'OC Table E.3.B.5. Cyber Suite Coverage Third Party Only Premiums',
-                                                     [self.buildCyberSuiteThird(), self.buildCyberSuiteSubLimit1(), self.buildCyberSuiteSubLimit2()], False, True)
-        self.formatCyberSuiteThird(wsCSCTP, boldFont)
+        csctpTables = [self.buildCyberSuiteThird(), self.buildCyberSuiteSubLimit1(), self.buildCyberSuiteSubLimit2()]
+        csctpStarts, wsCSCTP = OC.generateMultiTableWorksheet('CSCTP', 'OC Table E.3.B.5. Cyber Suite Coverage Third Party Only Premiums',
+                                                               csctpTables, False, True)
+        self.formatCyberSuiteThird(wsCSCTP, boldFont, [(start, len(df)) for start, df in zip(csctpStarts, csctpTables)])
 
         # ── EQ Class Rated (ECR) — format/table count varies by state ───────
         i += 1

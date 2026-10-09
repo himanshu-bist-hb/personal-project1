@@ -66,6 +66,7 @@
 # scratch (not verbatim) for the same reason — see
 # _formatEQClassRatedBlocks's docstring.
 
+import re
 from copy import copy
 
 import numpy as np
@@ -171,7 +172,7 @@ class OptionalCoverages:
     # split to layer Appetite subclasses on top of (see APPETITE_CLASSES in
     # BOPRatePages.py) — Appetite here is just a flag gating which of this
     # one class's own tables get built.
-    _APPETITE_ONLY_CODES = frozenset({'AIOLCS', 'AIOLCA', 'MPLER', 'SAPAE', 'EPLWHC', 'EPLTPP', 'BAEER'})
+    _APPETITE_ONLY_CODES = frozenset({'AIOLCS', 'AIOLCA', 'MPLER', 'SPAB', 'EPLWHC', 'EPLTPP', 'BAEER'})
 
     def __init__(self, state, rateTables, classCodes, nEffective, rEffective, eqTerritoryDefs, appetite=False) -> None:
         self.state = state
@@ -265,6 +266,7 @@ class OptionalCoverages:
     def buildBackupSewerILF(self):
         BackupSewerILF = self.buildDataFrame("BP7_BackupSewerDrain_IncreasedLimitFactor")
         filteredBackupSewerILF = BackupSewerILF.query(f'ClassCode_Min == 40000').filter(items=['PerBuilding_IncreasedLimit', 'PolicyAggr_IncreasedLimit', 'PerBuilding_TotalLimit', 'PolicyAggr_TotalLimit', 'BackupSewerDrainFactor' ])
+        filteredBackupSewerILF = filteredBackupSewerILF.assign(BackupSewerDrainFactor=pd.to_numeric(filteredBackupSewerILF['BackupSewerDrainFactor'], errors='coerce')) # keep the ratebook value numeric (not text) so the 3-decimal format applies
         return filteredBackupSewerILF.rename(columns={'PerBuilding_IncreasedLimit': 'Per Building', 'PolicyAggr_IncreasedLimit': 'Policy Aggregate', 'PerBuilding_TotalLimit': 'Per Building', 'PolicyAggr_TotalLimit': 'Policy Aggregate', 'BackupSewerDrainFactor': 'Rate per $100'})
 
     # Builds the Forgery and Alteration factor table
@@ -273,16 +275,29 @@ class OptionalCoverages:
         AwayFromPremisesILF = self.buildDataFrame("BP7_PersonalProp_InTransit")
         return AwayFromPremisesILF.rename(columns={'CoverageApplies': 'Coverage', 'IntransitPremisesFactor': 'Factor'}).replace({'Coverage' : {'OnlyOnInsuredVehicles' : ' While in Transit - Primary on Vehicles Owned/Operated by Insured', 'WhileOnAnyVehicle' : 'While in Transit - Otherwise Shipped'}}).fillna({'Coverage' : 'Temporarily Away from Premises'}).sort_values('Factor', ascending=False)
     
+    # Ratebook values can arrive as text (e.g. "5000.00"), which ignores number formats and
+    # shows its decimals as-is; convert fully-numeric columns to numbers so the sheet's
+    # number formats (e.g. whole-dollar limits) apply. Columns with any non-numeric value are left alone.
+    @staticmethod
+    def _numericColumns(df):
+        df = df.copy()
+        for column in df.columns:
+            converted = pd.to_numeric(df[column], errors='coerce')
+            if converted.notna().sum() == df[column].notna().sum():
+                df[column] = converted
+        return df
+
     # Builds the Forgery and Alteration factor table
     # Returns a dataframe
     def buildElectronicDataILF(self):
         ElectronicDataILF = self.buildDataFrame("BP7_ElectronicDataBaseRates")
+        ElectronicDataILF = self._numericColumns(ElectronicDataILF)
         return ElectronicDataILF.rename(columns={'ElectronicDataBaseRate': 'Additional Premium'})
     
     # Builds the Forgery and Alteration factor table
     # Returns a dataframe
     def buildInterruptionILF(self):
-        InterruptionILF = self.buildDataFrame("BP7 InterrOfCompOper Coverage Base Rate")
+        InterruptionILF = self._numericColumns(self.buildDataFrame("BP7 InterrOfCompOper Coverage Base Rate"))
         return InterruptionILF.rename(columns={'InterrOfCompOperBaseRate': 'Additional Premium'})
     
     # Builds the Forgery and Alteration factor table
@@ -520,7 +535,7 @@ class OptionalCoverages:
         filteredExtendedBusinessIncomeOther = ExtendedBusinessIncomeOther.query(f'`Peril TypeCode` == "allperil" & Class_Code_Min == 20000 & IndemnityDays != 60').filter(items=['IndemnityDays', 'ExtendedBusinessIncPeriodOfIndemnityFactor'])
         ExtendedBusinessIncome = pd.merge(filteredExtendedBusinessIncomeFood, filteredExtendedBusinessIncomeOther, on= 'IndemnityDays', how = 'left')
         ExtendedBusinessIncome = ExtendedBusinessIncome.rename(columns={'IndemnityDays' : "Number of Days", 'ExtendedBusinessIncPeriodOfIndemnityFactor_x' : "Food Service Business Income", 'ExtendedBusinessIncPeriodOfIndemnityFactor_y' : "All Other Programs Building and BPP"})
-        return ExtendedBusinessIncome
+        return self._numericColumns(ExtendedBusinessIncome)
 
     # Builds the Forgery and Alteration factor table
     # Returns a dataframe
@@ -531,7 +546,7 @@ class OptionalCoverages:
         filteredBusinessIncomeOrdOther = BusinessIncomeOrdOther.query(f'`Peril TypeCode` == "allperil" & Class_Code_Min == 10000 & NoOfDays != 60').filter(items=['NoOfDays', 'BusinessIncOrdinaryPayrollFactor'])
         BusinessIncomeOrd = pd.merge(filteredBusinessIncomeOrdFood, filteredBusinessIncomeOrdOther, on= 'NoOfDays', how = 'left')
         BusinessIncomeOrd = BusinessIncomeOrd.rename(columns={'NoOfDays' : "Number of Days", 'BusinessIncOrdinaryPayrollFactor_x' : "Food Service Business Income", 'BusinessIncOrdinaryPayrollFactor_y' : "All Other Programs Building and BPP"})
-        return BusinessIncomeOrd
+        return self._numericColumns(BusinessIncomeOrd)
 
     # Builds the Forgery and Alteration factor table
     # Returns a dataframe
@@ -542,8 +557,10 @@ class OptionalCoverages:
         filteredBusinessIncomeActOther = BusinessIncomeActOther.query(f'`Peril TypeCode` == "allperil" & Class_Code_Min == 20000').filter(items=['NoOfMonths', 'BusinessIncomeActualLossSustained'])
         BusinessIncomeAct = pd.merge(filteredBusinessIncomeActFood, filteredBusinessIncomeActOther, on= 'NoOfMonths', how = 'left')
         BusinessIncomeAct = BusinessIncomeAct.rename(columns={'NoOfMonths' : "Number of Months", 'BusinessIncomeActualLossSustained_x' : "Food Service", 'BusinessIncomeActualLossSustained_y' : "All Other Programs"})
-        BusinessIncomeAct['Food Service'] = BusinessIncomeAct['Food Service'] + 1
-        BusinessIncomeAct['All Other Programs'] = BusinessIncomeAct['All Other Programs'] + 1
+        BusinessIncomeAct = self._numericColumns(BusinessIncomeAct)
+        # +1 on a float can leave binary noise (e.g. 1.2999999999999998); the ratebook has 3 decimals, so round the noise away
+        BusinessIncomeAct['Food Service'] = (BusinessIncomeAct['Food Service'] + 1).round(3)
+        BusinessIncomeAct['All Other Programs'] = (BusinessIncomeAct['All Other Programs'] + 1).round(3)
         return BusinessIncomeAct
     
     # Builds the Forgery and Alteration factor table
@@ -555,8 +572,10 @@ class OptionalCoverages:
         filteredBusinessIncomeWaitOther = BusinessIncomeWaitOther.query(f'`Peril TypeCode` == "allperil" & Class_Code_Min == 20000').filter(items=['NoOfHours', 'BusinessIncomeWaitingPeriod'])
         BusinessIncomeWait = pd.merge(filteredBusinessIncomeWaitFood, filteredBusinessIncomeWaitOther, on= 'NoOfHours', how = 'left')
         BusinessIncomeWait = BusinessIncomeWait.rename(columns={'NoOfHours' : "Number of Hours", 'BusinessIncomeWaitingPeriod_x' : "Food Service", 'BusinessIncomeWaitingPeriod_y' : "All Other Programs"})
-        BusinessIncomeWait['Food Service'] = BusinessIncomeWait['Food Service'] + 1
-        BusinessIncomeWait['All Other Programs'] = BusinessIncomeWait['All Other Programs'] + 1
+        BusinessIncomeWait = self._numericColumns(BusinessIncomeWait)
+        # +1 on a float can leave binary noise; the ratebook has 3 decimals, so round the noise away
+        BusinessIncomeWait['Food Service'] = (BusinessIncomeWait['Food Service'] + 1).round(3)
+        BusinessIncomeWait['All Other Programs'] = (BusinessIncomeWait['All Other Programs'] + 1).round(3)
         return BusinessIncomeWait
 
     # Builds the Forgery and Alteration factor table
@@ -900,14 +919,14 @@ class OptionalCoverages:
         GarageKeepersDed = GarageKeepersDed.pivot(index='Deductible', columns='CausesType', values='DeductableFactor').reset_index('Deductible').rename(columns={'AllCauses': 'All Causes', 'LimitedCauses': 'Limited Causes', 'Deductible': 'Deductible Amount'}).sort_values('All Causes', ascending=False )
         GarageKeepersDed = GarageKeepersDed[['Deductible Amount', 'Limited Causes', 'All Causes']]
         GarageKeepersDed = GarageKeepersDed.astype({'Deductible Amount' : 'int64'})
-        return GarageKeepersDed
+        return self._numericColumns(GarageKeepersDed)
     
     # Builds the Accounts Receivable base rate table
     # Returns a dataframe
     def buildGarageKeepersDedLOI(self):
         GarageKeepersDedLOI = self.buildDataFrame("BP7_Bldg_GarageKeepers_LimitOfInsuranceFactor")
         GarageKeepersDedLOI = GarageKeepersDedLOI.filter(items=['LimitOfInsurance_Min', 'LimitOfInsuranceFactor']).rename(columns={'LimitOfInsurance_Min': 'Limit of Insurance', 'LimitOfInsuranceFactor': 'Factor'})
-        return GarageKeepersDedLOI
+        return self._numericColumns(GarageKeepersDedLOI)
     
     # Builds the Accounts Receivable base rate table
     # Returns a dataframe
@@ -936,7 +955,7 @@ class OptionalCoverages:
     # Builds the Accounts Receivable base rate table
     # Returns a dataframe
     def buildHiredAuto(self):
-        HiredAuto = self.buildDataFrame("BP7_HiredAutoLiability")
+        HiredAuto = self._numericColumns(self.buildDataFrame("BP7_HiredAutoLiability"))
         return HiredAuto.rename(columns={'Hired Auto Premium' : 'Premium'})
     
     # Builds the Accounts Receivable base rate table
@@ -973,13 +992,13 @@ class OptionalCoverages:
     # Builds the Accounts Receivable base rate table
     # Returns a dataframe
     def buildLiquorLiabAllOther(self):
-        LiquorLiabAllOther = self.buildDataFrame("BP7_LiquorBaseRateForOthers")
+        LiquorLiabAllOther = self._numericColumns(self.buildDataFrame("BP7_LiquorBaseRateForOthers"))
         return LiquorLiabAllOther.rename(columns={'LiabilityLimitOfInsurance' : 'Liability Limit of Insurance', 'LiquorBaseRateForOthers' : 'Rate (Each Premises)'})
     
     # Builds the Accounts Receivable base rate table
     # Returns a dataframe
     def buildLiquorLiabAmendment(self):
-        LiquorLiabAmendment = self.buildDataFrame("BP7_Liquor_Base_Rates")
+        LiquorLiabAmendment = self._numericColumns(self.buildDataFrame("BP7_Liquor_Base_Rates"))
         return LiquorLiabAmendment.rename(columns={'LiabilityLimitOfInsurance' : 'Liability Limit of Insurance', 'Premium' : 'Premium (Each Event)'})
     
     # Builds the Forgery and Alteration factor table
@@ -1415,7 +1434,8 @@ class OptionalCoverages:
                         cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True) # long headers wrap onto two lines
                     else:
                         cell.font = regularFont
-                        cell.number_format = self.currencywdecFormat
+                        # Additional/Total Limit (first two columns) are whole dollars; premiums keep 2 decimals
+                        cell.number_format = self.currencyFormat if col <= 2 else self.currencywdecFormat
 
         for col in range(1, ws.max_column + 1):
             ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(125 if col <= 3 else 110)
@@ -1465,6 +1485,8 @@ class OptionalCoverages:
                 cell = ws[char + str(row)]
                 if col < 5: 
                     cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
+                else:
+                    cell.number_format = '0.000' # Rate per $100: ratebook value, shown to 3 decimals
     
     def formatAwayFromPremisesILF(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(225)
@@ -1566,12 +1588,12 @@ class OptionalCoverages:
 
     def formatEQSprinkler(self, ws):
         # Only the Deductible Amount column is a dollar amount; every other
-        # column (the factor) must not carry a $ sign. Located by header (row 3)
+        # column (the factor, shown to 3 decimals) must not carry a $ sign. Located by header (row 3)
         # rather than position, since the ratebook table's column order isn't fixed.
         for col in range(1, ws.max_column + 1):
             isDollars = ws.cell(row=3, column=col).value == 'Deductible Amount'
             for row in range(4, ws.max_row + 1):
-                ws.cell(row=row, column=col).number_format = self.currencyFormat if isDollars else self.twodecimal
+                ws.cell(row=row, column=col).number_format = self.currencyFormat if isDollars else '0.000'
 
     def formatEQDeductibleOptions(self, ws):
         # Widen Building Classes so lists like "3C, 4C, 4D, 5B, 5C, 5AA" don't wrap
@@ -1649,6 +1671,16 @@ class OptionalCoverages:
     # Needs a visual check against a real state's rendered page.
     # format_table stamps SHARED StyleArrays onto data cells, so restyling a
     # cell in place would change every cell sharing it — copy first.
+    # format_table stamps one shared StyleArray onto every data cell, so a post-format that sets
+    # cell.number_format on one column silently changes every column sharing that array (the
+    # last column assigned wins, e.g. a "Limit of Insurance" column picking up the premium
+    # column's two decimals). Give each cell its own copy before the per-column post-format runs.
+    @staticmethod
+    def _privatizeCellStyles(ws):
+        for row in ws.iter_rows():
+            for cell in row:
+                cell._style = copy(cell._style)
+
     def _privateCell(self, ws, row, col):
         cell = ws.cell(row=row, column=col)
         cell._style = copy(cell._style)
@@ -1674,15 +1706,18 @@ class OptionalCoverages:
         for start, (label, df) in zip(starts, blocks):
             titleRow, subRow, headerRow = start, start + 1, start + 2
             ws[f'C{titleRow}'] = f'Territory {label} Loss Costs'
-            ws.merge_cells(f'C{titleRow}:{get_column_letter(lastCol)}{titleRow}')
             ws[f'D{subRow}'] = 'Contents Grade'
-            ws.merge_cells(f'D{subRow}:{get_column_letter(lastCol)}{subRow}')
+            # Border every cell BEFORE merging: openpyxl drops the styles of cells that are
+            # already merged when it saves, which left only the first cell of each merged
+            # header boxed (the rest of the label row had no border).
             for r, firstCol in ((titleRow, 3), (subRow, 4)):
                 for col in range(firstCol, lastCol + 1):
                     cell = self._privateCell(ws, r, col)
                     cell.border = border
                     cell.font = boldFont
                     cell.alignment = align
+            ws.merge_cells(f'C{titleRow}:{get_column_letter(lastCol)}{titleRow}')
+            ws.merge_cells(f'D{subRow}:{get_column_letter(lastCol)}{subRow}')
             for col in range(1, lastCol + 1):
                 cell = self._privateCell(ws, headerRow, col)
                 cell.border = border
@@ -1733,7 +1768,9 @@ class OptionalCoverages:
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
                 if col == 1: 
-                    cell.number_format = self.noDecimalFormat # Applying currency formatting to columns A-B
+                    cell.number_format = self.noDecimalFormat # Number of Days
+                else:
+                    cell.number_format = '0.000' # Food Service / All Other factors: ratebook value to 3 decimals
 
     def formatOrdinanceEndorsement(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -2032,7 +2069,9 @@ class OptionalCoverages:
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
                 if col == 1: 
-                    cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
+                    cell.number_format = self.currencyFormat # Deductible Amount
+                else:
+                    cell.number_format = '0.000' # Limited/All Causes factors: ratebook value to 3 decimals, no $
 
     def formatGarageKeepersLOI(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -2040,7 +2079,9 @@ class OptionalCoverages:
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
                 if col == 1: 
-                    cell.number_format = self.currencyFormat # Applying currency formatting to columns A-B
+                    cell.number_format = self.currencyFormat # Limit of Insurance
+                else:
+                    cell.number_format = '0.000' # Factor: ratebook value to 3 decimals, no $
 
     def formatGarageKeepersRateMod(self, ws):
         ws.merge_cells('A6:A7')
@@ -2063,6 +2104,13 @@ class OptionalCoverages:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
     def formatNonOwnedAuto(self, ws):
+        for col in range(2, ws.max_column + 1): # Limit headers (300000, 500000, ...) -> $300,000
+            header = ws.cell(row=3, column=col)
+            try:
+                header.value = int(float(header.value)) # headers may arrive as text; make them numeric so the format applies
+            except (TypeError, ValueError):
+                continue
+            header.number_format = self.currencyFormat
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -2103,7 +2151,7 @@ class OptionalCoverages:
                     cell.font = boldFont if rowNum == headerRow else regularFont
                     if rowNum != headerRow:
                         if blockIdx == 0 and col == 2:
-                            cell.number_format = '$#,##0.000'
+                            cell.number_format = '#,##0.000'
                         elif blockIdx == 1 and col == 1:
                             cell.number_format = self.currencywdecFormat
                         elif blockIdx == 2 and col == 1:
@@ -2135,6 +2183,13 @@ class OptionalCoverages:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
     def formatEmployeePracticesOutside(self, ws):
+        for col in range(2, ws.max_column + 1): # Deductible headers (2500, 5000, ...) -> $2,500
+            header = ws.cell(row=3, column=col)
+            try:
+                header.value = int(float(header.value)) # headers may arrive as text; make them numeric so the format applies
+            except (TypeError, ValueError):
+                continue
+            header.number_format = self.currencyFormat
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -2145,6 +2200,13 @@ class OptionalCoverages:
                     cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
 
     def formatEmployeePracticesInside(self, ws):
+        for col in range(2, ws.max_column + 1): # Deductible headers (2500, 5000, ...) -> $2,500
+            header = ws.cell(row=3, column=col)
+            try:
+                header.value = int(float(header.value)) # headers may arrive as text; make them numeric so the format applies
+            except (TypeError, ValueError):
+                continue
+            header.number_format = self.currencyFormat
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
@@ -2293,8 +2355,14 @@ class OptionalCoverages:
                 cell = ws[char + str(row)]
                 if col == 1: 
                     cell.alignment = Alignment(horizontal='center', vertical='center')
-                elif col == 2: 
+                elif col == 2:
                     cell.number_format = self.noDecimalFormat # Applying currency formatting to columns A-B
+                elif col in (3, 4): # 12 / 36 Months factors: ratebook has 3 decimals
+                    try:
+                        cell.value = float(cell.value) # may arrive as text, which ignores number formats
+                    except (TypeError, ValueError):
+                        continue # leave non-numeric values (e.g. N/A) alone
+                    cell.number_format = '0.000'
 
     def formatCarWashLiab(self, ws):
         for col in range(1, ws.max_column + 1):
@@ -2430,6 +2498,12 @@ class OptionalCoverages:
                 cell = ws[char + str(row)]
                 if col == 1: 
                     cell.number_format = self.currencyFormat # Applying currency formatting to columns A
+                else: # program factor columns: no $ sign, ratebook has 3 decimals
+                    try:
+                        cell.value = float(cell.value) # may arrive as text, which ignores number formats
+                    except (TypeError, ValueError):
+                        continue # leave non-numeric values (e.g. N/A) alone
+                    cell.number_format = '0.000'
 
     # Adds the merged "Rates" sub-header spanning Essential/Enhanced/Advanced
     # (columns B-D) above the column-header row — same insert-a-row-then-
@@ -2503,12 +2577,12 @@ class OptionalCoverages:
                         if col > 1 or blockIdx == 2:
                             cell.number_format = self.currencywdecFormat if blockIdx == 0 else self.currencyFormat
             # Fixed header heights so wrapped headers render the same in Excel and the PDF
-            ws.row_dimensions[headerRow].height = [18, 66, 36][blockIdx] if blockIdx else 18
+            ws.row_dimensions[headerRow].height = [32, 80, 50][blockIdx]
 
-        ws.column_dimensions['A'].width = self.pixelsToInches(150) # "$1,000,000 / $10,000" on one line
-        ws.column_dimensions['B'].width = self.pixelsToInches(190) # Forensic IT Review, ... wraps in this column
+        ws.column_dimensions['A'].width = self.pixelsToInches(175) # "Aggregate Limit / Deductible" header and "$1,000,000 / $10,000" fit
+        ws.column_dimensions['B'].width = self.pixelsToInches(130) # Forensic IT Review, ... wraps in this column
         for col in range(3, ws.max_column + 1):
-            ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(110)
+            ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(95)
 
     def formatGarageKeepersTerritoryMult(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(175)
@@ -2646,7 +2720,7 @@ class OptionalCoverages:
             ('CWLR', 'OC Table D.15.C. Car Wash Damage to Customers Autos - Liability Rate', self.buildCarWashLiab, self.formatCarWashLiab),
             ('CWDF', 'OC Table D.15.D. Car Wash Damage to Customers Autos - Deductible Factor', self.buildCarWashDed, self.formatCarWashDed),
             ('MPLER', 'OC Table D.19.A.6. Miscellaneous Professional Liability - Extended Reporting Coverage', self.buildMiscProfLiabExtReporting, lambda ws: self.formatMiscProfLiabExtReporting(ws, OC.font)),
-            ('SAPAE', 'OC Table D.24.A.4. Sexual and/or Physical Abuse Exclusion - Specified Professional Services', self.buildSexualAbuseExclusion, self.formatSexualAbuseExclusion),
+            ('SPAB', 'OC Table D.24.A.4. Sexual and/or Physical Abuse Exclusion - Specified Professional Services', self.buildSexualAbuseExclusion, self.formatSexualAbuseExclusion),
             ('EPLWHC', 'OC Table D.21.A.4 Wage and Hour Claims Expenses - Employment Practices Liability', self.buildEmploymentPracticesLiability, self.formatEmploymentPracticesLiability),
             ('EPLTPP', 'OC Table D.23.A.4 Employment Practices Liability Coverage for Third Party Practices', self.buildEmploymentPracticesLiabilityThirdParty, self.formatEmploymentPracticesLiabilityThirdParty),
             ('UAVL', 'OC Table D.25.B.4. Limited Coverage for Designated Unmanned Aircraft', self.buildLimitedCoverageUnmannedAircraft, self.formatLimitedCoverageUnmannedAircraft),
@@ -2668,6 +2742,7 @@ class OptionalCoverages:
             if progress_callback:
                 progress_callback(f"Building sheet {i}/{total}: {tableCode}...")
             ws = OC.generateWorksheet(tableCode, title, build(), False, True)
+            self._privatizeCellStyles(ws)
             if postFormat:
                 postFormat(ws)
 
@@ -2740,7 +2815,28 @@ class OptionalCoverages:
             wsWWCOV = OC.generateWorksheet('WWCOV', 'OC Table D.20.A.4 Amendment of Coverage Territory – Worldwide Coverage', pd.DataFrame(), False, False)
             self.formatWorldwideCoverage(wsWWCOV, boldFont, OC.fontItalic)
 
+        self._sortSheetsByTableNumber(OC.getWB())
         if progress_callback:
             progress_callback("Building Index sheet...")
         OC.createIndex()
         return OC.getWB()
+
+    @staticmethod
+    def _tableNumberKey(title):
+        """Sort key for an 'OC Table B.3.D.1. ...' title: each dot-separated part
+        compares numerically when it is a number ('3' < '15') and alphabetically
+        otherwise ('a' < 'b'); numbers sort before letters at the same position."""
+        m = re.match(r'\s*OC Table\s+([A-Z](?:\.[0-9A-Za-z]+)*)', title or '')
+        if not m:
+            return None
+        return [(0, int(part), '') if part.isdigit() else (1, 0, part.lower()) for part in m.group(1).split('.')]
+
+    # Sheets are built in code order; reorder them by Table Number (ascending) so
+    # the workbook and its Index follow the manual. The Index sheet stays first
+    # and any sheet without a parseable table number keeps its place at the end.
+    def _sortSheetsByTableNumber(self, wb):
+        sheets = list(wb._sheets)
+        index, rest = sheets[0], sheets[1:]
+        keyed = [(self._tableNumberKey(ws['A1'].value), n, ws) for n, ws in enumerate(rest)]
+        keyed.sort(key=lambda t: (t[0] is None, t[0] or [], t[1]))
+        wb._sheets = [index] + [ws for _, _, ws in keyed]

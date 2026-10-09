@@ -265,7 +265,7 @@ class Food:
         for company, tab, label in (('NACO', 'BRNACO', 'NW Assurance'), ('NAFF', 'BRNAFF', 'NW Affinity'),
                                      ('NGIC', 'BRNGIC', 'NW General Insurance Company'), ('NICOF', 'BRNICOF', 'NICOF')):
             if company in self.rateTables and all(t in self.rateTables[company] for t in self._BASE_RATE_TABLES):
-                sheetSpecs.append((tab, f'FS Table 3.B.1. {label} State Base Rates', lambda c=company: self.buildBaseRates(c), False, True, 'AS_BR', None))
+                sheetSpecs.append((tab, f'FS Table 3.B.1. {label} State Base Rates', lambda c=company: self.buildBaseRates(c), False, True, 'FS_BR', None))
 
         sheetSpecs += [
             ('CBG', 'FS Table 3.C.2.c. Construction Factor - Building', lambda: self.buildConstructionType('Building'), False, True, None, None),
@@ -275,9 +275,9 @@ class Food:
             ('YBPP', 'FS Table 3.C.2.p. Year Built Modifier - BPP', lambda: self.buildYearBuiltModifier('BPP'), False, True, None, None),
             ('YBBI', 'FS Table 3.C.2.p. Year Built Modifier - Bus Inc', lambda: self.buildYearBuiltModifier('Business Income'), False, True, None, None),
             ('EBB', 'FS Table 3.C.3.a. EB Base Rate', self.buildEBBaseRate, False, True, None, None),
-            ('PDLD', 'FS Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, None, None),
-            ('LS', 'FS Table 3.C.4.d. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, None, None),
-            ('LL', 'FS Table 3.C.4.e. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, None, None),
+            ('PDLD', 'FS Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, 'PDLD_HAB', None),
+            ('LS', 'FS Table 3.C.4.d. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, 'FS_LS', None),
+            ('LL', 'FS Table 3.C.4.e. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, 'FS_LL', None),
             ('FSS', 'FS Table 4.A.1. Food Service Specialized Endorsement', self.buildFSSplzdEndo, False, True, 'PLUS', None),
             ('SPO', 'FS Table 4.A.2. Optional Increased Limits – Spoilage From Power Outage', self.buildSpoilagePowerOutage, False, True, None, None),
             ('C', 'FS Table 4.A.3. Optional Increased Limits – Food Contamination – Loss of Income', self.buildFoodContamination, False, True, None, None),

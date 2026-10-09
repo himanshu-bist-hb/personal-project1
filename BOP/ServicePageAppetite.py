@@ -158,6 +158,8 @@ class _ServiceAppetiteMixin:
     # verbatim from ServicePage.Service._formatMPVS (BP-2.0); generateWorksheet
     # is called with an EMPTY dataframe for this table code.
     def _formatMPVS(self, ws, boldFont, font):
+        # Clear the empty boxed header cell left in A3 by generateWorksheet.
+        ws['A3'].border = Border()
         for i, (heading, mobile, vehicle, worker) in enumerate((
                 ("Pet Services", self.buildPSMobileEquipment(), self.buildPSBusinessIncomeVehicle(), self.buildPSBusinessIncomeWorker()),
                 ("Veterinarian Services", self.buildVetMobileEquipment(), self.buildVetBusinessIncomeVehicle(), self.buildVetBusinessIncomeWorker()))):

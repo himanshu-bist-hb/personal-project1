@@ -72,6 +72,9 @@ class Excel:
         "Food Service": "FS",
         "Retail": "R",
         "Optional Coverages": "OC",
+        "Additional Rules": "AR",
+        "Common Rules": "CR",
+        "Rating Plans": "RP",
     }
 
     def __init__(self, state, programName, nEffective, rEffective, companyList) -> None:

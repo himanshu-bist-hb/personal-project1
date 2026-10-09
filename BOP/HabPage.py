@@ -264,9 +264,9 @@ class Hab:
             ('NU', 'H Table 3.C.4.a. Number of Units Factor', self.buildNumOfUnitsFactor, False, True, None, None),
             ('NS', 'H Table 3.C.4.b. Number of Stories Factor', self.buildNumOfStoriesFactor, False, True, None, None),
             ('PDLD', 'H Table 3.C.4.d. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, 'PDLD_HAB', None),
-            ('LL', 'H Table 3.C.4.f. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, None, None),
-            ('DO', 'H Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, None, self._formatDirsOfficersLiabIns),
-            ('DONM', 'H Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, None, None),
+            ('LL', 'H Table 3.C.4.f. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, 'FS_LL', None),
+            ('DO', 'H Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, 'O_DO', self._formatDirsOfficersLiabIns),
+            ('DONM', 'H Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, 'O_DONM', None),
             ('ERP', 'H Table 4.A.3. Directors and Officers Liability Insurance - Extended Reporting Periods', self.buildDirsOfficersReportingPeriods, False, True, None, None),
             ('PLUS', 'H Table 4.B. Habitational PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
         ]

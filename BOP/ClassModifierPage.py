@@ -94,8 +94,11 @@ class ClassModifier:
         if ws.title == 'CLEB':
             ws.column_dimensions['B'].width = self.pixelsToInches(80)
         else:
+            # Liability's L-OtherMed/L-OtherPrem/L-Products/L-Violence headers
+            # wrap mid-word at the shared 53px width, so it gets wider columns.
+            peril_px = 90 if ws.title == 'CLGL' else 53
             for col in range(2, ws.max_column + 1):
-                ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(53)
+                ws.column_dimensions[get_column_letter(col)].width = self.pixelsToInches(peril_px)
 
     # Sets up the Class Modifier Excel file and creates a separate worksheet
     # for each of the given dataframes, then applies each table's shared

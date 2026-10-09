@@ -251,14 +251,14 @@ def build():
         # key. 2.0 and pre-2.0 use slightly different widths (140/100 vs
         # 150/125 in the root format methods), matching the LS/LS_CURRENT
         # split convention.
-        ["LS_RETAIL", 1, 2, 140], ["LS_RETAIL", 3, "REST", 100],
-        ["LS_RETAIL_CURRENT", 1, 2, 150], ["LS_RETAIL_CURRENT", 3, "REST", 125],
+        ["LS_RETAIL", 1, 2, 140], ["LS_RETAIL", 3, "REST", 90],
+        ["LS_RETAIL_CURRENT", 1, 2, 150], ["LS_RETAIL_CURRENT", 3, "REST", 110],
         # Service-only tables — see BOP/ServicePage.py's module docstring for
         # which codes above (CBG/CPP/YBBG/YBPP/EBB/PDLD/LL/DO/DONM/ERP/PLUS/
         # FR/AS_BR/ET/GLO/DC/DCEQ/LS_RETAIL) Service reuses as-is (widths
         # transcribed from the root ServicePage.py format*() methods matched
         # exactly).
-        ["FU", 1, "REST", 170],
+        ["FU", 1, 1, 170], ["FU", 2, "REST", 155],
         ["BB", 1, "REST", 170],
         # Repair Services (RSS) and the base-premium block of Pet Services
         # Specialized (PSS) are both a single value visually widened to span
@@ -297,6 +297,26 @@ def build():
         ["SPO", 1, 1, 160], ["SPO", 2, 2, 175],
         ["C", 2, 2, 135],
         ["VAL", 1, 1, 185],
+        # FS Table 3.C.4.d — same as LS/LS_CURRENT but narrower peril columns.
+        ["FS_LS", 1, 2, 95], ["FS_LS", 3, "REST", 100],
+        ["FS_LS_CURRENT", 1, 2, 95], ["FS_LS_CURRENT", 3, "REST", 100],
+        # FS Table 3.C.4.e — same as LL, but with "$" on the limit column.
+        ["FS_LL", 1, 1, 205], ["FS_LL", 2, 2, 54],
+        # W Table 3.C.4.e — same as LPGE, but with "$" on the limit column.
+        ["W_LPGE", 1, 1, 205], ["W_LPGE", 2, 2, 200],
+        # O Table 3.C.4.d — Retail's LS layout, "$" on Limit Min/Max, slightly
+        # narrower peril columns.
+        ["O_LS", 1, 2, 140], ["O_LS", 3, "REST", 90],
+        ["O_LS_CURRENT", 1, 2, 150], ["O_LS_CURRENT", 3, "REST", 110],
+        # O Table 4.A.1 — same as DO, but with "$" on the Limit column.
+        ["O_DO", 1, 1, 130], ["O_DO", 4, 4, 140],
+        # O Table 4.A.2 — same as DONM, but with "$" on the limit column.
+        ["O_DONM", 1, 1, 225],
+        # AS Table 3.C.4.f — LS/LS_CURRENT with "$" on Min/Max, narrower peril cols.
+        ["AS_LS", 1, 2, 95], ["AS_LS", 3, "REST", 100],
+        ["AS_LS_CURRENT", 1, 2, 95], ["AS_LS_CURRENT", 3, "REST", 170],
+        # FS Table 3.B.1 — narrower than the shared AS_BR (159px) columns.
+        ["FS_BR", 1, 1, 82], ["FS_BR", 2, "REST", 125],
     ])
 
     # =======================================================================
@@ -364,6 +384,7 @@ def build():
         ["HAB_BR", 2, "REST", 4, "#,##0.0000"],
         ["HAB_LA", 2, 2, 4, "#,##0.000"],
         ["AS_BR", 2, "REST", 4, "#,##0.0000"],
+        ["FS_BR", 2, "REST", 4, "#,##0.0000"],
         ["YBBG", 1, 1, 4, "###0"],
         ["YBPP", 1, 1, 4, "###0"],
         ["EBB", 1, 1, 4, "$#,##0.00"],
@@ -380,22 +401,31 @@ def build():
         # edit to the shared "PDLD" row.
         ["PDLD_HAB", 1, 1, 4, "$#,##0"],
         ["LL", 1, 1, 4, "#,##0"],
+        ["FS_LL", 1, 1, 4, "$#,##0"],
         ["DO", 2, 2, 4, "#,##0"],
         ["DO", 3, 4, 4, "$#,##0.00"],
+        ["O_DO", 2, 2, 4, "$#,##0"],
+        ["O_DO", 3, 4, 4, "$#,##0.00"],
+        ["O_DONM", 1, 1, 4, "$#,##0"],
+        ["O_DONM", 2, 2, 4, "$#,##0.00"],
         ["DONM", 1, 1, 4, "#,##0"],
         ["DONM", 2, 2, 4, "$#,##0.00"],
         ["PLUS", 1, 1, 4, "$#,##0.00"],
         ["LS", 1, 2, 5, "NoDecimal"],
         ["LS_CURRENT", 1, 2, 5, "NoDecimal"],
+        ["FS_LS", 1, 2, 5, "NoDecimal"],
+        ["FS_LS_CURRENT", 1, 2, 5, "NoDecimal"],
         # LPG Exposures (Auto Service) — "NoDecimal"/"Currency" are actually
         # #,##0.000 / $#,##0.000 (3 decimals despite the names); both columns
         # are whole-number, so literal formats without decimals instead.
         ["LPGE", 1, 1, 4, "#,##0"],
         ["LPGE", 2, 2, 4, "$#,##0"],
+        ["W_LPGE", 1, 1, 4, "$#,##0"],
+        ["W_LPGE", 2, 2, 4, "$#,##0"],
         # Retail's LPGE Premium column wants 2 decimals (user request,
         # 2026-08-14) — kept separate from Auto Service's "LPGE" row above
         # via the LPGE_RETAIL layout key so Auto Service's stays 0-decimal.
-        ["LPGE_RETAIL", 1, 1, 4, "#,##0"],
+        ["LPGE_RETAIL", 1, 1, 4, "$#,##0"],
         ["LPGE_RETAIL", 2, 2, 4, "$#,##0.00"],
         # Special Property Damage Deductible (Auto Service) — "Currency" is
         # $#,##0.000 (3 decimals); the Deductible column is a whole-dollar
@@ -406,14 +436,18 @@ def build():
         # "Currency" aliases) — those are already known-mislabeled 3-decimal
         # formats (see the PDLD/LPGE comments above); no reason to introduce
         # that trap into new keys.
-        ["FL", 1, 1, 4, "#,##0"],
+        ["FL", 1, 1, 4, "$#,##0"],
         ["FL", 2, 2, 4, "$#,##0.00"],
         ["HE", 2, 2, 4, "$#,##0.00"],
         ["OPTI", 2, 2, 4, "$#,##0.00"],
         ["PED", 2, 2, 4, "$#,##0.00"],
         ["RTS", 1, 1, 4, "$#,##0.00"],
-        ["LS_RETAIL", 1, 2, 5, "#,##0"],
-        ["LS_RETAIL_CURRENT", 1, 2, 5, "#,##0"],
+        ["LS_RETAIL", 1, 2, 5, "$#,##0"],
+        ["LS_RETAIL_CURRENT", 1, 2, 5, "$#,##0"],
+        ["O_LS", 1, 2, 5, "$#,##0"],
+        ["O_LS_CURRENT", 1, 2, 5, "$#,##0"],
+        ["AS_LS", 1, 2, 5, "$#,##0"],
+        ["AS_LS_CURRENT", 1, 2, 5, "$#,##0"],
         # Service-only tables. Literal formats throughout (not the
         # "NoDecimal"/"Currency" aliases), same reasoning as the Retail-only
         # rows above.
@@ -466,10 +500,16 @@ def build():
         # "Receipts Range" label spanning the Min/Max columns.
         ["LS", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
         ["LS_CURRENT", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
+        ["FS_LS", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
+        ["FS_LS_CURRENT", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
         # Retail's own Liability Size of Risk — different label text/columns
         # than Auto Service's LS, see the Table Layout note.
         ["LS_RETAIL", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
         ["LS_RETAIL_CURRENT", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
+        ["O_LS", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
+        ["O_LS_CURRENT", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
+        ["AS_LS", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
+        ["AS_LS_CURRENT", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
     ])
 
     # =======================================================================

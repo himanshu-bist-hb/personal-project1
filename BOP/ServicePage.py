@@ -505,6 +505,8 @@ class Service:
     # Veterinarian. Office's Table 4.L.3 carries the Veterinarian half of this
     # content.
     def _formatMPVS(self, ws, boldFont, font):
+        # Clear the empty boxed header cell left in A3 by generateWorksheet.
+        ws['A3'].border = Border()
         for i, (heading, mobile, vehicle, worker) in enumerate((
                 ("Pet Services", self.buildPSMobileEquipment(), self.buildPSBusinessIncomeVehicle(), self.buildPSBusinessIncomeWorker()),
                 ("Veterinarian Services", self.buildVetMobileEquipment(), self.buildVetBusinessIncomeVehicle(), self.buildVetBusinessIncomeWorker()))):
@@ -549,12 +551,12 @@ class Service:
             ('YBBG', 'S Table 3.C.2.p. Year Built Modifier - Building', lambda: self.buildYearBuiltModifier('Building'), False, True, None, None),
             ('YBPP', 'S Table 3.C.2.p. Year Built Modifier - BPP', lambda: self.buildYearBuiltModifier('BPP'), False, True, None, None),
             ('EBB', 'S Table 3.C.3.a. EB Base Rate', self.buildEBBaseRate, False, True, None, None),
-            ('PDLD', 'S Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, None, None),
-            ('LL', 'S Table 3.C.4.d. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, None, None),
-            ('LS', 'S Table 3.C.4.e. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, 'LS_RETAIL', None),
+            ('PDLD', 'S Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, 'PDLD_HAB', None),
+            ('LL', 'S Table 3.C.4.d. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, 'FS_LL', None),
+            ('LS', 'S Table 3.C.4.e. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, 'O_LS', None),
             ('GLO', 'S Table 3.D.1.c. General Liability Occupancy Modifiers', self.buildGeneralOccupancyMod, False, True, None, None),
-            ('DO', 'S Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, None, self._formatDirsOfficersLiabIns),
-            ('DONM', 'S Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, None, None),
+            ('DO', 'S Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, 'O_DO', self._formatDirsOfficersLiabIns),
+            ('DONM', 'S Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, 'O_DONM', None),
             ('ERP', 'S Table 4.A.3. Directors and Officers Liability Insurance - Extended Reporting Periods', self.buildDirsOfficersReportingPeriods, False, True, None, None),
             ('BB', 'S Table 4.B.1.e.(1). Barber, Beauty, or Spa Professional Liability', self.buildBarberProfLiab, False, True, None, None),
             ('PLUS', 'S Table 4.C. Service PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),

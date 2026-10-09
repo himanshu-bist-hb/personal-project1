@@ -572,6 +572,9 @@ class Office:
     # veterinarian, a plain note, then Mobile Equipment and the
     # two Business Income blocks, all driven by the ratebook.
     def _formatVSPL(self, ws, boldFont, font):
+        # generateWorksheet (empty df) leaves A3 as a boxed, empty header cell;
+        # clear it so no blank bordered cell shows above the first label.
+        ws['A3'].border = Border()
         self._appendLabeledBlocks(ws, boldFont, font, [
             ("Rate per Veterinarian - Household Pet", self.buildVetSpecializedLiabHousehold()),
             ("Rate per Veterinarian - Non Household Pet", self.buildVetSpecializedLiabNonHousehold()),
@@ -607,6 +610,8 @@ class Office:
     # with an EMPTY dataframe for this table code (just the title in A1),
     # same pattern as MPVS below.
     def _formatVPL(self, ws, boldFont, font):
+        # Clear the empty boxed header cell left in A3 (see _formatVSPL).
+        ws['A3'].border = Border()
         blocks = [
             ("Rate per Veterinarian - Household Pet", self.buildVetProfLiabHousehold()),
             ("Rate per Veterinarian - Non Household Pet", self.buildVetProfLiabNonHousehold()),
@@ -628,6 +633,8 @@ class Office:
     # real data is available. See [[bop_service_port]]'s _formatMPVS for the
     # same caveat.
     def _formatMPVS(self, ws, boldFont, font):
+        # Clear the empty boxed header cell left in A3 (see _formatVSPL).
+        ws['A3'].border = Border()
         blocks = [
             ("Pet Services", self.buildPetServicesMobileEquip()),
             ("Pet Services per Customized Vehicle", self.buildPetServicesCustomizedVehicle()),
@@ -680,12 +687,12 @@ class Office:
             ('YBBG', 'O Table 3.C.2.p. Year Built Modifier - Building', lambda: self.buildYearBuiltModifier('Building'), False, True, None, None),
             ('YBPP', 'O Table 3.C.2.p. Year Built Modifier - BPP', lambda: self.buildYearBuiltModifier('BPP'), False, True, None, None),
             ('EBB', 'O Table 3.C.3.a. EB Base Rate', self.buildEBBaseRate, False, True, None, None),
-            ('PDLD', 'O Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, None, None),
-            ('LS', 'O Table 3.C.4.d. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, 'LS_RETAIL', None),
-            ('LL', 'O Table 3.C.4.e. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, None, None),
+            ('PDLD', 'O Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, 'PDLD_HAB', None),
+            ('LS', 'O Table 3.C.4.d. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, 'O_LS', None),
+            ('LL', 'O Table 3.C.4.e. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, 'FS_LL', None),
             ('GLO', 'O Table 3.D.1.c. General Liability Occupancy Modifiers', self.buildGeneralOccupancyMod, False, True, None, None),
-            ('DO', 'O Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, None, self._formatDirsOfficersLiabIns),
-            ('DONM', 'O Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, None, None),
+            ('DO', 'O Table 4.A.1. Directors and Officers Liability Insurance', self.buildDirsOfficersLiabIns, False, True, 'O_DO', self._formatDirsOfficersLiabIns),
+            ('DONM', 'O Table 4.A.2. Directors and Officers Liability Insurance - Non-Monetary Relief', self.buildDirsOfficersNonMonetaryRelief, False, True, 'O_DONM', None),
             ('ERP', 'O Table 4.A.3. Directors and Officers Liability Insurance - Extended Reporting Periods', self.buildDirsOfficersReportingPeriods, False, True, None, None),
             ('OPTO', 'O Table 4.B.5.a. Optometrists Professional Liability', self.buildOptometristsProfessionalLiab, False, True, None, None),
             ('VSPL', 'O Table 4.C.4.A. Veterinarian Specialized Endorsement With Professional Liability', lambda: pd.DataFrame(), False, False, None,

@@ -199,10 +199,10 @@ class Wholesale:
             ('YBBG', 'W Table 3.C.2.p. Year Built Modifier - Building', lambda: self.buildYearBuiltModifier('Building'), False, True, None, None),
             ('YBPP', 'W Table 3.C.2.p. Year Built Modifier - BPP', lambda: self.buildYearBuiltModifier('BPP'), False, True, None, None),
             ('EBB', 'W Table 3.C.3.a. EB Base Rate', self.buildEBBaseRate, False, True, None, None),
-            ('PDLD', 'W Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, None, None),
-            ('LL', 'W Table 3.C.4.d. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, None, None),
-            ('LPGE', 'W Table 3.C.4.e. Liquefied Petroleum Gas (LPG) Exposures', self.buildLPGExposure, False, True, None, None),
-            ('LS', 'W Table 3.C.4.f. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, None, None),
+            ('PDLD', 'W Table 3.C.4.b. Property Damage Liability Deductible Factor', self.buildPDDeductibleAmount, False, True, 'PDLD_HAB', None),
+            ('LL', 'W Table 3.C.4.d. Liability Limit Factor', self.buildLiabilityLimitFactor, False, True, 'FS_LL', None),
+            ('LPGE', 'W Table 3.C.4.e. Liquefied Petroleum Gas (LPG) Exposures', self.buildLPGExposure, False, True, 'W_LPGE', None),
+            ('LS', 'W Table 3.C.4.f. Liability Size of Risk Modifier', self.buildLiabilitySizeRisk, False, True, 'FS_LS', None),
             ('PLUS', 'W Table 4.A. Wholesale PLUS Endorsement', self.buildEndorsementCharge, False, True, None, None),
         ]
 

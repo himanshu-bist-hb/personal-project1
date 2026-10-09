@@ -210,6 +210,9 @@ class _OfficeAppetiteMixin:
             ws.column_dimensions[get_column_letter(col)].bestFit = True
 
     def _formatVSPL(self, ws, boldFont, font):
+        # generateWorksheet (empty df) leaves A3 as a boxed, empty header cell;
+        # clear it so no blank bordered cell shows above the first label.
+        ws['A3'].border = Border()
         self._appendLabeledBlocks(ws, boldFont, font, [
             ("Rate per Veterinarian - Household Pet", self.buildVetSpecializedLiabHousehold()),
             ("Rate per Veterinarian - Non Household Pet", self.buildVetSpecializedLiabNonHousehold()),
@@ -236,6 +239,8 @@ class _OfficeAppetiteMixin:
         self._appendLabeledBlocks(ws, boldFont, font, blocks, blank_before_first=True)
 
     def _formatVPL(self, ws, boldFont, font):
+        # Clear the empty boxed header cell left in A3 (see _formatVSPL).
+        ws['A3'].border = Border()
         blocks = [
             ("Rate per Veterinarian - Household Pet", self.buildVetProfLiabHousehold()),
             ("Rate per Veterinarian - Non Household Pet", self.buildVetProfLiabNonHousehold()),
@@ -245,6 +250,8 @@ class _OfficeAppetiteMixin:
         ws.cell(row=noteRow, column=1, value="This coverage does not charge on the basis of per employee, but veterinarians only").font = font
 
     def _formatMPVS(self, ws, boldFont, font):
+        # Clear the empty boxed header cell left in A3 (see _formatVSPL).
+        ws['A3'].border = Border()
         blocks = [
             ("Pet Services", self.buildPetServicesMobileEquip()),
             ("Pet Services per Customized Vehicle", self.buildPetServicesCustomizedVehicle()),

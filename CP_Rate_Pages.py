@@ -421,11 +421,12 @@ class _RBSheets:
     def __init__(self, rbs):
         self.sheetnames = [name for rb in rbs for name in rb.sheet_names]
 
-def _rb_for(sheet):
-    for rb in _RB_CHAIN:
+# Defaults bind the values now: this file runs via exec() inside a function, so a function body can't see its top-level names.
+def _rb_for(sheet, _chain=_RB_CHAIN, _fallback=NGICRatebook):
+    for rb in _chain:
         if sheet in rb.sheet_names:
             return rb
-    return _RB_CHAIN[0] if _RB_CHAIN else NGICRatebook
+    return _chain[0] if _chain else _fallback
 
 if SMRatebook != "Not found":
     NGICRatebook = SMRatebook

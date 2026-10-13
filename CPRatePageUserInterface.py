@@ -29,7 +29,8 @@ from tkinter import filedialog as fd
 
 
 def callbackRatePages():
-    exec(open("CP_Rate_Pages.py").read())
+    # Single namespace so functions defined in the script can see its top-level names
+    exec(open("CP_Rate_Pages.py").read(), dict(globals()))
 
 def callbackHexValidate():
     exec(open("CP_Hex_Validate.py").read())

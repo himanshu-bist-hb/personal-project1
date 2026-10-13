@@ -258,7 +258,8 @@ def build():
         # FR/AS_BR/ET/GLO/DC/DCEQ/LS_RETAIL) Service reuses as-is (widths
         # transcribed from the root ServicePage.py format*() methods matched
         # exactly).
-        ["FU", 1, 1, 170], ["FU", 2, "REST", 155],
+        ["FU", 1, 1, 170], ["FU", 2, "REST", 135],
+        ["FU_BP2", 1, 1, 170], ["FU_BP2", 2, "REST", 135],  # S Table 1.C.5.a (BP-2.0)
         ["BB", 1, "REST", 170],
         # Repair Services (RSS) and the base-premium block of Pet Services
         # Specialized (PSS) are both a single value visually widened to span
@@ -313,6 +314,9 @@ def build():
         # O Table 4.A.2 — same as DONM, but with "$" on the limit column.
         ["O_DONM", 1, 1, 225],
         # AS Table 3.C.4.f — LS/LS_CURRENT with "$" on Min/Max, narrower peril cols.
+        # FS Table 3.C.4.d (BP-2.0) — FS_LS with "$" and no decimals on Min/Max.
+        ["FS_LS_BP2", 1, 2, 95], ["FS_LS_BP2", 3, "REST", 100],
+        ["FS_LS_PRE2", 1, 2, 95], ["FS_LS_PRE2", 3, "REST", 100],  # FS 3.C.4.d (pre-2.0)
         ["AS_LS", 1, 2, 95], ["AS_LS", 3, "REST", 100],
         ["AS_LS_CURRENT", 1, 2, 95], ["AS_LS_CURRENT", 3, "REST", 170],
         # FS Table 3.B.1 — narrower than the shared AS_BR (159px) columns.
@@ -446,6 +450,8 @@ def build():
         ["LS_RETAIL_CURRENT", 1, 2, 5, "$#,##0"],
         ["O_LS", 1, 2, 5, "$#,##0"],
         ["O_LS_CURRENT", 1, 2, 5, "$#,##0"],
+        ["FS_LS_BP2", 1, 2, 5, "$#,##0"],
+        ["FS_LS_PRE2", 1, 2, 5, "$#,##0"],
         ["AS_LS", 1, 2, 5, "$#,##0"],
         ["AS_LS_CURRENT", 1, 2, 5, "$#,##0"],
         # Service-only tables. Literal formats throughout (not the
@@ -508,6 +514,8 @@ def build():
         ["LS_RETAIL_CURRENT", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
         ["O_LS", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
         ["O_LS_CURRENT", 3, "1:4", "A:B", "Building plus Business Personal Property", "C:REST", ""],
+        ["FS_LS_BP2", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
+        ["FS_LS_PRE2", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
         ["AS_LS", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
         ["AS_LS_CURRENT", 3, "1:4", "A:B", "Receipts Range", "C:REST", ""],
     ])

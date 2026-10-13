@@ -29,10 +29,7 @@ from tkinter import filedialog as fd
 
 
 def callbackRatePages():
-    try:
-        exec(open("CP_Rate_Pages.py").read())
-    except FileNotFoundError:
-        exec(open("CP_Rate_Page.py").read())
+    exec(open("CP_Rate_Pages.py").read())
 
 def callbackHexValidate():
     exec(open("CP_Hex_Validate.py").read())
@@ -133,17 +130,17 @@ def CW_Ratebook():
         filetypes=filetypes)
     label_file_explorerCW.configure(text=os.path.basename(CWRatebook))
 
-def AppliesToAll_Ratebook():
+def AppliesAll_Ratebook():
     filetypes = (
         ('All files', '*.*'),
         ('text files', '*.txt')
     )
 
-    global AppliesToAllRatebook
-    AppliesToAllRatebook = fd.askopenfilename(
+    global AppliesAllRatebook
+    AppliesAllRatebook = fd.askopenfilename(
         title='Open a file',
         filetypes=filetypes)
-    label_file_explorerAppliesToAll.configure(text=os.path.basename(AppliesToAllRatebook))
+    label_file_explorerAppliesAll.configure(text=os.path.basename(AppliesAllRatebook))
 
 def SM_Ratebook():
     filetypes = (
@@ -156,7 +153,6 @@ def SM_Ratebook():
         title='Open a file',
         filetypes=filetypes)
     label_file_explorerSM.configure(text=os.path.basename(SMRatebook))
-
 
 def getFolderPath():
     global folder_selected
@@ -326,13 +322,14 @@ label_file_explorerHICNJ.grid(column=2, row=9, padx=2, pady=5)
 label_file_explorerTerrAdj = Label(scrollable_frame, text="", fg=fg, bg=bg)
 label_file_explorerTerrAdj.grid(column=1, row=12, pady=5)
 
-label_file_explorerAppliesToAll = Label(scrollable_frame, text="", fg=fg, bg=bg)
-label_file_explorerAppliesToAll.grid(column=1, row=14, padx=2, pady=5)
+label_file_explorerAppliesAll = Label(scrollable_frame, text="", fg=fg, bg=bg)
+label_file_explorerAppliesAll.grid(column=1, row=14, pady=5)
 
 label_file_explorerSM = Label(scrollable_frame, text="", fg=fg, bg=bg)
-label_file_explorerSM.grid(column=2, row=14, padx=2, pady=5)
+label_file_explorerSM.grid(column=2, row=14, pady=5)
 
 label_file_explorerSave = Label(scrollable_frame, text="", fg=fg, bg=bg)
+label_file_explorerSave.grid(column=6, row=11, pady=5)
 
 SelectFileNGIC = Button(scrollable_frame, text='Select NGIC Ratebook', fg=fg, command=NGIC_Ratebook, bg=bg)
 SelectFileNGIC.grid(column=1, row=2, pady=2)
@@ -355,8 +352,8 @@ SelectFileHICNJ.grid(column=2, row=8, pady=2)
 SelectFileTerrAdj = Button(scrollable_frame, text='Select Hex Ratebook', fg=fg, command=TerrAdj_Ratebook,bg=bg)
 SelectFileTerrAdj.grid(column=1,row=10,pady=2)
 
-SelectFileAppliesToAll = Button(scrollable_frame, text='Select Applies to All Ratebook', fg=fg, command=AppliesToAll_Ratebook, bg=bg)
-SelectFileAppliesToAll.grid(column=1, row=13, pady=2)
+SelectFileAppliesAll = Button(scrollable_frame, text='Select Applies to All Ratebook', fg=fg, command=AppliesAll_Ratebook, bg=bg)
+SelectFileAppliesAll.grid(column=1, row=13, pady=2)
 
 SelectFileSM = Button(scrollable_frame, text='Select SM Ratebook', fg=fg, command=SM_Ratebook, bg=bg)
 SelectFileSM.grid(column=2, row=13, pady=2)
@@ -431,17 +428,18 @@ C15.grid(column=8, row=7, padx=2)
 folderPath = StringVar()
 
 SaveButton = Button(scrollable_frame, text="Select Save Location", fg=fg, command=getFolderPath, bg=bg)
-SaveButton.grid(column=5, row=17, pady=(30, 5))
-label_file_explorerSave.grid(column=5, row=18, pady=(2, 10))
+SaveButton.grid(column=5, row=14, pady=5)
+label_file_explorerSave.grid(column=5, row=15, pady=2)
 
-btnrunRatePages = Button(scrollable_frame, text="Create Rate Pages", width=20, fg=fg, command=callbackRatePages, bg=bg)
-btnrunRatePages.grid(column=6, row=17, padx=5, pady=(30, 5))
-
-btnrunHexValidate = Button(scrollable_frame, text="Validate Hex Factors", width=20, fg=fg, command=hexValidate)
-btnrunHexValidate.grid(column=8, row=17, padx=5, pady=(30, 5))
 
 btncancel = Button(scrollable_frame, text="Cancel", width=10, fg=fg, command=window.destroy, bg=bg)
-btncancel.grid(column=9, row=17, padx=5, pady=(30, 5))
+btncancel.grid(column=8, row=14, padx=2, pady=2)
+
+btnrunRatePages = Button(scrollable_frame, text="Create Rate Pages", width=20, fg=fg, command=callbackRatePages, bg=bg)
+btnrunRatePages.grid(column=6, row=14, padx=2, pady=2)
+
+btnrunHexValidate = Button(scrollable_frame, text="Validate Hex Factors", width=20, fg=fg, command=hexValidate)
+btnrunHexValidate.grid(column=7, row=14, padx=2,pady=2)
 
 lbl1 = Label(scrollable_frame, text="Select items to include in small market output", fg='#65C7E3', font=("Arial", 12), bg=bg)
 lbl1.grid(column=4, row=1, pady=5, columnspan=3)
@@ -477,6 +475,6 @@ lbl2 = Label(scrollable_frame, text="Input Decimal i.e. 0.5", fg='#65C7E3', font
 lbl2.grid(column=10, row=12)
 
 
-tk.ttk.Separator(scrollable_frame, orient=VERTICAL).grid(column=3, row=0, padx=15, rowspan=20, sticky='ns')
-tk.ttk.Separator(scrollable_frame, orient=VERTICAL).grid(column=7, row=0, padx=15, rowspan=20, sticky='ns')
+tk.ttk.Separator(scrollable_frame, orient=VERTICAL).grid(column=3, row=0, padx=15, rowspan=10, sticky='ns')
+tk.ttk.Separator(scrollable_frame, orient=VERTICAL).grid(column=7, row=0, padx=15, rowspan=10, sticky='ns')
 window.mainloop()

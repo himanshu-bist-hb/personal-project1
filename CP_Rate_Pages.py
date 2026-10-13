@@ -328,51 +328,16 @@ global MMCondition
 global NACOCondition
 global NAFFCondition
 global NICOFCondition
-global SMCondition
-global AppliesToAllCondition
-
-try: SMRatebook
-except:
-    SMRatebook = "Not found"
-    SMCondition = False
-    SMRatebook_path = None
-else:
-    if SMRatebook == '':
-        SMRatebook = "Not found"
-        SMCondition = False
-        SMRatebook_path = None
-    else:
-        SMRatebook_path = SMRatebook
-        SMRatebook = pd.ExcelFile(SMRatebook)
-        SMCondition = True
-
-try: AppliesToAllRatebook
-except:
-    AppliesToAllRatebook = "Not found"
-    AppliesToAllCondition = False
-    AppliesToAllRatebook_path = None
-else:
-    if AppliesToAllRatebook == '':
-        AppliesToAllRatebook = "Not found"
-        AppliesToAllCondition = False
-        AppliesToAllRatebook_path = None
-    else:
-        AppliesToAllRatebook_path = AppliesToAllRatebook
-        AppliesToAllRatebook = pd.ExcelFile(AppliesToAllRatebook)
-        AppliesToAllCondition = True
 
 try: NGICRatebook
 except:
     NGICRatebook = "Not found"
     NGICCondition = False
-    NGICRatebook_path = None
 else:
     if NGICRatebook == '':
         NGICRatebook = "Not found"
         NGICCondition = False
-        NGICRatebook_path = None
     else:
-        NGICRatebook_path = NGICRatebook
         NGICRatebook = pd.ExcelFile(NGICRatebook)
         NGICCondition = True
 
@@ -380,14 +345,11 @@ try: MMRatebook
 except:
     MMRatebook = "Not found"
     MMCondition = False
-    MMRatebook_path = None
 else:
     if MMRatebook == '':
         MMRatebook = "Not found"
         MMCondition = False
-        MMRatebook_path = None
     else:
-        MMRatebook_path = MMRatebook
         MMRatebook = pd.ExcelFile(MMRatebook)
         MMCondition = True
 
@@ -427,33 +389,55 @@ else:
         NICOFRatebook = pd.ExcelFile(NICOFRatebook)
         NICOFCondition = True
 
+try: AppliesAllRatebook
+except:
+    AppliesAllRatebook = "Not found"
+    AppliesAllCondition = False
+else:
+    if AppliesAllRatebook == '':
+        AppliesAllRatebook = "Not found"
+        AppliesAllCondition = False
+    else:
+        AppliesAllRatebook = pd.ExcelFile(AppliesAllRatebook)
+        AppliesAllCondition = True
+
+try: SMRatebook
+except:
+    SMRatebook = "Not found"
+else:
+    if SMRatebook == '':
+        SMRatebook = "Not found"
+    else:
+        SMRatebook = pd.ExcelFile(SMRatebook)
+
+# Lookup order for sheets: with an SM ratebook -> SM, then Applies to All, then NGIC (if uploaded), then CW fallback.
+# Without one the behavior is unchanged: NGIC (or Applies to All standing in for it), then CW fallback.
+if SMRatebook != "Not found":
+    _RB_CHAIN = [rb for rb in (SMRatebook, AppliesAllRatebook, NGICRatebook) if not isinstance(rb, str)]
+else:
+    _RB_CHAIN = [rb for rb in (NGICRatebook if NGICRatebook != "Not found" else AppliesAllRatebook,) if not isinstance(rb, str)]
+
+class _RBSheets:
+    def __init__(self, rbs):
+        self.sheetnames = [name for rb in rbs for name in rb.sheet_names]
+
+def _rb_for(sheet):
+    for rb in _RB_CHAIN:
+        if sheet in rb.sheet_names:
+            return rb
+    return _RB_CHAIN[0] if _RB_CHAIN else NGICRatebook
 
 if SMRatebook != "Not found":
-    SMwb = load_workbook(SMRatebook_path, read_only=True)
-else:
-    SMwb = None
+    NGICRatebook = SMRatebook
+    NGICCondition = True
+elif NGICRatebook == "Not found" and AppliesAllRatebook != "Not found":
+    NGICRatebook = AppliesAllRatebook
+    NGICCondition = True
 
-if AppliesToAllRatebook != "Not found":
-    AppliesToAllwb = load_workbook(AppliesToAllRatebook_path, read_only=True)
-else:
-    AppliesToAllwb = None
 
 if NGICRatebook != "Not found":
-    NGICwb = load_workbook(NGICRatebook_path, read_only=True)
-else:
-    NGICwb = None
-
-if MMRatebook != "Not found":
-    MMwb = load_workbook(MMRatebook_path, read_only=True)
-else:
-    MMwb = None
-
-if SMRatebook != "Not found":
-    RateBookDetails = pd.read_excel(SMRatebook, sheet_name='Rate Book Details')
-elif AppliesToAllRatebook != "Not found":
-    RateBookDetails = pd.read_excel(AppliesToAllRatebook, sheet_name='Rate Book Details')
-elif NGICRatebook != "Not found":
-    RateBookDetails = pd.read_excel(NGICRatebook, sheet_name='Rate Book Details')
+    NGICwb = _RBSheets(_RB_CHAIN)
+    RateBookDetails = pd.read_excel(_rb_for('Rate Book Details'), sheet_name='Rate Book Details')
 else:
     RateBookDetails = pd.read_excel(MMRatebook, sheet_name='Rate Book Details')
 State = RateBookDetails.iloc[3,4]
@@ -608,9 +592,9 @@ if NICOFRatebook != "Not found":
     NICOFCRIMELCM = pd.read_excel(NICOFRatebook, sheet_name='CrimeLossCostMultiplier_Ext',skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NICOFCRIMELCM = NICOFCRIMELCM.iloc[0, 1]
 if NGICRatebook != "Not found":
-    NGICLCM = pd.read_excel(NGICRatebook, sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    NGICLCM = pd.read_excel(_rb_for('LossCostMultiplier'), sheet_name='LossCostMultiplier', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NGICLCM = NGICLCM.iloc[0, 1]
-    NGICCRIMELCM = pd.read_excel(NGICRatebook, sheet_name='CrimeLossCostMultiplier_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    NGICCRIMELCM = pd.read_excel(_rb_for('CrimeLossCostMultiplier_Ext'), sheet_name='CrimeLossCostMultiplier_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     NGICCRIMELCM = NGICCRIMELCM.iloc[0, 1]
 if MMRatebook != "Not found":
     if StateAbb != "WI":
@@ -762,28 +746,20 @@ else:
 
 # <editor-fold desc="Create PMF Dataframes">
 if MMRatebook != "Not found":
-    MMwb = load_workbook(MMRatebook_path, read_only=False)
+    MMwb = load_workbook(MMRatebook, read_only=False)
     if 'PackageModifierFactorTable_Ext' in MMwb.sheetnames:
         MMPMF = pd.read_excel(MMRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-    elif NGICwb is not None and 'PackageModifierFactorTable_Ext' in NGICwb.sheetnames:
-        MMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     else:
-        MMPMF = pd.read_excel(CWRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        MMPMF = pd.read_excel(_rb_for('PackageModifierFactorTable_Ext'), sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     MMPMF = MMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
     MMPMF = MMPMF.drop(labels=[0, 9], axis=0)
 else:
     MMwb = Workbook()
 
-if SMwb is not None and 'PackageModifierFactorTable_Ext' in SMwb.sheetnames:
-    SMPMF = pd.read_excel(SMRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-elif AppliesToAllwb is not None and 'PackageModifierFactorTable_Ext' in AppliesToAllwb.sheetnames:
-    SMPMF = pd.read_excel(AppliesToAllRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-elif NGICwb is not None and 'PackageModifierFactorTable_Ext' in NGICwb.sheetnames:
-    SMPMF = pd.read_excel(NGICRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-else:
-    SMPMF = pd.read_excel(CWRatebook, sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
-SMPMF = SMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
-SMPMF = SMPMF.drop(labels=[0, 9], axis=0)
+if NGICRatebook != "Not found":
+    SMPMF = pd.read_excel(_rb_for('PackageModifierFactorTable_Ext'), sheet_name='PackageModifierFactorTable_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    SMPMF = SMPMF.rename(columns={'PackageModifierCode': 'Package Code'})
+    SMPMF = SMPMF.drop(labels=[0, 9], axis=0)
 # </editor-fold>
 
 # <editor-fold desc="Create Capping Dataframe">
@@ -817,59 +793,46 @@ CrimeDed = CrimeDed.rename(columns={'Deductible': 'Deductible Amount'})
 
 # <editor-fold desc="Create AOI Factor Dataframe">
 
-if SMwb is not None and 'BasicGroupILOIFactorBldg' in SMwb.sheetnames:
-    BGIBLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
-elif AppliesToAllwb is not None and 'BasicGroupILOIFactorBldg' in AppliesToAllwb.sheetnames:
-    BGIBLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
-elif NGICwb is not None and 'BasicGroupILOIFactorBldg' in NGICwb.sheetnames:
-    BGIBLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
-else:
-    BGIBLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupILOIFactorBldg', skiprows=11)
+NGICwb = _RBSheets(_RB_CHAIN)
 
-if SMwb is not None and 'BasicGroupIILOIFactorBldg' in SMwb.sheetnames:
-    BGIIBLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
-elif AppliesToAllwb is not None and 'BasicGroupIILOIFactorBldg' in AppliesToAllwb.sheetnames:
-    BGIIBLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
-elif NGICwb is not None and 'BasicGroupIILOIFactorBldg' in NGICwb.sheetnames:
-    BGIIBLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
-else:
-    BGIIBLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupIILOIFactorBldg', skiprows=11)
+if MMRatebook != "Not found" and 'BasicGroupILOIFactorBldg' in NGICwb.sheetnames:
+    BGIBLOI = pd.read_excel(MMRatebook, sheet_name='BasicGroupILOIFactorBldg',skiprows=11)
 
-if SMwb is not None and 'BroadSpecialLOIFactorBldg' in SMwb.sheetnames:
-    SCOLBLOI = pd.read_excel(SMRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
-elif AppliesToAllwb is not None and 'BroadSpecialLOIFactorBldg' in AppliesToAllwb.sheetnames:
-    SCOLBLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
-elif NGICwb is not None and 'BroadSpecialLOIFactorBldg' in NGICwb.sheetnames:
-    SCOLBLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
-else:
-    SCOLBLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorBldg', skiprows=11)
+elif 'BasicGroupILOIFactorBldg' in NGICwb.sheetnames:
+    BGIBLOI = pd.read_excel(_rb_for('BasicGroupILOIFactorBldg'), sheet_name='BasicGroupILOIFactorBldg',skiprows=11)
 
-if SMwb is not None and 'BasicGroupILOIFactorPersProp' in SMwb.sheetnames:
-    BGIPPLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
-elif AppliesToAllwb is not None and 'BasicGroupILOIFactorPersProp' in AppliesToAllwb.sheetnames:
-    BGIPPLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
-elif NGICwb is not None and 'BasicGroupILOIFactorPersProp' in NGICwb.sheetnames:
-    BGIPPLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
 else:
-    BGIPPLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupILOIFactorPersProp', skiprows=11)
+    BGIBLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupILOIFactorBldg',skiprows=11)
 
-if SMwb is not None and 'BasicGroupIILOIFactorPersProp' in SMwb.sheetnames:
-    BGIIPPLOI = pd.read_excel(SMRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
-elif AppliesToAllwb is not None and 'BasicGroupIILOIFactorPersProp' in AppliesToAllwb.sheetnames:
-    BGIIPPLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
-elif NGICwb is not None and 'BasicGroupIILOIFactorPersProp' in NGICwb.sheetnames:
-    BGIIPPLOI = pd.read_excel(NGICRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
-else:
-    BGIIPPLOI = pd.read_excel(CWRatebook, sheet_name='BasicGroupIILOIFactorPersProp', skiprows=11)
+if 'BasicGroupIILOIFactorBldg' in NGICwb.sheetnames:
+    BGIIBLOI = pd.read_excel(_rb_for('BasicGroupIILOIFactorBldg'), sheet_name='BasicGroupIILOIFactorBldg',skiprows=11)
 
-if SMwb is not None and 'BroadSpecialLOIFactorPrsnlProp' in SMwb.sheetnames:
-    SCOLPPLOI = pd.read_excel(SMRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
-elif AppliesToAllwb is not None and 'BroadSpecialLOIFactorPrsnlProp' in AppliesToAllwb.sheetnames:
-    SCOLPPLOI = pd.read_excel(AppliesToAllRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
-elif NGICwb is not None and 'BroadSpecialLOIFactorPrsnlProp' in NGICwb.sheetnames:
-    SCOLPPLOI = pd.read_excel(NGICRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
 else:
-    SCOLPPLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp', skiprows=11)
+    BGIIBLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupIILOIFactorBldg',skiprows=11)
+
+if 'BroadSpecialLOIFactorBldg' in NGICwb.sheetnames:
+    SCOLBLOI = pd.read_excel(_rb_for('BroadSpecialLOIFactorBldg'), sheet_name='BroadSpecialLOIFactorBldg',skiprows=11)
+
+else:
+    SCOLBLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorBldg',skiprows=11)
+
+if 'BasicGroupILOIFactorPersProp' in NGICwb.sheetnames:
+    BGIPPLOI = pd.read_excel(_rb_for('BasicGroupILOIFactorPersProp'), sheet_name='BasicGroupILOIFactorPersProp',skiprows=11)
+
+else:
+    BGIPPLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupILOIFactorPersProp',skiprows=11)
+
+if 'BasicGroupIILOIFactorPersProp' in NGICwb.sheetnames:
+    BGIIPPLOI = pd.read_excel(_rb_for('BasicGroupIILOIFactorPersProp'), sheet_name='BasicGroupIILOIFactorPersProp',skiprows=11)
+
+else:
+    BGIIPPLOI = pd.read_excel(CWRatebook,sheet_name='BasicGroupIILOIFactorPersProp',skiprows=11)
+
+if 'BroadSpecialLOIFactorPrsnlProp' in NGICwb.sheetnames:
+    SCOLPPLOI = pd.read_excel(_rb_for('BroadSpecialLOIFactorPrsnlProp'), sheet_name='BroadSpecialLOIFactorPrsnlProp',skiprows=11)
+
+else:
+    SCOLPPLOI = pd.read_excel(CWRatebook, sheet_name='BroadSpecialLOIFactorPrsnlProp',skiprows=11)
 
 BGIBLOI = BGIBLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index(names=['Limit',1,2,3,4,5,6])
 BGIBLOI = BGIBLOI.drop(columns=[2,3,5,6])
@@ -893,7 +856,7 @@ BGIPPLOI = BGIPPLOI.pivot(index='Limit',columns='ConstructionCode',values='Facto
 BGIPPLOI = BGIPPLOI.drop(columns=[2,3,5,6])
 BGIPPLOI = BGIPPLOI.drop(BGIPPLOI.tail(1).index)
 BGIPPLOI['Limit'] = BGIPPLOI['Limit'].apply('{:,}'.format)
-BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] = BGIPPLOI.iloc[-1,BGIPPLOI.columns.get_loc('Limit')] + "+"
+BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] = BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] + "+"
 BGIPPLOI = BGIPPLOI.rename(columns={1:"Construction Group 1-3",4:"Construction Group 4-6"})
 BGIPPLOI = splitdf(BGIPPLOI, 2).fillna('')
 
@@ -910,30 +873,21 @@ SCOLPPLOI = splitdf(SCOLPPLOI,2).fillna('')
 # </editor-fold>
 
 # <editor-fold desc="Create Tiering Grade Dataframes">
-if SMwb is not None and 'GroupITierFactor_Ext' in SMwb.sheetnames:
-    BGITier = pd.read_excel(SMRatebook, sheet_name='GroupITierFactor_Ext', skiprows=11)
-elif AppliesToAllwb is not None and 'GroupITierFactor_Ext' in AppliesToAllwb.sheetnames:
-    BGITier = pd.read_excel(AppliesToAllRatebook, sheet_name='GroupITierFactor_Ext', skiprows=11)
-elif NGICwb is not None and 'GroupITierFactor_Ext' in NGICwb.sheetnames:
-    BGITier = pd.read_excel(NGICRatebook, sheet_name='GroupITierFactor_Ext', skiprows=11)
+if 'GroupITierFactor_Ext' in NGICwb.sheetnames:
+    BGITier = pd.read_excel(_rb_for('GroupITierFactor_Ext'), sheet_name='GroupITierFactor_Ext', skiprows=11)
+
 else:
     BGITier = pd.read_excel(CWRatebook,sheet_name='GroupITierFactor_Ext', skiprows=11)
 
-if SMwb is not None and 'GroupIITierFactor_Ext' in SMwb.sheetnames:
-    BGIITier = pd.read_excel(SMRatebook, sheet_name='GroupIITierFactor_Ext',skiprows=11)
-elif AppliesToAllwb is not None and 'GroupIITierFactor_Ext' in AppliesToAllwb.sheetnames:
-    BGIITier = pd.read_excel(AppliesToAllRatebook, sheet_name='GroupIITierFactor_Ext',skiprows=11)
-elif NGICwb is not None and 'GroupIITierFactor_Ext' in NGICwb.sheetnames:
-    BGIITier = pd.read_excel(NGICRatebook, sheet_name='GroupIITierFactor_Ext',skiprows=11)
+if 'GroupIITierFactor_Ext' in NGICwb.sheetnames:
+    BGIITier = pd.read_excel(_rb_for('GroupIITierFactor_Ext'), sheet_name='GroupIITierFactor_Ext',skiprows=11)
+
 else:
     BGIITier = pd.read_excel(CWRatebook, sheet_name='GroupIITierFactor_Ext', skiprows=11)
 
-if SMwb is not None and 'SpecialCauseofLossTierFactor_Ex' in SMwb.sheetnames:
-    SCOLTier = pd.read_excel(SMRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
-elif AppliesToAllwb is not None and 'SpecialCauseofLossTierFactor_Ex' in AppliesToAllwb.sheetnames:
-    SCOLTier = pd.read_excel(AppliesToAllRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
-elif NGICwb is not None and 'SpecialCauseofLossTierFactor_Ex' in NGICwb.sheetnames:
-    SCOLTier = pd.read_excel(NGICRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
+if 'SpecialCauseofLossTierFactor_Ex' in NGICwb.sheetnames:
+    SCOLTier = pd.read_excel(_rb_for('SpecialCauseofLossTierFactor_Ex'), sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
+
 else:
     SCOLTier = pd.read_excel(CWRatebook, sheet_name='SpecialCauseofLossTierFactor_Ex',skiprows=11)
 
@@ -965,12 +919,8 @@ SCOLTier = SCOLTier.reset_index(drop=True)
 
 # <editor-fold desc="Create AOB Dataframes">
 
-if SMwb is not None and 'AgeOfBuildingFactor_Ext' in SMwb.sheetnames:
-    AOB = pd.read_excel(SMRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
-elif AppliesToAllwb is not None and 'AgeOfBuildingFactor_Ext' in AppliesToAllwb.sheetnames:
-    AOB = pd.read_excel(AppliesToAllRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
-elif NGICwb is not None and 'AgeOfBuildingFactor_Ext' in NGICwb.sheetnames:
-    AOB = pd.read_excel(NGICRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
+if 'AgeOfBuildingFactor_Ext' in NGICwb.sheetnames:
+    AOB = pd.read_excel(_rb_for('AgeOfBuildingFactor_Ext'), sheet_name='AgeOfBuildingFactor_Ext',skiprows=11)
 else:
     AOB = pd.read_excel(CWRatebook, sheet_name='AgeOfBuildingFactor_Ext', skiprows=11)
 
@@ -991,23 +941,15 @@ SCOLAOB = splitdf(SCOLAOB,3)
 # <editor-fold desc="Create Deductible Factor Dataframe">
 if 'DeductibleFactor' in MMwb.sheetnames:
     DIP1 = pd.read_excel(MMRatebook, sheet_name='DeductibleFactor',skiprows=11)
-elif SMwb is not None and 'DeductibleFactor' in SMwb.sheetnames:
-    DIP1 = pd.read_excel(SMRatebook, sheet_name='DeductibleFactor', skiprows=11)
-elif AppliesToAllwb is not None and 'DeductibleFactor' in AppliesToAllwb.sheetnames:
-    DIP1 = pd.read_excel(AppliesToAllRatebook, sheet_name='DeductibleFactor', skiprows=11)
-elif NGICwb is not None and 'DeductibleFactor' in NGICwb.sheetnames:
-    DIP1 = pd.read_excel(NGICRatebook, sheet_name='DeductibleFactor', skiprows=11)
+elif 'DeductibleFactor' in NGICwb.sheetnames:
+    DIP1 = pd.read_excel(_rb_for('DeductibleFactor'), sheet_name='DeductibleFactor', skiprows=11)
 else:
     DIP1 = pd.read_excel(CWRatebook, sheet_name='DeductibleFactor', skiprows=11)
 
 if 'Deductible250Factor' in MMwb.sheetnames:
     DIP2 = pd.read_excel(MMRatebook, sheet_name='Deductible250Factor',skiprows=11)
-elif SMwb is not None and 'Deductible250Factor' in SMwb.sheetnames:
-    DIP2 = pd.read_excel(SMRatebook, sheet_name='Deductible250Factor', skiprows=11)
-elif AppliesToAllwb is not None and 'Deductible250Factor' in AppliesToAllwb.sheetnames:
-    DIP2 = pd.read_excel(AppliesToAllRatebook, sheet_name='Deductible250Factor', skiprows=11)
-elif NGICwb is not None and 'Deductible250Factor' in NGICwb.sheetnames:
-    DIP2 = pd.read_excel(NGICRatebook, sheet_name='Deductible250Factor', skiprows=11)
+elif 'Deductible250Factor' in NGICwb.sheetnames:
+    DIP2 = pd.read_excel(_rb_for('Deductible250Factor'), sheet_name='Deductible250Factor', skiprows=11)
 else:
     DIP2 = pd.read_excel(CWRatebook, sheet_name='Deductible250Factor', skiprows=11)
 
@@ -1088,12 +1030,12 @@ DIPSCOL = splitdf(DIPSCOL,3)
 
 #<editor-fold desc="Create M&S Dataframe">
 if 'CrimeTerritoryBaseRate_Ext' in NGICwb.sheetnames:
-    CrimeMSDF = pd.read_excel(NGICRatebook, sheet_name='CrimeTerritoryBaseRate_Ext', skiprows=11).rename(columns={"CrimeTerritory":"Territory","Base Premium":"Premium"})
+    CrimeMSDF = pd.read_excel(_rb_for('CrimeTerritoryBaseRate_Ext'), sheet_name='CrimeTerritoryBaseRate_Ext', skiprows=11).rename(columns={"CrimeTerritory":"Territory","Base Premium":"Premium"})
 else:
     CrimeMSDF = pd.read_excel(CWRatebook, sheet_name='CrimeTerritoryBaseRate_Ext', skiprows=11).rename(columns={"CrimeTerritory":"Territory","Base Premium":"Premium"})
 
 if 'MoneyandSecuritiesOccupancyFact' in NGICwb.sheetnames:
-    MSDF = pd.read_excel(NGICRatebook, sheet_name='MoneyandSecuritiesOccupancyFact', skiprows=11)
+    MSDF = pd.read_excel(_rb_for('MoneyandSecuritiesOccupancyFact'), sheet_name='MoneyandSecuritiesOccupancyFact', skiprows=11)
 else:
     MSDF = pd.read_excel(CWRatebook, sheet_name='MoneyandSecuritiesOccupancyFact', skiprows=11)
 
@@ -1106,12 +1048,12 @@ MSDF['Outside Limit'] = MSDF['Outside Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="Create Employee Dishonesty Dataframe">
 if 'EmployeeDishonestyLimitsBaseRat' in NGICwb.sheetnames:
-    EmployeeDF = pd.read_excel(NGICRatebook, sheet_name='EmployeeDishonestyLimitsBaseRat', skiprows=11)
+    EmployeeDF = pd.read_excel(_rb_for('EmployeeDishonestyLimitsBaseRat'), sheet_name='EmployeeDishonestyLimitsBaseRat', skiprows=11)
 else:
     EmployeeDF = pd.read_excel(CWRatebook, sheet_name='EmployeeDishonestyLimitsBaseRat', skiprows=11)
 
 if 'EmployeeDishonestyLimitsRateabl' in NGICwb.sheetnames:
-    EDLR = pd.read_excel(NGICRatebook, sheet_name='EmployeeDishonestyLimitsRateabl', skiprows=11)
+    EDLR = pd.read_excel(_rb_for('EmployeeDishonestyLimitsRateabl'), sheet_name='EmployeeDishonestyLimitsRateabl', skiprows=11)
 else:
     EDLR = pd.read_excel(CWRatebook, sheet_name='EmployeeDishonestyLimitsRateabl', skiprows=11)
 
@@ -1122,11 +1064,11 @@ EmployeeDF['Limit'] = EmployeeDF['Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="Create Fraudulent Impersonation DF">
 if 'FraudulentImpersonationEmployee' in NGICwb.sheetnames:
-    Fraudone = pd.read_excel(NGICRatebook, sheet_name='FraudulentImpersonationEmployee', skiprows=11)
+    Fraudone = pd.read_excel(_rb_for('FraudulentImpersonationEmployee'), sheet_name='FraudulentImpersonationEmployee', skiprows=11)
 else:
     Fraudone = pd.read_excel(CWRatebook, sheet_name='FraudulentImpersonationEmployee', skiprows=11)
 if 'FraudulentImpersonationEmpl (1)' in NGICwb.sheetnames:
-    Fraudtwo = pd.read_excel(NGICRatebook, sheet_name='FraudulentImpersonationEmpl (1)', skiprows=11)
+    Fraudtwo = pd.read_excel(_rb_for('FraudulentImpersonationEmpl (1)'), sheet_name='FraudulentImpersonationEmpl (1)', skiprows=11)
 else:
     Fraudtwo = pd.read_excel(CWRatebook, sheet_name='FraudulentImpersonationEmpl (1)', skiprows=11)
 
@@ -1134,7 +1076,7 @@ FraudDF = Fraudtwo.merge(Fraudone, how='inner',on='Limit').rename(columns={"Prem
 FraudDF['Limit'] = FraudDF['Limit'].apply('{:,}'.format)
 
 if 'VerificationFactorEmployeesFact' in NGICwb.sheetnames:
-    FraudDF2 = pd.read_excel(NGICRatebook, sheet_name='VerificationFactorEmployeesFact', skiprows=11)
+    FraudDF2 = pd.read_excel(_rb_for('VerificationFactorEmployeesFact'), sheet_name='VerificationFactorEmployeesFact', skiprows=11)
 else:
     FraudDF2 = pd.read_excel(CWRatebook, sheet_name='VerificationFactorEmployeesFact', skiprows=11)
 
@@ -1143,7 +1085,7 @@ FraudDF2['Verification Type'] = FraudDF2['Verification Type'].map({'OptionAVerif
                                                                'OptionCVerifTransferInstrNotReqd':"Verification of transfer instructions not required"})
 
 if 'VerificationFactorEmployeesFact' in NGICwb.sheetnames:
-    FraudDF3 = pd.read_excel(NGICRatebook, sheet_name='VerificationFactorCustomerorVen', skiprows=11)
+    FraudDF3 = pd.read_excel(_rb_for('VerificationFactorCustomerorVen'), sheet_name='VerificationFactorCustomerorVen', skiprows=11)
 else:
     FraudDF3 = pd.read_excel(CWRatebook, sheet_name='VerificationFactorCustomerorVen', skiprows=11)
 
@@ -1156,15 +1098,15 @@ FraudDF3['Verification Type'] = FraudDF3['Verification Type'].map({'OptionAVerif
 #<editor-fold desc="IRPM DF">
 
 if 'Schedule Rating Threshold_Ext' in NGICwb.sheetnames:
-    IRPM1 = pd.read_excel(NGICRatebook, sheet_name='Schedule Rating Threshold_Ext', skiprows=11).drop('AbsoluteThreshold',axis=1).rename(columns={'ScheduleEligibilityIndicator':'Constant'})
+    IRPM1 = pd.read_excel(_rb_for('Schedule Rating Threshold_Ext'), sheet_name='Schedule Rating Threshold_Ext', skiprows=11).drop('AbsoluteThreshold',axis=1).rename(columns={'ScheduleEligibilityIndicator':'Constant'})
 else:
     IRPM1 = pd.read_excel(CWRatebook, sheet_name='Schedule Rating Threshold_Ext', skiprows=11).drop('AbsoluteThreshold',axis=1).rename(columns={'ScheduleEligibilityIndicator':'Constant'})
 if 'IRPMMaximumCredit' in NGICwb.sheetnames:
-    IRPM2 = pd.read_excel(NGICRatebook, sheet_name='IRPMMaximumCredit', skiprows=11)
+    IRPM2 = pd.read_excel(_rb_for('IRPMMaximumCredit'), sheet_name='IRPMMaximumCredit', skiprows=11)
 else:
     IRPM2 = pd.read_excel(CWRatebook, sheet_name='IRPMMaximumCredit', skiprows=11)
 if 'IRPMMaximumDebit' in NGICwb.sheetnames:
-    IRPM3 = pd.read_excel(NGICRatebook, sheet_name='IRPMMaximumDebit', skiprows=11)
+    IRPM3 = pd.read_excel(_rb_for('IRPMMaximumDebit'), sheet_name='IRPMMaximumDebit', skiprows=11)
 else:
     IRPM3 = pd.read_excel(CWRatebook, sheet_name='IRPMMaximumDebit', skiprows=11)
 
@@ -1181,7 +1123,7 @@ IRPM.iloc[2,1]=IRPM3.iloc[0,1].astype(str) + "%"
 #<editor-fold desc="Emergency Evacuation DF">
 
 if 'EmergencyEvacuationIncludin (1)' in NGICwb.sheetnames:
-    EmergencyDF = pd.read_excel(NGICRatebook, sheet_name='EmergencyEvacuationIncludin (1)', skiprows=11)
+    EmergencyDF = pd.read_excel(_rb_for('EmergencyEvacuationIncludin (1)'), sheet_name='EmergencyEvacuationIncludin (1)', skiprows=11)
 else:
     EmergencyDF = pd.read_excel(CWRatebook, sheet_name='EmergencyEvacuationIncludin (1)', skiprows=11)
 
@@ -1191,7 +1133,7 @@ EmergencyDF['Limit'] = EmergencyDF['Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="Civil Authority DF">
 if 'CivilAuthorityIncreasedRadiusCo' in NGICwb.sheetnames:
-    CivilDF = pd.read_excel(NGICRatebook, sheet_name='CivilAuthorityIncreasedRadiusCo', skiprows=11).rename(columns={"Radius":"Radius In Miles"})
+    CivilDF = pd.read_excel(_rb_for('CivilAuthorityIncreasedRadiusCo'), sheet_name='CivilAuthorityIncreasedRadiusCo', skiprows=11).rename(columns={"Radius":"Radius In Miles"})
 else:
     CivilDF = pd.read_excel(CWRatebook, sheet_name='CivilAuthorityIncreasedRadiusCo', skiprows=11).rename(columns={"Radius":"Radius in Miles"})
 
@@ -1200,12 +1142,12 @@ else:
 #<editor-fold desc="Computer DFs">
 
 if 'ComputerandFundsTransferFraudBa' in NGICwb.sheetnames:
-    ComputerDF = pd.read_excel(NGICRatebook, sheet_name='ComputerandFundsTransferFraudBa', skiprows=11)
+    ComputerDF = pd.read_excel(_rb_for('ComputerandFundsTransferFraudBa'), sheet_name='ComputerandFundsTransferFraudBa', skiprows=11)
 else:
     ComputerDF = pd.read_excel(CWRatebook, sheet_name='ComputerandFundsTransferFraudBa', skiprows=11)
 
 if 'ComputerandFundsTransferFraudAn' in NGICwb.sheetnames:
-    ComputerAnnualDF = pd.read_excel(NGICRatebook,sheet_name='ComputerandFundsTransferFraudAn', skiprows=11).fillna('0').astype(str)
+    ComputerAnnualDF = pd.read_excel(_rb_for('ComputerandFundsTransferFraudAn'), sheet_name='ComputerandFundsTransferFraudAn', skiprows=11).fillna('0').astype(str)
 else:
     ComputerAnnualDF = pd.read_excel(CWRatebook,sheet_name='ComputerandFundsTransferFraudAn', skiprows=11).fillna('0').astype(str)
 
@@ -1223,25 +1165,27 @@ ComputerAnnualDF.iloc[4,1] = "2.00 + .10 for each addn'l 10,000,000"
 
 #<editor-fold desc="Forgery or Alteration DF">
 if 'ForgeryOrAlterationLimitsRateab' in NGICwb.sheetnames:
-    ForgeryDF = pd.read_excel(NGICRatebook, sheet_name='ForgeryOrAlterationLimitsRateab', skiprows=11)
+    ForgeryDF = pd.read_excel(_rb_for('ForgeryOrAlterationLimitsRateab'), sheet_name='ForgeryOrAlterationLimitsRateab', skiprows=11)
 else:
     ForgeryDF = pd.read_excel(CWRatebook, sheet_name='ForgeryOrAlterationLimitsRateab', skiprows=11)
 
 if 'ForgeryorAlterationLimitsBaseRa' in NGICwb.sheetnames:
-    ForgeryDF2 = pd.read_excel(NGICRatebook, sheet_name='ForgeryorAlterationLimitsBaseRa', skiprows=11)
+    ForgeryDF2 = pd.read_excel(_rb_for('ForgeryorAlterationLimitsBaseRa'), sheet_name='ForgeryorAlterationLimitsBaseRa', skiprows=11)
 else:
     ForgeryDF2 = pd.read_excel(CWRatebook, sheet_name='ForgeryorAlterationLimitsBaseRa', skiprows=11)
 
-ForgeryDF2["Each Add'l Rateable Employee"] = ForgeryDF2['Premium Per Rateable Employee >5']
-ForgeryDF2.rename(columns={"Premium < 5 Rateable Employees":"1-5 Rateable Employees"},inplace=True)
-ForgeryDF2['Limit'] = ForgeryDF2['Limit'].apply('{:,}'.format)
+if 'Premium Per Rateable Employee >5' in ForgeryDF2.columns:
+    ForgeryDF2["Each Add'l Rateable Employee"] = ForgeryDF2['Premium Per Rateable Employee >5']
+    ForgeryDF2.rename(columns={"Premium < 5 Rateable Employees":"1-5 Rateable Employees"},inplace=True)
+    ForgeryDF2['Limit'] = ForgeryDF2['Limit'].apply('{:,}'.format)
+# else: TEMP SKIPPED - column names don't match when NGICRatebook is substituted with AppliesAllRatebook. Restore once column mapping is confirmed.
 
 #</editor-fold>
 
 #<editor-fold desc="LPDP Dataframe DF">
 #Pull in dataframe
 if 'Large Premium Discount Factor_E' in NGICwb.sheetnames:
-    LPDFDF = pd.read_excel(NGICRatebook, sheet_name='Large Premium Discount Factor_E', skiprows=11).rename(columns={"PremiumRangeMinimum":"Premium Range Minimum", "PremiumRangeMaximum":"Premium Range Maximum"})
+    LPDFDF = pd.read_excel(_rb_for('Large Premium Discount Factor_E'), sheet_name='Large Premium Discount Factor_E', skiprows=11).rename(columns={"PremiumRangeMinimum":"Premium Range Minimum", "PremiumRangeMaximum":"Premium Range Maximum"})
 else:
     LPDFDF = pd.read_excel(CWRatebook, sheet_name='Large Premium Discount Factor_E', skiprows=11).rename(columns={"PremiumRangeMinimum":"Premium Range Minimum","PremiumRangeMaximum":"Premium Range Maximum"})
 #Changing the column label for this dataframe
@@ -1252,14 +1196,14 @@ LPDFDF.iloc[0,1] = "999,999,999"
 
 #<editor-fold desc="Counterfeit Currency 313 DF">
 if 'MoneyOrdersAndCounterfeitLimits' in NGICwb.sheetnames:
-    CFCurrDF = pd.read_excel(NGICRatebook, sheet_name='MoneyOrdersAndCounterfeitLimits', skiprows=11)
+    CFCurrDF = pd.read_excel(_rb_for('MoneyOrdersAndCounterfeitLimits'), sheet_name='MoneyOrdersAndCounterfeitLimits', skiprows=11)
 else:
     CFCurrDF = pd.read_excel(CWRatebook, sheet_name='MoneyOrdersAndCounterfeitLimits', skiprows=11)
 #</editor-fold>
 
 #<editor-fold desc="Money and Securities DF">
 if 'MoneyandSecuritiesOccupancyFact' in NGICwb.sheetnames:
-    MSDF = pd.read_excel(NGICRatebook, sheet_name='MoneyandSecuritiesOccupancyFact', skiprows=11)
+    MSDF = pd.read_excel(_rb_for('MoneyandSecuritiesOccupancyFact'), sheet_name='MoneyandSecuritiesOccupancyFact', skiprows=11)
 else:
     MSDF = pd.read_excel(CWRatebook, sheet_name='MoneyandSecuritiesOccupancyFact', skiprows=11)
 MSDF = MSDF.pivot_table(index=['Inside','Outside'],columns='Occupancy',values='Factor').reset_index()
@@ -1270,14 +1214,14 @@ MSDF['Outside Limit'] = MSDF['Outside Limit'].apply('{:,}'.format)
 
 #<editor-fold desc="BI ALS DF">
 if 'BusinessIncomeActualLossSus (1)' in NGICwb.sheetnames:
-    BusinessDF = pd.read_excel(NGICRatebook, sheet_name='BusinessIncomeActualLossSus (1)', skiprows=11).rename(columns={"TypeOfRisk":"Type Of Risk","PeriodOfRestoration":"Period of Restoration"})
+    BusinessDF = pd.read_excel(_rb_for('BusinessIncomeActualLossSus (1)'), sheet_name='BusinessIncomeActualLossSus (1)', skiprows=11).rename(columns={"TypeOfRisk":"Type Of Risk","PeriodOfRestoration":"Period of Restoration"})
 else:
     BusinessDF = pd.read_excel(CWRatebook, sheet_name='BusinessIncomeActualLossSus (1)', skiprows=11).rename(columns={"TypeOfRisk":"Type Of Risk","PeriodOfRestoration":"Period of Restoration"})
 #</editor-fold>
 
 #<editor-fold desc="All Other DFs">
 if 'ExpenseConstant_Ext' in NGICwb.sheetnames:
-    ExpConstDF = pd.read_excel(NGICRatebook, sheet_name='ExpenseConstant_Ext', skiprows=11)
+    ExpConstDF = pd.read_excel(_rb_for('ExpenseConstant_Ext'), sheet_name='ExpenseConstant_Ext', skiprows=11)
 else:
     ExpConstDF = pd.read_excel(CWRatebook, sheet_name='ExpenseConstant_Ext', skiprows=11)
 
@@ -1286,7 +1230,7 @@ ExpConstDF['Premium'] = '$' + ExpConstDF['Premium'].astype(str)
 
 
 if 'PolicyMinimumPremium_Ext' in NGICwb.sheetnames:
-    PolicyMinDF = pd.read_excel(NGICRatebook, sheet_name='PolicyMinimumPremium_Ext', skiprows=11)
+    PolicyMinDF = pd.read_excel(_rb_for('PolicyMinimumPremium_Ext'), sheet_name='PolicyMinimumPremium_Ext', skiprows=11)
 else:
     PolicyMinDF = pd.read_excel(CWRatebook, sheet_name='PolicyMinimumPremium_Ext', skiprows=11)
 
@@ -1294,60 +1238,60 @@ PolicyMinDF.iloc[0,0] = "All Policies"
 PolicyMinDF['Minimum'] = '$' + PolicyMinDF['Minimum'].astype(str)
 
 if 'Nut Hullers And Processors Cove' in NGICwb.sheetnames:
-    NutHullProcDF = pd.read_excel(NGICRatebook, sheet_name='Nut Hullers And Processors Cove', skiprows=11).drop(columns = 'Constant')
+    NutHullProcDF = pd.read_excel(_rb_for('Nut Hullers And Processors Cove'), sheet_name='Nut Hullers And Processors Cove', skiprows=11).drop(columns = 'Constant')
 else:
     NutHullProcDF = pd.read_excel(CWRatebook, sheet_name='Nut Hullers And Processors Cove', skiprows=11).drop(columns = 'Constant')
 
 if 'NutHullersAndProcessorsCoverage' in NGICwb.sheetnames:
-    NutHullILF = pd.read_excel(NGICRatebook, sheet_name = 'NutHullersAndProcessorsCoverage', skiprows=11).rename(columns={"StockPile Occurrence Limit":"Limit Per Stockpile Per Occurrence"})
+    NutHullILF = pd.read_excel(_rb_for('NutHullersAndProcessorsCoverage'), sheet_name='NutHullersAndProcessorsCoverage', skiprows=11).rename(columns={"StockPile Occurrence Limit":"Limit Per Stockpile Per Occurrence"})
 else:
     NutHullILF = pd.read_excel(CWRatebook, sheet_name = 'NutHullersAndProcessorsCoverage', skiprows=11).rename(columns={"StockPile Occurrence Limit":"Limit Per Stockpile Per Occurrence"})
 
 if 'CosmeticExclusiononCoverageforS' in NGICwb.sheetnames:
-    CosmeticDF = pd.read_excel(NGICRatebook, sheet_name='CosmeticExclusiononCoverageforS', skiprows=11).drop(columns='Constant')
+    CosmeticDF = pd.read_excel(_rb_for('CosmeticExclusiononCoverageforS'), sheet_name='CosmeticExclusiononCoverageforS', skiprows=11).drop(columns='Constant')
 else:
     CosmeticDF = pd.read_excel(CWRatebook, sheet_name='CosmeticExclusiononCoverageforS', skiprows=11).drop(columns='Constant')
 
 if 'TerrsmPrsnlPropBaseRate' in NGICwb.sheetnames:
-    TerrorismDF = pd.read_excel(NGICRatebook, sheet_name='TerrorismLoadFactor_Ext', skiprows=11).rename(columns={"Rate":"Factor"}).drop(columns='Terrorism Territory Tier')
+    TerrorismDF = pd.read_excel(_rb_for('TerrorismLoadFactor_Ext'), sheet_name='TerrorismLoadFactor_Ext', skiprows=11).rename(columns={"Rate":"Factor"}).drop(columns='Terrorism Territory Tier')
 else:
     TerrorismDF = pd.read_excel(CWRatebook, sheet_name='TerrorismLoadFactor_Ext', skiprows=11).rename(columns={"Rate":"Factor"}).drop(columns='Terrorism Territory Tier')
 
 if 'Controlled Atmosphere and S (1)' in NGICwb.sheetnames:
-    ControlAtmDF = pd.read_excel(NGICRatebook, sheet_name='Controlled Atmosphere and S (1)',skiprows=11).rename(columns={"Premium": "Base Rate"}).drop(columns='Constant')
+    ControlAtmDF = pd.read_excel(_rb_for('Controlled Atmosphere and S (1)'), sheet_name='Controlled Atmosphere and S (1)',skiprows=11).rename(columns={"Premium": "Base Rate"}).drop(columns='Constant')
 else:
     ControlAtmDF = pd.read_excel(CWRatebook, sheet_name='Controlled Atmosphere and S (1)',skiprows=11).rename(columns={"Premium": "Base Rate"}).drop(columns='Constant')
 
 if 'ControlledAtmosphereStorage (1)' in NGICwb.sheetnames:
-    ControlAtChInjDF = pd.read_excel(NGICRatebook, sheet_name='ControlledAtmosphereStorage (1)',skiprows=11).rename(columns={"Rate": "Base Rate"})
+    ControlAtChInjDF = pd.read_excel(_rb_for('ControlledAtmosphereStorage (1)'), sheet_name='ControlledAtmosphereStorage (1)',skiprows=11).rename(columns={"Rate": "Base Rate"})
 else:
     ControlAtChInjDF = pd.read_excel(CWRatebook, sheet_name='ControlledAtmosphereStorage (1)',skiprows=11).rename(columns={"Rate": "Base Rate"})
 
 if 'Hops Growers Coverage_Ext' in NGICwb.sheetnames:
-    HopsDF = pd.read_excel(NGICRatebook, sheet_name='Hops Growers Coverage_Ext', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
+    HopsDF = pd.read_excel(_rb_for('Hops Growers Coverage_Ext'), sheet_name='Hops Growers Coverage_Ext', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 else:
     HopsDF = pd.read_excel(CWRatebook, sheet_name='Hops Growers Coverage_Ext', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 
 if 'Fruit Trees, Trellises, Sta (1)' in NGICwb.sheetnames:
-    FruitDF = pd.read_excel(NGICRatebook, sheet_name='Fruit Trees, Trellises, Sta (1)', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
+    FruitDF = pd.read_excel(_rb_for('Fruit Trees, Trellises, Sta (1)'), sheet_name='Fruit Trees, Trellises, Sta (1)', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 else:
     FruitDF = pd.read_excel(CWRatebook, sheet_name='Fruit Trees, Trellises, Sta (1)', skiprows=11).rename(columns={"Premium":"Rate"}).drop(columns='Constant')
 
 if 'WineryEndorsementPremium_Ext' in NGICwb.sheetnames:
-    WineEndDF = pd.read_excel(NGICRatebook, sheet_name='WineryEndorsementPremium_Ext', skiprows=11).drop(columns='Constant')
+    WineEndDF = pd.read_excel(_rb_for('WineryEndorsementPremium_Ext'), sheet_name='WineryEndorsementPremium_Ext', skiprows=11).drop(columns='Constant')
 else:
     WineEndDF = pd.read_excel(CWRatebook, sheet_name='WineryEndorsementPremium_Ext', skiprows=11).drop(columns='Constant')
 
 if 'WineContaminationIncreasedLimit' in NGICwb.sheetnames:
-    WineConDF = pd.read_excel(NGICRatebook, sheet_name='WineContaminationIncreasedLimit', skiprows=11).rename(columns={'Premium':'Rate'})
+    WineConDF = pd.read_excel(_rb_for('WineContaminationIncreasedLimit'), sheet_name='WineContaminationIncreasedLimit', skiprows=11).rename(columns={'Premium':'Rate'})
 else:
     WineConDF = pd.read_excel(CWRatebook, sheet_name='WineContaminationIncreasedLimit', skiprows=11).rename(columns={'Premium':'Rate'})
 if 'WineLeakageIncreasedLimits_Ext' in NGICwb.sheetnames:
-    WineLeakDF = pd.read_excel(NGICRatebook, sheet_name='WineLeakageIncreasedLimits_Ext', skiprows=11).rename(columns={'Premium':'Rate'})
+    WineLeakDF = pd.read_excel(_rb_for('WineLeakageIncreasedLimits_Ext'), sheet_name='WineLeakageIncreasedLimits_Ext', skiprows=11).rename(columns={'Premium':'Rate'})
 else:
     WineLeakDF = pd.read_excel(CWRatebook, sheet_name='WineLeakageIncreasedLimits_Ext', skiprows=11).rename(columns={'Premium':'Rate'})
 if 'WineProcessingErrorsIncreasedLi' in NGICwb.sheetnames:
-    WineProDF = pd.read_excel(NGICRatebook, sheet_name='WineProcessingErrorsIncreasedLi', skiprows=11).rename(columns={'Premium':'Rate'})
+    WineProDF = pd.read_excel(_rb_for('WineProcessingErrorsIncreasedLi'), sheet_name='WineProcessingErrorsIncreasedLi', skiprows=11).rename(columns={'Premium':'Rate'})
 else:
     WineProDF = pd.read_excel(CWRatebook, sheet_name='WineProcessingErrorsIncreasedLi', skiprows=11).rename(columns={'Premium':'Rate'})
 
@@ -1360,52 +1304,52 @@ WineProDF = WineProDF.tail(3)
 WineryDF = pd.concat([WineConDF,WineLeakDF,WineProDF],ignore_index=True)
 
 if 'WineLeakageEndorsementMinimum_E' in NGICwb.sheetnames:
-    WineLkgDF1 = pd.read_excel(NGICRatebook, sheet_name='WineLeakageEndorsementMinimum_E', skiprows=11)
+    WineLkgDF1 = pd.read_excel(_rb_for('WineLeakageEndorsementMinimum_E'), sheet_name='WineLeakageEndorsementMinimum_E', skiprows=11)
 else:
     WineLkgDF1 = pd.read_excel(CWRatebook, sheet_name='WineLeakageEndorsementMinimum_E', skiprows=11)
 
 WineLkgDF1.iloc[0,0] = 'Minimum Charge'
 if 'WineLeakageEndorsementRate_Ext' in NGICwb.sheetnames:
-    WineLkgDF2 = pd.read_excel(NGICRatebook, sheet_name='WineLeakageEndorsementRate_Ext', skiprows=11)
+    WineLkgDF2 = pd.read_excel(_rb_for('WineLeakageEndorsementRate_Ext'), sheet_name='WineLeakageEndorsementRate_Ext', skiprows=11)
 else:
     WineLkgDF2 = pd.read_excel(CWRatebook, sheet_name='WineLeakageEndorsementRate_Ext', skiprows=11)
 
 
 if 'HumanSvcWrkplaceViolncLossofInc' in NGICwb.sheetnames:
-    HumSvcsDF = pd.read_excel(NGICRatebook, sheet_name='HumanSvcWrkplaceViolncLossofInc', skiprows=11).drop(columns='Constant')
+    HumSvcsDF = pd.read_excel(_rb_for('HumanSvcWrkplaceViolncLossofInc'), sheet_name='HumanSvcWrkplaceViolncLossofInc', skiprows=11).drop(columns='Constant')
 else:
     HumSvcsDF = pd.read_excel(CWRatebook, sheet_name='HumanSvcWrkplaceViolncLossofInc', skiprows=11).drop(columns='Constant')
 
 if 'ClientsPropertyCoverageFactor_E' in NGICwb.sheetnames:
-    ClientsDF = pd.read_excel(NGICRatebook, sheet_name='ClientsPropertyCoverageFactor_E', skiprows=11).drop(columns='Constant')
+    ClientsDF = pd.read_excel(_rb_for('ClientsPropertyCoverageFactor_E'), sheet_name='ClientsPropertyCoverageFactor_E', skiprows=11).drop(columns='Constant')
 else:
     ClientsDF = pd.read_excel(CWRatebook, sheet_name='ClientsPropertyCoverageFactor_E', skiprows=11).drop(columns='Constant')
 
 if 'HumanServicesEnhancementCoverag' in NGICwb.sheetnames:
-    HumSvcsEnhDF = pd.read_excel(NGICRatebook, sheet_name='HumanServicesEnhancementCoverag', skiprows=11).drop(columns='Constant')
+    HumSvcsEnhDF = pd.read_excel(_rb_for('HumanServicesEnhancementCoverag'), sheet_name='HumanServicesEnhancementCoverag', skiprows=11).drop(columns='Constant')
 else:
     HumSvcsEnhDF = pd.read_excel(CWRatebook, sheet_name='HumanServicesEnhancementCoverag', skiprows=11).drop(columns='Constant')
 
 if 'HumanServicesPropertyEndors (1)' in NGICwb.sheetnames:
-    HumSvcsFctDF = pd.read_excel(NGICRatebook, sheet_name='HumanServicesPropertyEndors (1)', skiprows=11).drop(columns='Constant')
+    HumSvcsFctDF = pd.read_excel(_rb_for('HumanServicesPropertyEndors (1)'), sheet_name='HumanServicesPropertyEndors (1)', skiprows=11).drop(columns='Constant')
 else:
     HumSvcsFctDF = pd.read_excel(CWRatebook, sheet_name='HumanServicesPropertyEndors (1)', skiprows=11).drop(columns='Constant')
 
 if 'WaterDamageDeductibleWeight_Ext' in NGICwb.sheetnames:
-    WtrDmgDF = pd.read_excel(NGICRatebook, sheet_name='WaterDamageDeductibleWeight_Ext', skiprows=11).drop(columns='Constant')
+    WtrDmgDF = pd.read_excel(_rb_for('WaterDamageDeductibleWeight_Ext'), sheet_name='WaterDamageDeductibleWeight_Ext', skiprows=11).drop(columns='Constant')
 else:
     WtrDmgDF = pd.read_excel(CWRatebook, sheet_name='WaterDamageDeductibleWeight_Ext', skiprows=11).drop(columns='Constant')
 
 if 'SeniorLivingCommunitiesProp (1)' in NGICwb.sheetnames:
-    SeniorDF1 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (1)', skiprows=11)
+    SeniorDF1 = pd.read_excel(_rb_for('SeniorLivingCommunitiesProp (1)'), sheet_name='SeniorLivingCommunitiesProp (1)', skiprows=11)
 else:
     SeniorDF1 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (1)', skiprows=11)
 if 'SeniorLivingCommunitiesProp (2)' in NGICwb.sheetnames:
-    SeniorDF2 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (2)', skiprows=11)
+    SeniorDF2 = pd.read_excel(_rb_for('SeniorLivingCommunitiesProp (2)'), sheet_name='SeniorLivingCommunitiesProp (2)', skiprows=11)
 else:
     SeniorDF2 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (2)', skiprows=11)
 if 'SeniorLivingCommunitiesProp (3)' in NGICwb.sheetnames:
-    SeniorDF3 = pd.read_excel(NGICRatebook, sheet_name='SeniorLivingCommunitiesProp (3)', skiprows=11).rename(columns={"Premium":"Minimum"})
+    SeniorDF3 = pd.read_excel(_rb_for('SeniorLivingCommunitiesProp (3)'), sheet_name='SeniorLivingCommunitiesProp (3)', skiprows=11).rename(columns={"Premium":"Minimum"})
 else:
     SeniorDF3 = pd.read_excel(CWRatebook, sheet_name='SeniorLivingCommunitiesProp (3)', skiprows=11).rename(columns={"Premium":"Minimum"})
 
@@ -1438,17 +1382,17 @@ SeniorDF = SeniorDFmin.merge(SeniorDFmax,on='Constant')
 SeniorDF = SeniorDF.merge(SeniorDFfac,on='Constant').drop(columns='Constant')
 
 if 'PropertyProtectionPlusEndor (3)' in NGICwb.sheetnames:
-    PropPPDF1 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (3)', skiprows=5, header=None)
+    PropPPDF1 = pd.read_excel(_rb_for('PropertyProtectionPlusEndor (3)'), sheet_name='PropertyProtectionPlusEndor (3)', skiprows=5, header=None)
 else:
     PropPPDF1 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (3)', skiprows=5, header=None)
 
 if 'PropertyProtectionPlusEndor (2)' in NGICwb.sheetnames:
-    PropPPDF2 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (2)', skiprows=5, header=None)
+    PropPPDF2 = pd.read_excel(_rb_for('PropertyProtectionPlusEndor (2)'), sheet_name='PropertyProtectionPlusEndor (2)', skiprows=5, header=None)
 else:
     PropPPDF2 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (2)', skiprows=5, header=None)
 
 if 'PropertyProtectionPlusEndor (1)' in NGICwb.sheetnames:
-    PropPPDF3 = pd.read_excel(NGICRatebook, sheet_name='PropertyProtectionPlusEndor (1)', skiprows=5, header=None)
+    PropPPDF3 = pd.read_excel(_rb_for('PropertyProtectionPlusEndor (1)'), sheet_name='PropertyProtectionPlusEndor (1)', skiprows=5, header=None)
 else:
     PropPPDF3 = pd.read_excel(CWRatebook, sheet_name='PropertyProtectionPlusEndor (1)',skiprows=5, header=None)
 
@@ -1489,17 +1433,17 @@ PropPPDF['Option'] = pd.Categorical(PropPPDF['Option'], categories=['Gold','Plat
 PropPPDF = PropPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'BreweryProtectionPlusEndors (3)' in NGICwb.sheetnames:
-    BrewPPDF1 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (3)', skiprows=5, header=None)
+    BrewPPDF1 = pd.read_excel(_rb_for('BreweryProtectionPlusEndors (3)'), sheet_name='BreweryProtectionPlusEndors (3)', skiprows=5, header=None)
 else:
     BrewPPDF1 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (3)', skiprows=5, header=None)
 
 if 'BreweryProtectionPlusEndors (2)' in NGICwb.sheetnames:
-    BrewPPDF2 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (2)', skiprows=5, header=None)
+    BrewPPDF2 = pd.read_excel(_rb_for('BreweryProtectionPlusEndors (2)'), sheet_name='BreweryProtectionPlusEndors (2)', skiprows=5, header=None)
 else:
     BrewPPDF2 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (2)', skiprows=5, header=None)
 
 if 'BreweryProtectionPlusEndors (1)' in NGICwb.sheetnames:
-    BrewPPDF3 = pd.read_excel(NGICRatebook, sheet_name='BreweryProtectionPlusEndors (1)', skiprows=5, header=None)
+    BrewPPDF3 = pd.read_excel(_rb_for('BreweryProtectionPlusEndors (1)'), sheet_name='BreweryProtectionPlusEndors (1)', skiprows=5, header=None)
 else:
     BrewPPDF3 = pd.read_excel(CWRatebook, sheet_name='BreweryProtectionPlusEndors (1)', skiprows=5, header=None)
 
@@ -1540,15 +1484,15 @@ BrewPPDF['Option'] = pd.Categorical(BrewPPDF['Option'], categories=['Gold','Plat
 BrewPPDF = BrewPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'GolfProtectionPlusEndorsementMi' in NGICwb.sheetnames:
-    GolfPPDF1 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementMi', skiprows=11).rename(columns={"Minimum":"Minimum Charge"})
+    GolfPPDF1 = pd.read_excel(_rb_for('GolfProtectionPlusEndorsementMi'), sheet_name='GolfProtectionPlusEndorsementMi', skiprows=11).rename(columns={"Minimum":"Minimum Charge"})
 else:
     GolfPPDF1 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementMi', skiprows=11).rename(columns={"Minimum":"Minimum Charge"})
 if 'GolfProtectionPlusEndorsementMa' in NGICwb.sheetnames:
-    GolfPPDF2 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementMa', skiprows=11).rename(columns={"Maximum":"Maximum Charge"})
+    GolfPPDF2 = pd.read_excel(_rb_for('GolfProtectionPlusEndorsementMa'), sheet_name='GolfProtectionPlusEndorsementMa', skiprows=11).rename(columns={"Maximum":"Maximum Charge"})
 else:
     GolfPPDF2 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementMa', skiprows=11).rename(columns={"Maximum":"Maximum Charge"})
 if 'GolfProtectionPlusEndorsementFa' in NGICwb.sheetnames:
-    GolfPPDF3 = pd.read_excel(NGICRatebook, sheet_name='GolfProtectionPlusEndorsementFa', skiprows=11)
+    GolfPPDF3 = pd.read_excel(_rb_for('GolfProtectionPlusEndorsementFa'), sheet_name='GolfProtectionPlusEndorsementFa', skiprows=11)
 else:
     GolfPPDF3 = pd.read_excel(CWRatebook, sheet_name='GolfProtectionPlusEndorsementFa', skiprows=11)
 
@@ -1558,15 +1502,15 @@ GolfPPDF['Option'] = pd.Categorical(GolfPPDF['Option'], categories=['Gold','Plat
 GolfPPDF = GolfPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'ManufacturerProtectionPlusE (3)' in NGICwb.sheetnames:
-    ManuPPDF1 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (3)', skiprows=5,header=None)
+    ManuPPDF1 = pd.read_excel(_rb_for('ManufacturerProtectionPlusE (3)'), sheet_name='ManufacturerProtectionPlusE (3)', skiprows=5,header=None)
 else:
     ManuPPDF1 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (3)', skiprows=5, header=None)
 if 'ManufacturerProtectionPlusE (2)' in NGICwb.sheetnames:
-    ManuPPDF2 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (2)', skiprows=5,header=None)
+    ManuPPDF2 = pd.read_excel(_rb_for('ManufacturerProtectionPlusE (2)'), sheet_name='ManufacturerProtectionPlusE (2)', skiprows=5,header=None)
 else:
     ManuPPDF2 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (2)', skiprows=5, header=None)
 if 'ManufacturerProtectionPlusE (1)' in NGICwb.sheetnames:
-    ManuPPDF3 = pd.read_excel(NGICRatebook, sheet_name='ManufacturerProtectionPlusE (1)', skiprows=5,header=None)
+    ManuPPDF3 = pd.read_excel(_rb_for('ManufacturerProtectionPlusE (1)'), sheet_name='ManufacturerProtectionPlusE (1)', skiprows=5,header=None)
 else:
     ManuPPDF3 = pd.read_excel(CWRatebook, sheet_name='ManufacturerProtectionPlusE (1)', skiprows=5, header=None)
 
@@ -1607,15 +1551,15 @@ ManuPPDF['Option'] = pd.Categorical(ManuPPDF['Option'], categories=['Gold','Plat
 ManuPPDF = ManuPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'RestaurantProtectionPlusEnd (3)' in NGICwb.sheetnames:
-    RestPPDF1 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (3)', skiprows=5,header=None)
+    RestPPDF1 = pd.read_excel(_rb_for('RestaurantProtectionPlusEnd (3)'), sheet_name='RestaurantProtectionPlusEnd (3)', skiprows=5,header=None)
 else:
     RestPPDF1 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (3)', skiprows=5,header=None)
 if 'RestaurantProtectionPlusEnd (2)' in NGICwb.sheetnames:
-    RestPPDF2 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (2)', skiprows=5,header=None)
+    RestPPDF2 = pd.read_excel(_rb_for('RestaurantProtectionPlusEnd (2)'), sheet_name='RestaurantProtectionPlusEnd (2)', skiprows=5,header=None)
 else:
     RestPPDF2 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (2)', skiprows=5, header=None)
 if 'RestaurantProtectionPlusEnd (1)' in NGICwb.sheetnames:
-    RestPPDF3 = pd.read_excel(NGICRatebook, sheet_name='RestaurantProtectionPlusEnd (1)', skiprows=5, header=None)
+    RestPPDF3 = pd.read_excel(_rb_for('RestaurantProtectionPlusEnd (1)'), sheet_name='RestaurantProtectionPlusEnd (1)', skiprows=5, header=None)
 else:
     RestPPDF3 = pd.read_excel(CWRatebook, sheet_name='RestaurantProtectionPlusEnd (1)',skiprows=5, header=None)
 
@@ -1656,15 +1600,15 @@ RestPPDF['Option'] = pd.Categorical(RestPPDF['Option'], categories=['Gold','Plat
 RestPPDF = RestPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'WholesalerProtectionPlusEnd (3)' in NGICwb.sheetnames:
-    WholePPDF1 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (3)', skiprows=5,header=None)
+    WholePPDF1 = pd.read_excel(_rb_for('WholesalerProtectionPlusEnd (3)'), sheet_name='WholesalerProtectionPlusEnd (3)', skiprows=5,header=None)
 else:
     WholePPDF1 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (3)', skiprows=5,header=None)
 if 'WholesalerProtectionPlusEnd (2)' in NGICwb.sheetnames:
-    WholePPDF2 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (2)', skiprows=5,header=None)
+    WholePPDF2 = pd.read_excel(_rb_for('WholesalerProtectionPlusEnd (2)'), sheet_name='WholesalerProtectionPlusEnd (2)', skiprows=5,header=None)
 else:
     WholePPDF2 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (2)', skiprows=5,header=None)
 if 'WholesalerProtectionPlusEnd (1)' in NGICwb.sheetnames:
-    WholePPDF3 = pd.read_excel(NGICRatebook, sheet_name='WholesalerProtectionPlusEnd (1)', skiprows=5,header=None)
+    WholePPDF3 = pd.read_excel(_rb_for('WholesalerProtectionPlusEnd (1)'), sheet_name='WholesalerProtectionPlusEnd (1)', skiprows=5,header=None)
 else:
     WholePPDF3 = pd.read_excel(CWRatebook, sheet_name='WholesalerProtectionPlusEnd (1)', skiprows=5,header=None)
 
@@ -1705,15 +1649,15 @@ WholePPDF['Option'] = pd.Categorical(WholePPDF['Option'], categories=['Gold','Pl
 WholePPDF = WholePPDF.sort_values('Option').reset_index(drop=True)
 
 if 'HotelProtectionPlusEndorsem (1)' in NGICwb.sheetnames:
-    HotelPPDF1 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsem (1)', skiprows=5,header=None)
+    HotelPPDF1 = pd.read_excel(_rb_for('HotelProtectionPlusEndorsem (1)'), sheet_name='HotelProtectionPlusEndorsem (1)', skiprows=5,header=None)
 else:
     HotelPPDF1 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsem (1)', skiprows=5,header=None)
 if 'HotelProtectionPlusEndorsementM' in NGICwb.sheetnames:
-    HotelPPDF2 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsementM', skiprows=5,header=None)
+    HotelPPDF2 = pd.read_excel(_rb_for('HotelProtectionPlusEndorsementM'), sheet_name='HotelProtectionPlusEndorsementM', skiprows=5,header=None)
 else:
     HotelPPDF2 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsementM', skiprows=5,header=None)
 if 'HotelProtectionPlusEndorsementF' in NGICwb.sheetnames:
-    HotelPPDF3 = pd.read_excel(NGICRatebook, sheet_name='HotelProtectionPlusEndorsementF', skiprows=5,header=None)
+    HotelPPDF3 = pd.read_excel(_rb_for('HotelProtectionPlusEndorsementF'), sheet_name='HotelProtectionPlusEndorsementF', skiprows=5,header=None)
 else:
     HotelPPDF3 = pd.read_excel(CWRatebook, sheet_name='HotelProtectionPlusEndorsementF',skiprows=5, header=None)
 
@@ -1754,7 +1698,7 @@ HotelPPDF['Option'] = pd.Categorical(HotelPPDF['Option'], categories=['Gold','Pl
 HotelPPDF = HotelPPDF.sort_values('Option').reset_index(drop=True)
 
 if 'FranchiseUpgradeEndorsement_Ext' in NGICwb.sheetnames:
-    FranUpgDF = pd.read_excel(NGICRatebook, sheet_name='FranchiseUpgradeEndorsement_Ext', skiprows=11).rename(columns={"Premium":"Base Rate"}).drop(columns='Constant')
+    FranUpgDF = pd.read_excel(_rb_for('FranchiseUpgradeEndorsement_Ext'), sheet_name='FranchiseUpgradeEndorsement_Ext', skiprows=11).rename(columns={"Premium":"Base Rate"}).drop(columns='Constant')
 else:
     FranUpgDF = pd.read_excel(CWRatebook, sheet_name='FranchiseUpgradeEndorsement_Ext', skiprows=11).rename(columns={"Premium":"Base Rate"}).drop(columns='Constant')
 #remember header=False

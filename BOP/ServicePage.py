@@ -531,7 +531,7 @@ class Service:
         sheetSpecs = [
             ('DC', 'S Table 1.A.5.c. Dry Cleaners EXTRA Factor', self.buildDryCleanersFactor, False, True, None, self._formatDryCleanersFactor),
             ('DCEQ', 'S Table 1.A.5.d. Dry Cleaners EXTRA Earthquake Factor', self.buildDryCleanersEQFactor, False, True, None, None),
-            ('FU', 'S Table 1.C.5.a. Funeral Home EXTRA Endorsement', self.buildFuneralHomeEndorsement, False, True, None, None),
+            ('FU', 'S Table 1.C.5.a. Funeral Home EXTRA Endorsement', self.buildFuneralHomeEndorsement, False, True, 'FU_BP2', None),
             ('FUMP', 'S Table 1.C.5.c. Funeral Home EXTRA Endorsement Minimum Premium', self.buildFuneralHomeMinPrem, False, True, None, None),
         ]
         # A company can be present in rateTables (its ratebook was uploaded)

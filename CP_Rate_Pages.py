@@ -634,20 +634,21 @@ if SMRatebook != "Not found" and 'Company Deviation Factor_Ext' in SMRatebook.sh
     SMCompDev = pd.read_excel(SMRatebook, sheet_name='Company Deviation Factor_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     SMCompDev['UnderwritingCompanyCode'] = SMCompDev['UnderwritingCompanyCode'].astype(str).str.strip().str.lower()
     SMDevFactors = dict(zip(SMCompDev['UnderwritingCompanyCode'], SMCompDev.iloc[:, 2]))
-    # (company name, ordered substrings identifying its code on the sheet) - display order matches the footer
-    _SMCompanyKeys = [('Nationwide Affinity Insurance Company of America', ('naff', 'nacia')),
-                      ('Nationwide Assurance Company', ('naco', 'nac_', 'nasc')),
-                      ('Nationwide Insurance Company of Florida', ('nicof', 'nicf')),
-                      ('Nationwide General Insurance Company', ('ngic',))]
+    # (company name, UnderwritingCompanyCode on the deviation sheet) - display order matches the footer
+    _SMCompanyKeys = [('Nationwide Affinity Insurance Company of America', 'naff_ext'),
+                      ('Nationwide Assurance Company', 'naco_ext'),
+                      ('Nationwide Insurance Company of Florida', 'nicof_ext'),
+                      ('Harleysville Insurance Company', 'hic_ext'),
+                      ('Allied Property & Casualty Insurance Company', 'apcic_ext'),
+                      ('Nationwide General Insurance Company', 'ngic_ext')]
     SMLCMs, SMCRIMELCMs = [], []
-    for _name, _keys in _SMCompanyKeys:
-        _code = next((c for c in SMDevFactors if any(c.startswith(k) for k in _keys)), None)
-        if _code is None and not _name.startswith('Nationwide General'):
+    for _name, _code in _SMCompanyKeys:
+        if _code not in SMDevFactors and _code != 'ngic_ext':
             continue  # company has no deviation row -> not part of this ratebook
-        _dev = SMDevFactors[_code] if _code is not None else 1
+        _dev = SMDevFactors.get(_code, 1)
         SMLCMs.append([_name, round_half_up(NGICLCM * _dev, 3)])
         SMCRIMELCMs.append([_name, round_half_up(NGICCRIMELCM * _dev, 3)])
-    _unmatched = [c for c in SMDevFactors if not any(c.startswith(k) for _, ks in _SMCompanyKeys for k in ks)]
+    _unmatched = [c for c in SMDevFactors if c not in dict((k, 1) for _, k in _SMCompanyKeys)]
     if _unmatched:
         print("Company Deviation Factor_Ext codes not recognized (skipped):", _unmatched)
     SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
@@ -681,7 +682,7 @@ if not _SMDevApplied and NICOFRatebook == "Not found" and NAFFRatebook == "Not f
 global SMCompanyList
 SMCompanyList = list(SMLCMTable['Company']) if 'SMLCMTable' in globals() else []
 global SMFooterText
-SMFooterText = "\n" + " \n".join(SMCompanyList)
+SMFooterText = "\n" + " \n".join(SMCompanyList).replace("&", "&&")  # a single & is a header/footer control code in Excel
 if MMRatebook != "Not found":
     if StateAbb != "WI":
         MMLCMs = [['Nationwide Insurance Company of America', NICOALCM], ['Nationwide Mutual Insurance Company', NWMLCM],

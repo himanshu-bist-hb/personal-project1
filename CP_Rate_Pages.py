@@ -122,14 +122,7 @@ def formatwkstSM(wkstname,titlerows,A1title,A2title,dfname,statename,stabb, effd
     wkstname.oddFooter.center.size = footerFontSize
     wkstname.oddFooter.center.font = footerFont
 
-    if NICOFCondition == True:
-        wkstname.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
-    elif NICOFCondition == False and NAFFCondition == True:
-        wkstname.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
-    elif NICOFCondition == False and NAFFCondition == False and NACOCondition == True:
-        wkstname.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance Company"
-    else:
-        wkstname.oddFooter.left.text = "\nNationwide General Insurance Company"
+    wkstname.oddFooter.left.text = SMFooterText
 
 def formatwkstMM(wkstname,titlerows,A1title,A2title,dfname,statename,stabb, effdate):
     from openpyxl.utils.dataframe import dataframe_to_rows
@@ -634,30 +627,61 @@ if MMRatebook != "Not found":
         NICOACompDev = NICOACompDev.iloc[0, 2]
         NICOALCM = round_half_up(NWMLCM * NICOACompDev, 3)
         NICOACRIMELCM = round_half_up(NWMCRIMELCM * NICOACompDev, 3)
-if NICOFRatebook != "Not found":
+_SMDevApplied = False
+if SMRatebook != "Not found" and 'Company Deviation Factor_Ext' in SMRatebook.sheet_names:
+    # Same approach as Middle Market: one base LCM from the SM ratebook, each company's LCM = base LCM * its deviation factor.
+    # Companies without a row on the deviation sheet (e.g. the base company, NGIC) use a factor of 1.
+    SMCompDev = pd.read_excel(SMRatebook, sheet_name='Company Deviation Factor_Ext', skiprows=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    SMCompDev['UnderwritingCompanyCode'] = SMCompDev['UnderwritingCompanyCode'].astype(str).str.strip().str.lower()
+    SMDevFactors = dict(zip(SMCompDev['UnderwritingCompanyCode'], SMCompDev.iloc[:, 2]))
+    # (company name, ordered substrings identifying its code on the sheet) - display order matches the footer
+    _SMCompanyKeys = [('Nationwide Affinity Insurance Company of America', ('naff', 'nacia')),
+                      ('Nationwide Assurance Company', ('naco', 'nac_', 'nasc')),
+                      ('Nationwide Insurance Company of Florida', ('nicof', 'nicf')),
+                      ('Nationwide General Insurance Company', ('ngic',))]
+    SMLCMs, SMCRIMELCMs = [], []
+    for _name, _keys in _SMCompanyKeys:
+        _code = next((c for c in SMDevFactors if any(c.startswith(k) for k in _keys)), None)
+        if _code is None and not _name.startswith('Nationwide General'):
+            continue  # company has no deviation row -> not part of this ratebook
+        _dev = SMDevFactors[_code] if _code is not None else 1
+        SMLCMs.append([_name, round_half_up(NGICLCM * _dev, 3)])
+        SMCRIMELCMs.append([_name, round_half_up(NGICCRIMELCM * _dev, 3)])
+    _unmatched = [c for c in SMDevFactors if not any(c.startswith(k) for _, ks in _SMCompanyKeys for k in ks)]
+    if _unmatched:
+        print("Company Deviation Factor_Ext codes not recognized (skipped):", _unmatched)
+    SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
+    SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
+    _SMDevApplied = True
+elif NICOFRatebook != "Not found":
     SMLCMs = [['Nationwide Affinity Insurance Company of America', NAFFLCM], ['Nationwide Assurance Company', NACOLCM],
               ['Nationwide Insurance Company of Florida', NICOFLCM], ['Nationwide General Insurance Company', NGICLCM]]
     SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
     SMCRIMELCMs = [['Nationwide Affinity Insurance Company of America', NAFFCRIMELCM], ['Nationwide Assurance Company', NACOCRIMELCM],
               ['Nationwide Insurance Company of Florida', NICOFCRIMELCM], ['Nationwide General Insurance Company', NGICCRIMELCM]]
     SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
-if NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
+if not _SMDevApplied and NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
     SMLCMs = [['Nationwide Affinity Insurance Company of America', NAFFLCM], ['Nationwide Assurance Company', NACOLCM],
                ['Nationwide General Insurance Company', NGICLCM]]
     SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
     SMCRIMELCMs = [['Nationwide Affinity Insurance Company of America', NAFFCRIMELCM], ['Nationwide Assurance Company', NACOCRIMELCM],
                 ['Nationwide General Insurance Company', NGICCRIMELCM]]
     SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
-if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
+if not _SMDevApplied and NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
     SMLCMs = [['Nationwide Assurance Company', NACOLCM], ['Nationwide General Insurance Company', NGICLCM]]
     SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
     SMCRIMELCMs = [['Nationwide Assurance Company', NACOCRIMELCM], ['Nationwide General Insurance Company', NGICCRIMELCM]]
     SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
-if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook == "Not found" and NGICRatebook != "Not found":
+if not _SMDevApplied and NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook == "Not found" and NGICRatebook != "Not found":
     SMLCMs = [['Nationwide General Insurance Company', NGICLCM]]
     SMLCMTable = pd.DataFrame(SMLCMs, columns=['Company', 'LCM'])
     SMCRIMELCMs = [['Nationwide General Insurance Company', NGICCRIMELCM]]
     SMCRIMELCMTable = pd.DataFrame(SMCRIMELCMs, columns=['Company', 'LCM'])
+# Companies shown in SM footers / capping table, driven by whichever LCM table was built
+global SMCompanyList
+SMCompanyList = list(SMLCMTable['Company']) if 'SMLCMTable' in globals() else []
+global SMFooterText
+SMFooterText = "\n" + " \n".join(SMCompanyList)
 if MMRatebook != "Not found":
     if StateAbb != "WI":
         MMLCMs = [['Nationwide Insurance Company of America', NICOALCM], ['Nationwide Mutual Insurance Company', NWMLCM],
@@ -767,15 +791,9 @@ if NGICRatebook != "Not found":
 if v5.get() == 1 and v4.get() == 1:
     SMMinCap = SMMinCapRange.get()
     SMMaxCap = SMMaxCapRange.get()
-    if NICOFRatebook != "Not found":
-        SMCapping = [['Nationwide Affinity Insurance Company of America', SMMinCap, SMMaxCap], ['Nationwide Assurance Company', SMMinCap, SMMaxCap],
-                ['Nationwide Insurance Company of Florida', SMMinCap, SMMaxCap]]
-        SMCapTable = pd.DataFrame(SMCapping, columns=['Company', 'Minimum', 'Maximum'])
-    if NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        SMCapping = [['Nationwide Affinity Insurance Company of America', SMMinCap, SMMaxCap], ['Nationwide Assurance Company', SMMinCap, SMMaxCap]]
-        SMCapTable = pd.DataFrame(SMCapping, columns=['Company', 'Minimum', 'Maximum'])
-    if NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
-        SMCapping = [['Nationwide Assurance Company', SMMinCap, SMMaxCap]]
+    # Every SM company except NGIC (the base company) gets a capping row
+    SMCapping = [[c, SMMinCap, SMMaxCap] for c in SMCompanyList if c != 'Nationwide General Insurance Company']
+    if SMCapping:
         SMCapTable = pd.DataFrame(SMCapping, columns=['Company', 'Minimum', 'Maximum'])
 if v10.get() == 1 and v11.get() == 1:
     MMMinCap = MMMinCapRange.get()
@@ -1838,14 +1856,7 @@ if v5.get() == 1 and v1.get() == 1:
                 pass
         adjusted_width = (max_length + 2) * 1.2
         ws.column_dimensions[column].width = adjusted_width
-    if NICOFRatebook != "Not found":
-        ws.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        ws.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
-        ws.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance Company"
-    else:
-        ws.oddFooter.left.text = "\nNationwide General Insurance Company"
+    ws.oddFooter.left.text = SMFooterText
     # Left footer
     ws.oddFooter.left.size = footerFontSize
     ws.oddFooter.left.font = footerFont
@@ -1893,14 +1904,7 @@ if v5.get() == 1 and v2.get() == 1:
                 pass
         adjusted_width = (max_length + 2) * 1.2
         ws2.column_dimensions[column].width = adjusted_width
-    if NICOFRatebook != "Not found":
-        ws2.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        ws2.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
-        ws2.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance Company"
-    else:
-        ws2.oddFooter.left.text = "\nNationwide General Insurance Company"
+    ws2.oddFooter.left.text = SMFooterText
     # Left footer
     ws2.oddFooter.left.size = footerFontSize
     ws2.oddFooter.left.font = footerFont
@@ -1955,14 +1959,7 @@ if v5.get() == 1 and v1.get() == 1:
     ws3.oddHeader.right.text = "Effective Date: " + EffectiveDate
     ws3.oddHeader.right.size = headerFontSize
     ws3.oddHeader.right.font = headerFont
-    if NICOFRatebook != "Not found":
-        ws3.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        ws3.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
-        ws3.oddFooter.left.text = "Nationwide Assurance Company \nNationwide General Insurance Company"
-    else:
-        ws3.oddFooter.left.text = "Nationwide General Insurance Company"
+    ws3.oddFooter.left.text = SMFooterText
     # Left footer
     ws3.oddFooter.left.size = footerFontSize
     ws3.oddFooter.left.font = footerFont
@@ -2053,14 +2050,7 @@ if v5.get() == 1 and v4.get() == 1:
                 pass
         adjusted_width = (max_length + 2) * 1.2
         ws4.column_dimensions[column].width = adjusted_width
-    if NICOFRatebook != "Not found":
-        ws4.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide Insurance Company of Florida \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook != "Not found":
-        ws4.oddFooter.left.text = "\nNationwide Affinity Insurance Company of America \nNationwide Assurance Company \nNationwide General Insurance Company"
-    elif NICOFRatebook == "Not found" and NAFFRatebook == "Not found" and NACORatebook != "Not found":
-        ws4.oddFooter.left.text = "\nNationwide Assurance Company \nNationwide General Insurance Company"
-    else:
-        ws4.oddFooter.left.text = "\nNationwide General Insurance Company"
+    ws4.oddFooter.left.text = SMFooterText
     # Left footer
     ws4.oddFooter.left.size = footerFontSize
     ws4.oddFooter.left.font = footerFont

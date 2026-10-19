@@ -6480,10 +6480,11 @@ class Auto:
         center_center_wrap = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
         # --- Column widths -------------------------------------------------------
-        for col_letter, px in {
-            "A": 82, "B": 220, "C": 220, "D": 220, "E": 220,
-            "F": 220, "G": 220, "H": 220, "I": 220, "J": 220, "K": 220
-        }.items():
+        if rule == "222" and self.StateAbb != "MI":
+            col_widths = {"A": 70, **{c: 125 for c in "BCDEFGHIJK"}}  # compact so the table fits the page
+        else:
+            col_widths = {"A": 82, **{c: 220 for c in "BCDEFGHIJK"}}
+        for col_letter, px in col_widths.items():
             ws.column_dimensions[col_letter].width = self.pixelsToInches(px)
 
         # --- Header line-breaks and moving lines (Row 3, Cols B..max) -----------
@@ -6670,6 +6671,28 @@ class Auto:
                             cell.font = bold_font
                             cell.alignment = center_center_wrap
 
+        # --- Rule 222: merge header cells vertically (e.g. Territory, Liability) ---
+        if rule == "222" and self.StateAbb != "MI":
+            merged_cols = set()
+            for mr in ws.merged_cells.ranges:
+                if mr.min_row <= 3 and mr.max_row >= 2:
+                    merged_cols.update(range(mr.min_col, mr.max_col + 1))
+            for col_idx in range(1, ws.max_column + 1):
+                if col_idx in merged_cols:
+                    continue
+                top = ws.cell(row=2, column=col_idx)
+                bottom = ws.cell(row=3, column=col_idx)
+                if (top.value is None) == (bottom.value is None):
+                    continue  # both filled or both empty: nothing to merge
+                if bottom.value is not None:
+                    top.value, bottom.value = bottom.value, None
+                top.alignment = center_center_wrap
+                ws.merge_cells(start_row=2, start_column=col_idx, end_row=3, end_column=col_idx)
+            # PIP sub-headers (row 3 under a merged PIP cell) need room to wrap
+            for col_idx in range(1, ws.max_column + 1):
+                ws.cell(row=3, column=col_idx).alignment = center_center_wrap
+            ws.row_dimensions[3].height = 40
+
         if data_start_row == 4:
             for r in range(2, 4):
                 for c in range(1, ws.max_column + 1):
@@ -6755,6 +6778,11 @@ class Auto:
 
         ws['A2'].font = italic_font
         ws['A3'].border = None  # Assuming you want to apply a thin border
+
+        # Compact columns so the three fleet-size tables fit the page
+        ws.column_dimensions['A'].width = self.pixelsToInches(105)
+        for col_letter in "BCDEFGHIJ":
+            ws.column_dimensions[col_letter].width = self.pixelsToInches(88)
 
         ws.insert_rows(25, 2)
         ws.insert_rows(49, 2)

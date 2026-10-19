@@ -58,6 +58,7 @@ import shutil
 import subprocess
 import time
 import zipfile
+from copy import copy
 from io import BytesIO
 
 import openpyxl
@@ -103,6 +104,130 @@ def add_break_after(ws, row):
     ws.row_breaks.append(Break(id=row))
 
 
+def _is_blank(v):
+    return v is None or (isinstance(v, str) and not v.strip())
+
+
+def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
+                            default_row_pt=15.0):
+    """
+    Paginate a sheet of stacked tables (row 1 = page title, then repeating
+    blocks of: subtitle row, blank row, column-header row, data rows) so every
+    continuation page repeats the table's subtitle and column headers.
+
+    Excel's print_title_rows can only repeat contiguous rows from the top, so
+    it cannot repeat a *later* table's own subtitle/header. Instead we plan the
+    page breaks ourselves and physically copy the table's lead rows (subtitle,
+    blank, header) above the rows that spill onto the next page. Row 1 (the
+    sheet title) keeps repeating through print_title_rows = "1:1".
+
+    A table that fits on one page is kept whole (moved to the next page if it
+    would otherwise be cut); only tables longer than a page get split.
+    `safety` shrinks the page budget to absorb wrapped-header autofit heights.
+    """
+    max_row = ws.max_row
+    heights = {r: (ws.row_dimensions[r].height or default_row_pt)
+               for r in range(1, max_row + 1)}
+
+    def row_vals(r):
+        return [ws.cell(row=r, column=c).value for c in range(1, last_col + 1)]
+
+    # Estimate wrapped header heights (Excel autofits them at export).
+    for r in range(1, max_row + 1):
+        if ws.row_dimensions[r].height:
+            continue
+        lines = 1
+        for c in range(1, last_col + 1):
+            cell = ws.cell(row=r, column=c)
+            if cell.value and cell.alignment is not None and cell.alignment.wrap_text:
+                width = ws.column_dimensions[get_column_letter(c)].width or 8.43
+                lines = max(lines, -(-len(str(cell.value)) // max(1, int(width))))
+        heights[r] = default_row_pt * lines
+
+    # Locate blocks: subtitle at s, blank at s+1, header at s+2, data below.
+    blocks = []  # (start_row, header_row, end_row)
+    r = 2
+    while r <= max_row:
+        vals = row_vals(r)
+        if (not _is_blank(vals[0]) and all(_is_blank(v) for v in vals[1:])
+                and r + 2 <= max_row and all(_is_blank(v) for v in row_vals(r + 1))
+                and any(not _is_blank(v) for v in row_vals(r + 2))):
+            end = r + 2
+            while end + 1 <= max_row and any(not _is_blank(v) for v in row_vals(end + 1)):
+                end += 1
+            blocks.append((r, r + 2, end))
+            r = end + 1
+        else:
+            r += 1
+    if not blocks:
+        return False
+
+    top = ws.page_margins.top if ws.page_margins.top is not None else 0.75
+    bottom = ws.page_margins.bottom if ws.page_margins.bottom is not None else 0.75
+    capacity = (page_height_in - top - bottom) * 72 * safety
+    title_h = heights[1]
+
+    plan = []  # (before_row, lead_rows_to_copy)
+    used = title_h
+    prev_end = 1
+    for start, hdr, end in blocks:
+        lead = list(range(start, hdr + 1))
+        lead_h = sum(heights[x] for x in lead)
+        block_h = sum(heights[x] for x in range(start, end + 1))
+        gap_h = sum(heights[x] for x in range(prev_end + 1, start))
+        first_data_h = heights[hdr + 1] if hdr + 1 <= end else 0
+        fits_whole = title_h + block_h <= capacity
+        if used + gap_h + (block_h if fits_whole else lead_h + 2 * first_data_h) > capacity:
+            plan.append((start, []))      # start the table on a fresh page
+            used = title_h
+        else:
+            used += gap_h
+        used += lead_h
+        for r in range(hdr + 1, end + 1):
+            if used + heights[r] > capacity:
+                plan.append((r, lead))    # continuation: repeat subtitle+header
+                used = title_h + lead_h
+            used += heights[r]
+        prev_end = end
+
+    # Apply bottom-up so earlier row numbers stay valid while inserting.
+    max_col = max(ws.max_column, last_col)
+    for before, lead in sorted(plan, key=lambda p: p[0], reverse=True):
+        if not lead:
+            continue
+        ws.insert_rows(before, amount=len(lead))
+        for i, src in enumerate(lead):
+            src_row = src  # rows above `before` are unmoved
+            for c in range(1, max_col + 1):
+                s = ws.cell(row=src_row, column=c)
+                d = ws.cell(row=before + i, column=c)
+                d.value = s.value
+                if s.has_style:
+                    d._style = copy(s._style)
+
+    # Final row of an original row after all insertions above/at it.
+    def final_row(orig):
+        return orig + sum(len(lead) for b, lead in plan if b <= orig)
+
+    # insert_rows does not move row dimensions: re-home explicit heights.
+    explicit = {r: ws.row_dimensions[r].height for r in range(1, max_row + 1)
+                if ws.row_dimensions[r].height}
+    for r in explicit:
+        ws.row_dimensions[r].height = None
+    for r, h in explicit.items():
+        ws.row_dimensions[final_row(r)].height = h
+    for b, lead in plan:
+        for i, src in enumerate(lead):
+            if src in explicit:
+                ws.row_dimensions[final_row(b - 1) + 1 + i].height = explicit[src]
+
+    # A break after the last row of the previous page (before any copied lead).
+    ws.row_breaks = RowBreak()
+    for b, lead in plan:
+        add_break_after(ws, final_row(b - 1))
+    return True
+
+
 # ============================================================================
 #  RULE HANDLERS
 #  Signature: (ws, dest_filename) -> None
@@ -137,12 +262,17 @@ def _handle_rule_223c(ws, dest_filename):
 
 
 def _handle_rule_225_zone(ws, dest_filename):
-    ws.print_area = f"A1:G{ws.max_row}"
     ws.print_options.horizontalCentered = False
     ws.print_options.verticalCentered = False
     fit_width_only(ws)
-    add_break_after(ws, 51)
-    add_break_after(ws, 103)
+    # Zone tables can run past one page: plan the breaks ourselves and repeat
+    # each table's subtitle + column headers on the continuation page.
+    if paginate_stacked_tables(ws, last_col=5):
+        ws.print_area = f"A1:E{ws.max_row}"
+    else:
+        ws.print_area = f"A1:G{ws.max_row}"
+        add_break_after(ws, 51)
+        add_break_after(ws, 103)
 
 
 def _handle_rule_225c3(ws, dest_filename):

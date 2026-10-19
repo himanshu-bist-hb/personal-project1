@@ -6482,6 +6482,10 @@ class Auto:
         # --- Column widths -------------------------------------------------------
         if rule == "222" and self.StateAbb != "MI":
             col_widths = {"A": 70, **{c: 125 for c in "BCDEFGHIJK"}}  # compact so the table fits the page
+        elif rule in ("232", "239"):
+            # Narrower columns so fit-to-page scales these wide tables up
+            # instead of shrinking them to tiny, hard-to-read text.
+            col_widths = {"A": 70, **{c: 140 for c in "BCDEFGHIJK"}}
         else:
             col_widths = {"A": 82, **{c: 220 for c in "BCDEFGHIJK"}}
         for col_letter, px in col_widths.items():

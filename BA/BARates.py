@@ -1903,8 +1903,8 @@ class Auto:
 
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values, replace_values, filter_values=orig_values)
         output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: 'Factor'})
-        output_table = output_table.astype(object)
-        output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
+        # Drop the blank label column so the single Factor column sits at the left (column A).
+        output_table = output_table.iloc[:, [1]].astype(float).map(lambda x: f"{x:.3f}").astype(object)
 
         return output_table
 
@@ -3833,9 +3833,9 @@ class Auto:
         orig_values = ['Y']
         replace_values = ['']
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,replace_values, filter_values=orig_values)
-        output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: 'Factor'})
-        output_table = output_table.astype(object)
-        output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
+        output_table = output_table.rename(columns={output_table.columns[1]: 'Factor'})
+        # Drop the blank label column so the single Factor column sits at the left (column A).
+        output_table = output_table.iloc[:, [1]].astype(float).map(lambda x: f"{x:.3f}").astype(object)
 
         return output_table
 
@@ -3878,9 +3878,9 @@ class Auto:
         orig_values = ['Y']
         replace_values = ['']
         output_table = self.simple_long_table_build(self.rateTables, company, sheet_names, '', orig_values,replace_values, filter_values=orig_values)
-        output_table = output_table.rename(columns={output_table.columns[0]: '', output_table.columns[1]: 'Factor'})
-        output_table = output_table.astype(object)
-        output_table.iloc[:, 1:] = output_table.iloc[:, 1:].astype(float).map(lambda x: f"{x:.3f}")
+        output_table = output_table.rename(columns={output_table.columns[1]: 'Factor'})
+        # Drop the blank label column so the single Factor column sits at the left (column A).
+        output_table = output_table.iloc[:, [1]].astype(float).map(lambda x: f"{x:.3f}").astype(object)
 
         return output_table
 
@@ -6490,6 +6490,10 @@ class Auto:
             col_widths = {"A": 82, **{c: 220 for c in "BCDEFGHIJK"}}
         for col_letter, px in col_widths.items():
             ws.column_dimensions[col_letter].width = self.pixelsToInches(px)
+        if rule == "232":
+            # Collision and Comprehensive (the last two columns) only hold short values.
+            for col_idx in range(max(2, ws.max_column - 1), ws.max_column + 1):
+                ws.column_dimensions[get_column_letter(col_idx)].width = self.pixelsToInches(110)
 
         # --- Header line-breaks and moving lines (Row 3, Cols B..max) -----------
         start_idx = openpyxl.utils.column_index_from_string("B")
@@ -7933,7 +7937,7 @@ class Auto:
         ws['F4'].value = "Taxicabs and Limousines"
         ws['G4'].value = "Private Passenger Types"
 
-        ws.column_dimensions['A'].width = self.pixelsToInches(150)
+        ws.column_dimensions['A'].width = self.pixelsToInches(80)
         ws.column_dimensions['B'].width = self.pixelsToInches(140)
         ws.column_dimensions['C'].width = self.pixelsToInches(100)
         ws.column_dimensions['D'].width = self.pixelsToInches(100)

@@ -109,7 +109,7 @@ def _is_blank(v):
 
 
 def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
-                            default_row_pt=15.0):
+                            default_row_pt=15.0, keep_small_tail=False):
     """
     Paginate a sheet of stacked tables (row 1 = page title, then repeating
     blocks of: subtitle row, blank row, column-header row, data rows) so every
@@ -124,6 +124,9 @@ def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
     A table that fits on one page is kept whole (moved to the next page if it
     would otherwise be cut); only tables longer than a page get split.
     `safety` shrinks the page budget to absorb wrapped-header autofit heights.
+    `keep_small_tail` lets a short final table (<= 2 data rows) use the full
+    page height, so it stays on the previous page instead of being pushed alone
+    onto a new page by the safety margin.
     """
     max_row = ws.max_row
     heights = {r: (ws.row_dimensions[r].height or default_row_pt)
@@ -170,21 +173,25 @@ def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
     plan = []  # (before_row, lead_rows_to_copy)
     used = title_h
     prev_end = 1
-    for start, hdr, end in blocks:
+    full_capacity = (page_height_in - top - bottom) * 72
+    for bi, (start, hdr, end) in enumerate(blocks):
+        cap = capacity
+        if keep_small_tail and bi == len(blocks) - 1 and end - hdr <= 2:
+            cap = full_capacity
         lead = list(range(start, hdr + 1))
         lead_h = sum(heights[x] for x in lead)
         block_h = sum(heights[x] for x in range(start, end + 1))
         gap_h = sum(heights[x] for x in range(prev_end + 1, start))
         first_data_h = heights[hdr + 1] if hdr + 1 <= end else 0
-        fits_whole = title_h + block_h <= capacity
-        if used + gap_h + (block_h if fits_whole else lead_h + 2 * first_data_h) > capacity:
+        fits_whole = title_h + block_h <= cap
+        if used + gap_h + (block_h if fits_whole else lead_h + 2 * first_data_h) > cap:
             plan.append((start, []))      # start the table on a fresh page
             used = title_h
         else:
             used += gap_h
         used += lead_h
         for r in range(hdr + 1, end + 1):
-            if used + heights[r] > capacity:
+            if used + heights[r] > cap:
                 plan.append((r, lead))    # continuation: repeat subtitle+header
                 used = title_h + lead_h
             used += heights[r]
@@ -267,7 +274,7 @@ def _handle_rule_225_zone(ws, dest_filename):
     fit_width_only(ws)
     # Zone tables can run past one page: plan the breaks ourselves and repeat
     # each table's subtitle + column headers on the continuation page.
-    if paginate_stacked_tables(ws, last_col=5):
+    if paginate_stacked_tables(ws, last_col=5, keep_small_tail=True):
         ws.print_area = f"A1:E{ws.max_row}"
     else:
         ws.print_area = f"A1:G{ws.max_row}"
@@ -290,16 +297,31 @@ def _handle_rule_239_general(ws, dest_filename):
 
 
 def _handle_rule_239c(ws, dest_filename):
-    fit_single_page(ws)
+    # Break before the "Other Than Collision" fleet-size table (row 48 is the last
+    # row of the Collision table) so it starts on a fresh page.
+    fit_width_only(ws)
     ws.page_margins.top = 1.00
+    break_after = 48
+    for row in range(4, ws.max_row + 1):
+        v = str(ws.cell(row=row, column=1).value)
+        if v.startswith("239.C.3") and "Other Than Collision" in v:
+            break_after = row - 1
+            break
+    ws.row_breaks = RowBreak()
+    add_break_after(ws, break_after)
 
 
 def _handle_rule_240(ws, dest_filename):
-    fit_single_page(ws)
-    ws.print_options.verticalCentered = True
-    ws.print_title_rows = "1:3"
+    # Two pages: 240.C.3.a on the first, Van Pools (240.C.3.b) + 240.D on the second.
+    fit_width_only(ws)
+    ws.print_title_rows = "1:1"
     ws.print_area = f"A1:G{ws.max_row}"
     ws.page_margins.top = 1.00
+    for row in range(4, ws.max_row + 1):
+        if str(ws.cell(row=row, column=1).value).startswith("240.C.3.b"):
+            ws.row_breaks = RowBreak()
+            add_break_after(ws, row - 1)
+            break
 
 
 def _handle_rule_255(ws, dest_filename):
@@ -317,7 +339,7 @@ def _handle_rule_275(ws, dest_filename):
 
 
 def _handle_rule_283(ws, dest_filename):
-    ws.print_area = f"A1:P{ws.max_row}"
+    ws.print_area = f"A1:G{ws.max_row}"
     targets = {
         "283.B Limited Specified Causes of Loss",
         "283.B Comprehensive",

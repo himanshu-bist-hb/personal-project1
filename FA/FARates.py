@@ -745,7 +745,8 @@ class Auto(_BABase):
         # Column widths (Use Class column needs room for long use-class names)
         ws.column_dimensions["A"].width = 28
         for col_idx in range(2, num_cols + 1):
-            ws.column_dimensions[get_column_letter(col_idx)].width = 22
+            # Pickup / Van (cols D, E) only hold short factors, so keep them narrower.
+            ws.column_dimensions[get_column_letter(col_idx)].width = 15 if col_idx >= 4 else 22
 
     def _page_rule_239d(self, RatePages):
         # FA override — uses FarmLayUpFactor_Ext and Farm subtitle.

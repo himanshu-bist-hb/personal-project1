@@ -828,8 +828,6 @@ class Auto:
             factors = pd.DataFrame(self.rateTables[company]['PIPOtherThanPrivatePassengerAndGarageFactor'][1:], index=None, columns=self.rateTables[company]['PIPOtherThanPrivatePassengerAndGarageFactor'][0])
             npobe_factors = factors.loc[factors["TruckPIPRatingBasis"] == "Not Principally Operated by Employees", "Factor"].iloc[0]
             pobe_factors = factors.loc[factors["TruckPIPRatingBasis"] == "Principally Operated by Employees", "Factor"].iloc[0]
-            output_table["Principally Operated By Employees"] = output_table["Liability (222.C.2.a.)"] * pobe_factors
-            output_table["Not Principally Operated By Employees"] = output_table["Liability (222.C.2.a.)"] * npobe_factors
 
             liability_col = "Liability (222.C.2.a.)"
             liability_index = output_table.columns.get_loc(liability_col)

@@ -109,7 +109,8 @@ def _is_blank(v):
 
 
 def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
-                            default_row_pt=15.0, keep_small_tail=False):
+                            default_row_pt=15.0, keep_small_tail=False,
+                            break_before=None):
     """
     Paginate a sheet of stacked tables (row 1 = page title, then repeating
     blocks of: subtitle row, blank row, column-header row, data rows) so every
@@ -127,6 +128,8 @@ def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
     `keep_small_tail` lets a short final table (<= 2 data rows) use the full
     page height, so it stays on the previous page instead of being pushed alone
     onto a new page by the safety margin.
+    `break_before(subtitle)` -> True forces the table with that subtitle to
+    start on a fresh page.
     """
     max_row = ws.max_row
     heights = {r: (ws.row_dimensions[r].height or default_row_pt)
@@ -152,9 +155,13 @@ def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
     r = 2
     while r <= max_row:
         vals = row_vals(r)
+        # A table with no column headers (blank header row, e.g. the zone-rated
+        # Medical Payments factor) still counts: its data starts at r + 3.
+        hdr_blank = r + 2 <= max_row and all(_is_blank(v) for v in row_vals(r + 2))
+        has_body = (r + 2 <= max_row and any(not _is_blank(v) for v in row_vals(r + 2))) or                    (hdr_blank and r + 3 <= max_row and any(not _is_blank(v) for v in row_vals(r + 3)))
         if (not _is_blank(vals[0]) and all(_is_blank(v) for v in vals[1:])
                 and r + 2 <= max_row and all(_is_blank(v) for v in row_vals(r + 1))
-                and any(not _is_blank(v) for v in row_vals(r + 2))):
+                and has_body):
             end = r + 2
             while end + 1 <= max_row and any(not _is_blank(v) for v in row_vals(end + 1)):
                 end += 1
@@ -184,7 +191,8 @@ def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
         gap_h = sum(heights[x] for x in range(prev_end + 1, start))
         first_data_h = heights[hdr + 1] if hdr + 1 <= end else 0
         fits_whole = title_h + block_h <= cap
-        if used + gap_h + (block_h if fits_whole else lead_h + 2 * first_data_h) > cap:
+        force = bool(break_before and bi > 0 and break_before(str(ws.cell(row=start, column=1).value)))
+        if force or used + gap_h + (block_h if fits_whole else lead_h + 2 * first_data_h) > cap:
             plan.append((start, []))      # start the table on a fresh page
             used = title_h
         else:
@@ -196,6 +204,11 @@ def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
                 used = title_h + lead_h
             used += heights[r]
         prev_end = end
+
+    # insert_rows does not move merged ranges: unmerge now, re-merge shifted below.
+    merges = [(m.min_row, m.min_col, m.max_row, m.max_col) for m in list(ws.merged_cells.ranges)]
+    for m in list(ws.merged_cells.ranges):
+        ws.unmerge_cells(str(m))
 
     # Apply bottom-up so earlier row numbers stay valid while inserting.
     max_col = max(ws.max_column, last_col)
@@ -215,6 +228,10 @@ def paginate_stacked_tables(ws, last_col, page_height_in=11.0, safety=0.9,
     # Final row of an original row after all insertions above/at it.
     def final_row(orig):
         return orig + sum(len(lead) for b, lead in plan if b <= orig)
+
+    for r1, c1, r2, c2 in merges:
+        ws.merge_cells(start_row=final_row(r1), start_column=c1,
+                       end_row=final_row(r2), end_column=c2)
 
     # insert_rows does not move row dimensions: re-home explicit heights.
     explicit = {r: ws.row_dimensions[r].height for r in range(1, max_row + 1)
@@ -297,31 +314,26 @@ def _handle_rule_239_general(ws, dest_filename):
 
 
 def _handle_rule_239c(ws, dest_filename):
-    # Break before the "Other Than Collision" fleet-size table (row 48 is the last
-    # row of the Collision table) so it starts on a fresh page.
+    # "Other Than Collision" fleet-size table starts on a fresh page. Any table
+    # that still runs past a page repeats its subtitle + column headers.
     fit_width_only(ws)
     ws.page_margins.top = 1.00
-    break_after = 48
-    for row in range(4, ws.max_row + 1):
-        v = str(ws.cell(row=row, column=1).value)
-        if v.startswith("239.C.3") and "Other Than Collision" in v:
-            break_after = row - 1
-            break
-    ws.row_breaks = RowBreak()
-    add_break_after(ws, break_after)
+    ws.print_title_rows = "1:1"
+    paginate_stacked_tables(
+        ws, last_col=6,
+        break_before=lambda sub: sub.startswith("239.C.3") and "Other Than Collision" in sub)
+    ws.print_area = f"A1:G{ws.max_row}"
 
 
 def _handle_rule_240(ws, dest_filename):
-    # Two pages: 240.C.3.a on the first, Van Pools (240.C.3.b) + 240.D on the second.
+    # Van Pools (240.C.3.b) starts a fresh page; a table that runs past a page
+    # repeats its subtitle + column headers on the continuation page.
     fit_width_only(ws)
-    ws.print_title_rows = "1:1"
-    ws.print_area = f"A1:G{ws.max_row}"
     ws.page_margins.top = 1.00
-    for row in range(4, ws.max_row + 1):
-        if str(ws.cell(row=row, column=1).value).startswith("240.C.3.b"):
-            ws.row_breaks = RowBreak()
-            add_break_after(ws, row - 1)
-            break
+    ws.print_title_rows = "1:1"
+    paginate_stacked_tables(
+        ws, last_col=7, break_before=lambda sub: sub.startswith("240.C.3.b"))
+    ws.print_area = f"A1:G{ws.max_row}"
 
 
 def _handle_rule_255(ws, dest_filename):

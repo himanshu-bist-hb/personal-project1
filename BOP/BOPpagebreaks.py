@@ -66,12 +66,28 @@ def _handle_fit_width_landscape(ws, dest_filename):
 
 def _handle_fit_width_repeat_header(ws, dest_filename):
     # One page wide, rows flow down across as many pages as needed, with the
-    # column-header row (row 3: A1 = title, A2 = blank) repeated at the top of
-    # every page — for long single tables (e.g. OC Table C.4.B.1 EQ Property
-    # Deductible Factor, ~100+ rows) that were unreadable when forced onto
-    # one page by the default fit_single_page.
+    # sheet's title + column headers repeated at the top of every page — for
+    # long single tables (e.g. OC Table C.4.B.1 EQ Property Deductible Factor,
+    # ~100+ rows, or RP Table 94.C.1) that were unreadable when forced onto
+    # one page by the default fit_single_page. The repeat rows are whatever
+    # the sheet was created with (title/blank/header = "1:3", "1:4" with a
+    # sub-header) — see _ensure_title_repeats — never header-only.
     fit_width_only(ws)
-    ws.print_title_rows = "3:3"
+
+
+def _ensure_title_repeats(ws, default_rows="1:3"):
+    """
+    Every sheet's page title (row 1) must repeat on each printed page, like
+    its column headers, so a table that runs onto a second page is still
+    identifiable. Sheets are created with print_title_rows already covering
+    title..header (see ExcelSettingsBOP), so this only restores that default
+    if a page-break rule or format callback left the repeat rows missing or
+    starting below row 1 (e.g. a header-only "3:3").
+    """
+    rows = ws.print_title_rows
+    first = str(rows).split(":")[0].lstrip("$") if rows else None
+    if first != "1":
+        ws.print_title_rows = default_rows
 
 
 # Rule name (as written in the "Page Break Rules" tab) -> handler function.
@@ -118,6 +134,8 @@ def process_pagebreaks(dest_filename1, dest_filename2=None, progress_callback=No
     for sheet_name in workbook.sheetnames:
         ws = workbook[sheet_name]
         _apply_matching_rule(sheet_name, ws, dest_filename1, page_break_rules)
+        if sheet_name != "Index":
+            _ensure_title_repeats(ws)
 
     if "Index" in workbook.sheetnames:
         ws_index = workbook["Index"]

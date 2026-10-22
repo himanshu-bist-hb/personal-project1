@@ -68,3 +68,14 @@
 2026-07-07 16:09:37,930 - BOP.ratebook_loader - INFO - Company 'CW': 4 tables
 2026-07-07 16:09:37,931 - BOP.ratebook_loader - INFO - Company 'NGIC': 4 tables
 2026-07-07 16:09:37,984 - BOP.ratebook_loader - INFO - Company 'MM': 4 tables
+2026-10-22 19:21:49,738 - BA.BARatePages - INFO - Company 'CW': 1 tables
+2026-10-22 19:21:49,744 - BA.BARatePages - INFO - Company 'SM': 1 tables
+2026-10-22 19:21:49,748 - BA.BARatePages - INFO - Company 'ATA': 1 tables
+2026-10-22 19:21:58,660 - BA.BARatePages - INFO - Company 'SM': 1 tables
+2026-10-22 19:21:58,667 - BA.BARatePages - INFO - Company 'ATA': 1 tables
+2026-10-22 19:21:58,672 - BA.BARatePages - INFO - Company 'CW': 1 tables
+2026-10-22 19:22:12,047 - BA.BARatePages - INFO - Company 'SM': 1 tables
+2026-10-22 19:22:12,048 - BA.BARatePages - INFO - Company 'ATA': 1 tables
+2026-10-22 19:22:12,056 - BA.BARatePages - INFO - Company 'CW': 1 tables
+2026-10-22 19:22:13,794 - pikepdf._core - INFO - pikepdf C++ to Python logger bridge initialized
+2026-10-22 19:22:26,978 - pikepdf._core - INFO - pikepdf C++ to Python logger bridge initialized

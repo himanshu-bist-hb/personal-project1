@@ -2296,10 +2296,10 @@ elif active_lob == "Business Owners Policy":
     # Mirrors Business Auto's "Individual State" / "Small & Middle Market"
     # toggle. Both modes share the exact same page below (version toggle,
     # program selection, config, readiness, Create Rate Pages) — only the
-    # ratebook upload widgets differ (see the "with L:" block). Small
-    # Market's backend isn't wired up yet (see the "processing" step below),
-    # so its Create Rate Pages flow ends in a friendly "not wired up" error
-    # for now, same as Individual Company otherwise behaves.
+    # ratebook upload widgets differ (see the "with L:" block). Small Market
+    # looks tables up Small Market -> Applies to All -> Countrywide, lists
+    # the Company Deviation Factor sheet's companies in the footers and adds
+    # Rating Plans Table 96.C (see BOP/BOPRatePages.py).
     bop_mode = st.session_state.bop_mode
     bmc1, bmc2, _ = st.columns([2, 2, 8])
     with bmc1:
@@ -2617,14 +2617,6 @@ elif active_lob == "Business Owners Policy":
                 if st.button("Proceed", key="bop_proceed_btn", use_container_width=True, type="primary"):
                     st.session_state.bop_confirm_step = "processing"; st.rerun()
 
-        elif st.session_state.bop_confirm_step == "processing" and bop_mode == "small_market":
-            # Small Market backend isn't wired up yet (see the mode toggle's
-            # docstring above) — the upload/readiness/confirm flow is real,
-            # but there's nothing to build against yet.
-            st.session_state.bop_run_status = "error"
-            st.session_state.bop_run_msg = "Small Market rate page generation isn't wired up yet — this tab is a frontend preview for now."
-            st.session_state.bop_confirm_step = "idle"; st.rerun()
-
         elif st.session_state.bop_confirm_step == "processing":
             st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
             st.button("Processing Excel...", key="bop_run_btn_proc", use_container_width=True, disabled=True)
@@ -2635,14 +2627,17 @@ elif active_lob == "Business Owners Policy":
             update_progress("Please wait while the workbooks are processed.")
             from BOP.BOPRatePages import run as run_bop_rate_pages
             try:
+                _pfx = "bop_file_" if bop_mode == "individual" else "bop_sm_file_"
                 def _rb(k):
-                    f = st.session_state.get(f"bop_file_{k}")
+                    f = st.session_state.get(f"{_pfx}{k}")
                     return io.BytesIO(f["bytes"]) if f and "error" not in f else None
                 built_programs = list(st.session_state.bop_programs)
+                # Small Market: SM -> ATA -> CW only (no NGIC/MM/... ratebooks).
+                _sm_kwargs = dict(SMRatebook=_rb("SM"), ATARatebook=_rb("ATA")) if bop_mode == "small_market" else {}
                 xlsx_outs, pdf_outs, resolved_version, resolved_appetite = run_bop_rate_pages(
                     NGICRatebook=_rb("NGIC"), CWRatebook=_rb("CW"), MMRatebook=_rb("MM"),
                     NACORatebook=_rb("NACO"), NAFFRatebook=_rb("NAFF"), NICOFRatebook=_rb("NICOF"),
-                    HICNJRatebook=_rb("HICNJ"),
+                    HICNJRatebook=_rb("HICNJ"), **_sm_kwargs,
                     folder_selected=st.session_state.bop_save_dir,
                     progress_callback=update_progress, skip_pdf=True,
                     version=st.session_state.bop_version,

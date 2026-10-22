@@ -44,6 +44,7 @@ from . import FoodServicePageCurrent
 from . import FoodServicePageAppetite
 from . import OptionalCoveragesPage
 from . import RatingPlansPage
+from . import ExcelSettingsBOP
 from . import ClassModifierPage
 from . import CommonRulesPage
 from . import AdditionalRulesPage
@@ -143,7 +144,34 @@ def load_eq_territory_defs(state_abb: str) -> pd.DataFrame:
     return pd.read_csv(str(path), sep="\t", header=0)
 
 
-def run(
+def _merge_small_market(sm_tables, ata_tables):
+    """
+    Small Market's SM -> ATA lookup, collapsed to one table set: every table
+    name found in the Small Market ratebook wins, any other comes from the
+    Applies to All / State ratebook. The result goes in the NGIC slot every
+    page class already searches before CW, so the full hierarchy is exactly
+    Small Market -> Applies to All -> Countrywide with no per-page changes —
+    and each page builds ONE base-rate sheet instead of one per company.
+    """
+    return {**(ata_tables or {}), **(sm_tables or {})}
+
+
+def _small_market_footer_names(rate_tables) -> List[str]:
+    """Company names for the Small Market footer: every company in the
+    "Company Deviation Factor_Ext" table, same hierarchy and sort as the
+    Rating Plans Table 96.C."""
+    for source in ("NGIC", "CW"):
+        raw = (rate_tables.get(source) or {}).get(RatingPlansPage.COMPANY_DEVIATION_TABLE)
+        if raw:
+            df = pd.DataFrame(data=raw[1:], columns=raw[0])
+            return RatingPlansPage.clean_company_deviation(df)['Underwriting Company Name'].tolist()
+    raise ValueError(
+        f"'{RatingPlansPage.COMPANY_DEVIATION_TABLE}' sheet not found in the Small Market, Applies to All / State "
+        "or Countrywide ratebook — Small Market rate pages need it for the footer company names."
+    )
+
+
+def _run_impl(
     NGICRatebook: Optional[str],
     folder_selected: str,
     CWRatebook: Optional[str] = None,
@@ -159,6 +187,8 @@ def run(
     version: str = "Default",
     appetite: Optional[bool] = None,
     program: Union[str, Sequence[str]] = "All Programs",
+    SMRatebook: Optional[str] = None,
+    ATARatebook: Optional[str] = None,
 ) -> Tuple[Union[str, List[str]], Union[str, List[str]]]:
     """
     Orchestrate the BOP rate-page generation pipeline.
@@ -183,6 +213,13 @@ def run(
             Programs" or "All Peril") or a list of names. The ratebooks are
             opened and extracted ONCE and every requested program is built
             from the same tables, each saved as its own file.
+
+        SMRatebook / ATARatebook: Small Market mode — when SMRatebook is
+            given, the NGIC/MM/NACO/NAFF/NICOF/HICNJ ratebooks are ignored
+            and tables are looked up Small Market -> Applies to All (ATA,
+            required) -> Countrywide. Footers list the companies in the
+            "Company Deviation Factor_Ext" sheet and Rating Plans gains
+            Table 96.C (the company deviation factors).
 
     Returns:
         (xlsx_out, pdf_out, resolved_version, resolved_appetite) when
@@ -213,16 +250,23 @@ def run(
     # ── 1. Open every ratebook ─────────────────────────────────────────────
     t_stage = time.perf_counter()
     if progress_callback: progress_callback("Opening uploaded ratebooks...")
-    ratebooks = {
-        "NGIC":  load_ratebook(NGICRatebook),
-        "MM":    load_ratebook(MMRatebook),
-        "NACO":  load_ratebook(NACORatebook),
-        "NAFF":  load_ratebook(NAFFRatebook),
-        "NICOF": load_ratebook(NICOFRatebook),
-        "HICNJ": load_ratebook(HICNJRatebook),
-    }
-    if ratebooks["NGIC"] == "Not found":
-        raise ValueError("NGIC ratebook is required.")
+    small_market = SMRatebook is not None
+    if small_market:
+        ratebooks = {"SM": load_ratebook(SMRatebook), "ATA": load_ratebook(ATARatebook)}
+        for key, label in (("SM", "Small Market"), ("ATA", "Applies to All / State")):
+            if ratebooks[key] == "Not found":
+                raise ValueError(f"{label} ratebook is required.")
+    else:
+        ratebooks = {
+            "NGIC":  load_ratebook(NGICRatebook),
+            "MM":    load_ratebook(MMRatebook),
+            "NACO":  load_ratebook(NACORatebook),
+            "NAFF":  load_ratebook(NAFFRatebook),
+            "NICOF": load_ratebook(NICOFRatebook),
+            "HICNJ": load_ratebook(HICNJRatebook),
+        }
+        if ratebooks["NGIC"] == "Not found":
+            raise ValueError("NGIC ratebook is required.")
 
     # CW is optional — fall back to the static network copy when the user
     # doesn't upload their own, same pattern as Business Auto's CW handling.
@@ -235,7 +279,10 @@ def run(
     print(f"Stage 1: Ratebooks opened in {time.perf_counter() - t_stage:0.1f}s")
 
     # ── 2. Extract state / date metadata (same 'Rate Book Details' layout BA uses) ──
-    info = get_rate_book_info(ngic_loaded=ratebooks["NGIC"], mm_loaded=ratebooks["MM"])
+    if small_market:
+        info = get_rate_book_info(ngic_loaded="Not found", mm_loaded="Not found", sm_loaded=ratebooks["SM"])
+    else:
+        info = get_rate_book_info(ngic_loaded=ratebooks["NGIC"], mm_loaded=ratebooks["MM"])
 
     # ── 3. Load config-driven rating lookup tables ─────────────────────────
     cfg = load_bop_config()
@@ -271,15 +318,18 @@ def run(
         eq_territory_defs = load_eq_territory_defs(info.state_abb)
 
     # ── 5. Assemble the rate_books dict & extract all tables ───────────────
-    rate_books: Dict[str, Union[pd.ExcelFile, str]] = {
-        "CW":    cw_file,
-        "NGIC":  ratebooks["NGIC"],
-        "NACO":  ratebooks["NACO"],
-        "NAFF":  ratebooks["NAFF"],
-        "NICOF": ratebooks["NICOF"],
-        "HICNJ": ratebooks["HICNJ"],
-        "MM":    ratebooks["MM"],
-    }
+    if small_market:
+        rate_books: Dict[str, Union[pd.ExcelFile, str]] = {"CW": cw_file, "SM": ratebooks["SM"], "ATA": ratebooks["ATA"]}
+    else:
+        rate_books = {
+            "CW":    cw_file,
+            "NGIC":  ratebooks["NGIC"],
+            "NACO":  ratebooks["NACO"],
+            "NAFF":  ratebooks["NAFF"],
+            "NICOF": ratebooks["NICOF"],
+            "HICNJ": ratebooks["HICNJ"],
+            "MM":    ratebooks["MM"],
+        }
     t_stage = time.perf_counter()
     if progress_callback: progress_callback("Extracting rate tables from ratebooks...")
     rate_tables_raw = load_all_ratebooks(rate_books, progress_callback)
@@ -289,13 +339,19 @@ def run(
     # correctly (a present-but-None entry would otherwise crash on
     # None.keys()).
     rate_tables = {k: v for k, v in rate_tables_raw.items() if v is not None}
+    footer_names = None
+    if small_market:
+        rate_tables = {"NGIC": _merge_small_market(rate_tables.get("SM"), rate_tables.get("ATA")), "CW": rate_tables["CW"]}
+        footer_names = _small_market_footer_names(rate_tables)
+        print(f"Small Market footer companies: {footer_names}")
+        ExcelSettingsBOP.set_small_market_context(footer_names)
 
     # ── 6-8. Build, save and page-break each requested program ──────────────
     # The expensive part (opening + extracting the ratebooks above) is shared;
     # each program only costs its own workbook build and save.
     out_dir     = Path(folder_selected)
     base_tag    = "" if version == "2.0" else " (Pre 2.0)"
-    version_tag = base_tag + (" (Appetite)" if appetite else "")
+    version_tag = base_tag + (" (Appetite)" if appetite else "") + (" (Small Market)" if small_market else "")
     xlsx_outs: List[str] = []
     pdf_outs:  List[str] = []
 
@@ -377,6 +433,7 @@ def run(
             rate_pages_obj = RatingPlansPage.RatingPlans(
                 info.state_abb, rate_tables, perils, cfg.peril_conversions,
                 info.n_effective, info.r_effective, irpm_credit, irpm_debit,
+                smallMarket=small_market,
             )
             bop_workbook = rate_pages_obj.buildRatingPlansPage(progress_callback=cb)
         elif prog == "Class Modifier":
@@ -445,6 +502,16 @@ def run(
     if single:
         return xlsx_outs[0], pdf_outs[0], version, appetite
     return xlsx_outs, pdf_outs, version, appetite
+
+
+def run(*args, **kwargs):
+    """Public entry point — see _run_impl for the arguments. Guarantees the
+    Small Market footer/title context never leaks into a later build, even if
+    this one fails part-way."""
+    try:
+        return _run_impl(*args, **kwargs)
+    finally:
+        ExcelSettingsBOP.set_small_market_context(None)
 
 
 def generate_pdf_only(

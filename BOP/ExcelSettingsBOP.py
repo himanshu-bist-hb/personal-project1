@@ -43,6 +43,23 @@ _WIDE_PERIL_HEADERS = {"L-Products", "L-SlipFall", "L-Violence", "L-OtherMed", "
 _WIDE_PERIL_HEADER_MIN_PX = 75
 
 
+# Small Market context. Small Market has no per-company ratebooks (just
+# SM -> ATA -> CW), so its footer lists the underwriting companies named in
+# the ratebook's "Company Deviation Factor_Ext" sheet instead of rateTables
+# keys, and its single merged base-rate sheet is titled "Small Market" rather
+# than after NGIC. Set by BOPRatePages.run() for the duration of a Small
+# Market build and always cleared afterwards (see set_small_market_context).
+_SMALL_MARKET = {"footer_names": None}
+_NGIC_TITLE_LABEL = "NW General Insurance Company"
+_SM_TITLE_LABEL = "Small Market"
+_FOOTER_LINE_INCHES = 0.14  # one 8pt footer line, with leading
+
+
+def set_small_market_context(footer_names=None) -> None:
+    """Activate (list of company names) or clear (None) Small Market mode."""
+    _SMALL_MARKET["footer_names"] = [str(n).strip() for n in footer_names] if footer_names else None
+
+
 class Excel:
     """
     Factory class that creates an openpyxl Workbook and populates it with
@@ -151,7 +168,7 @@ class Excel:
         ws.page_margins.left = self.leftMargin
         ws.page_margins.right = self.rightMargin
         ws.page_margins.top = self.topMargin
-        ws.page_margins.bottom = self.bottomMargin
+        ws.page_margins.bottom = self._bottomMarginFor(len(self._footer_names()))
         ws.page_margins.header = self.headerMargin
         ws.page_margins.footer = self.footerMargin
 
@@ -166,12 +183,26 @@ class Excel:
             section=self._SECTION_CODES.get(self.programName, self.programName),
         )
 
-    def _footer_companies_text(self) -> str:
+    def _footer_names(self) -> list:
         # .strip() guards against stray leading/trailing whitespace on any
         # individual company name (e.g. NGIC showing indented relative to
         # the other companies in the footer) regardless of where it enters.
-        names = [COMPANY_NAMES.get(c, c).strip() for c in self.companyList if c != "CW"]
-        return "\n".join(f"{n} " for n in names)
+        if _SMALL_MARKET["footer_names"]:
+            return _SMALL_MARKET["footer_names"]
+        return [COMPANY_NAMES.get(c, c).strip() for c in self.companyList if c != "CW"]
+
+    def _bottomMarginFor(self, n_names: int) -> float:
+        # The configured bottom margin fits the usual <= 5 footer lines; more
+        # companies than that (Small Market can list many) would otherwise
+        # print over the table, so grow the margin to hold them all.
+        needed = self.footerMargin + n_names * _FOOTER_LINE_INCHES + 0.05
+        return max(self.bottomMargin, round(needed, 2))
+
+    def _footer_companies_text(self) -> str:
+        # "&" starts a control code in Excel header/footer text ("& C" would
+        # switch sections), so a literal ampersand — e.g. "Allied Property &
+        # Casualty" — must be doubled.
+        return "\n".join(f"{n.replace('&', '&&')} " for n in self._footer_names())
 
     @staticmethod
     def _set_hf_part(part, text: str, font: str, size: int) -> None:
@@ -270,6 +301,14 @@ class Excel:
     #  WORKSHEET GENERATORS
     # ==========================================================================
 
+    @staticmethod
+    def _retitle(title: str) -> str:
+        # Small Market's merged base-rate sheet is built through the NGIC slot
+        # (see BOPRatePages._merge_small_market), whose sheet title names NGIC.
+        if _SMALL_MARKET["footer_names"] and isinstance(title, str):
+            return title.replace(_NGIC_TITLE_LABEL, _SM_TITLE_LABEL)
+        return title
+
     def generateWorksheet(self, table_code, title, df, useIndex, useHeader, layout_key=None):
         """
         Single-table sheet: A1 = title, A2 = blank, row 3+ = data (headers + rows).
@@ -281,7 +320,7 @@ class Excel:
         building-code groups (BCEG_MULTI vs BCEG_SINGLE).
         """
         ws = self.wb.create_sheet(title=table_code)
-        ws["A1"] = title
+        ws["A1"] = self._retitle(title)
         ws["A2"] = ""
         self._write_df_block(ws, df, useIndex, useHeader, index_cell="A3")
         self.format_table(ws, layout_key or table_code)
@@ -314,7 +353,7 @@ class Excel:
         reserved_header_rows is 0).
         """
         ws = self.wb.create_sheet(title=table_code)
-        ws["A1"] = title
+        ws["A1"] = self._retitle(title)
         ws["A2"] = ""
         block_start_rows = []
         for df in dataframes:

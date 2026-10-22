@@ -42,6 +42,36 @@ from openpyxl.utils import get_column_letter
 from . import ExcelSettingsBOP
 
 
+COMPANY_DEVIATION_TABLE = "Company Deviation Factor_Ext"
+
+
+def clean_company_deviation(df):
+    """
+    Turn the raw "Company Deviation Factor_Ext" ratebook table into the
+    2-column "Underwriting Company Name" / "Company Deviation Factor" table,
+    sorted alphabetically by company name (stable, unambiguous order for a
+    filed manual page; the factor is the value, not the key).
+
+    The ratebook's columns are UnderwritingCompanyCode,
+    UnderwritingCompanyDisplay Name and CompanyCodeFactor; columns are matched
+    ignoring case/spaces so a re-exported ratebook with slightly different
+    spacing still works. Blank rows and repeated companies are dropped.
+    """
+    norm = {str(c).replace(' ', '').lower(): c for c in df.columns if c is not None}
+    nameCol = next((norm[k] for k in norm if 'displayname' in k), None)
+    factorCol = next((norm[k] for k in norm if 'factor' in k), None)
+    if nameCol is None or factorCol is None:
+        raise ValueError(f"'{COMPANY_DEVIATION_TABLE}' must have a company display name column and a factor column; "
+                         f"found {list(df.columns)}")
+    out = df[[nameCol, factorCol]].rename(columns={nameCol: 'Underwriting Company Name', factorCol: 'Company Deviation Factor'})
+    out = out.dropna(subset=['Underwriting Company Name'])
+    out['Underwriting Company Name'] = out['Underwriting Company Name'].astype(str).str.strip()
+    out = out[out['Underwriting Company Name'] != '']
+    out['Company Deviation Factor'] = pd.to_numeric(out['Company Deviation Factor'], errors='coerce')
+    out = out.drop_duplicates(subset=['Underwriting Company Name'])
+    return out.sort_values(by='Underwriting Company Name', key=lambda s: s.str.lower()).reset_index(drop=True)
+
+
 class RatingPlans:
     # Shared by buildLPDPFactors' two tables — identical except for the
     # $0-$5,000 bucket's source key (0 for the non-NRP table, 1 for NRP).
@@ -55,7 +85,7 @@ class RatingPlans:
     }
 
     def __init__(self, state, rateTables, perils, perilsConversions, nEffective, rEffective,
-                 irpmCredit=0.0, irpmDebit=0.0) -> None:
+                 irpmCredit=0.0, irpmDebit=0.0, smallMarket=False) -> None:
         self.state = state
         self.rateTables = rateTables
         self.perils = perils
@@ -64,6 +94,7 @@ class RatingPlans:
         self.rEffective = rEffective  # Renewal business effective date
         self.irpmCredit = irpmCredit
         self.irpmDebit = irpmDebit
+        self.smallMarket = smallMarket  # adds Table 96.C (Company Deviation Factor)
 
     # Builds a dataframe for the given table code. Hierarchy matches every
     # other BOP program page: lower-level company (NACO/NAFF/NICOF) first,
@@ -161,6 +192,13 @@ class RatingPlans:
         filteredNonNRP = nonNRP.filter(items=['PremiumRange', 'LPDPFactor']).rename(columns={'PremiumRange': 'Annual Premium', 'LPDPFactor': 'All Other Factor Range'})
         return pd.merge(filteredNonNRP, filteredNRP, on='Annual Premium', how='inner')
 
+    # Builds the Small Market Company Deviation Factor table (Table 96.C),
+    # looked up through the usual hierarchy (Small Market -> Applies to All ->
+    # Countrywide) and sorted by company name.
+    # Returns a dataframe
+    def buildCompanyDeviation(self):
+        return clean_company_deviation(self.buildDataFrame(COMPANY_DEVIATION_TABLE))
+
     # Converts the given pixels to inches (same 7px/char ratio ExcelSettingsBOP
     # uses internally for its own Table Layout column widths).
     def pixelsToInches(self, px):
@@ -224,6 +262,16 @@ class RatingPlans:
         ws.column_dimensions['B'].width = self.pixelsToInches(95)
         ws.column_dimensions['C'].width = self.pixelsToInches(150)
 
+    # Applies the CDF worksheet's column widths, left-aligned company names
+    # and 3-decimal factor format.
+    def formatCompanyDeviation(self, ws):
+        ws.column_dimensions['A'].width = self.pixelsToInches(340)
+        ws.column_dimensions['B'].width = self.pixelsToInches(150)
+        for row in range(4, ws.max_row + 1):
+            name, factor = ws['A' + str(row)], ws['B' + str(row)]
+            name.alignment = Alignment(horizontal='left', vertical='bottom', wrap_text=False, indent=1)
+            factor.number_format = '0.000'
+
     # Sets up the Rating Plans Excel file and creates a separate worksheet
     # for each of the given dataframes, then applies each table's bespoke
     # postFormat. progress_callback (optional) is called with a short
@@ -242,6 +290,8 @@ class RatingPlans:
             ('LEAF',  'RP Table 94.C.1. Lifetime Expense Allocation Factor', self.buildLEAFfactors, False, True, None, None),
             ('LPDP',  'RP Table 95.C. Large Premium Discount Plan', self.buildLPDPFactors, False, True, None, self.formatLPDPFactors),
         ]
+        if self.smallMarket:
+            sheetSpecs.append(('CDF', 'RP Table 96.C. Company Deviation Factor', self.buildCompanyDeviation, False, True, None, self.formatCompanyDeviation))
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey, postFormat) in enumerate(sheetSpecs, start=1):

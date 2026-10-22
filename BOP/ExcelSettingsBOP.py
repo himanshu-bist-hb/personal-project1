@@ -54,6 +54,23 @@ _NGIC_TITLE_LABEL = "NW General Insurance Company"
 _SM_TITLE_LABEL = "Small Market"
 _FOOTER_LINE_INCHES = 0.14  # one 8pt footer line, with leading
 
+# Excel rejects the whole workbook ("We found a problem with some content" /
+# COM Open failure when exporting to PDF) if a sheet's header or footer string
+# exceeds 255 characters in total: the "&L"/"&C"/"&R" markers plus the text of
+# every section, font codes like &"Arial,Bold"&8 (15 chars) included, a line
+# break counting as 1. Verified against Excel itself. Kept a little under.
+_HF_STORED_LIMIT = 250
+
+# Progressively shorter spellings used only when the full company names can't
+# fit in the footer (see Excel._fit_footer_names). Applied cumulatively.
+_ABBREVIATION_LEVELS = [
+    [],
+    [("Insurance Company", "Ins Co")],
+    [("Property & Casualty", "P&C"), ("Company", "Co")],
+    [("Nationwide", "NW"), ("Insurance", "Ins")],
+]
+_OVERFLOW_LINE = "+{n} more - see RP Table 96.C"
+
 
 def set_small_market_context(footer_names=None) -> None:
     """Activate (list of company names) or clear (None) Small Market mode."""
@@ -199,10 +216,54 @@ class Excel:
         return max(self.bottomMargin, round(needed, 2))
 
     def _footer_companies_text(self) -> str:
+        return self._companies_text(self._footer_names(), trailing_space=True)
+
+    @staticmethod
+    def _companies_text(names, trailing_space: bool) -> str:
         # "&" starts a control code in Excel header/footer text ("& C" would
         # switch sections), so a literal ampersand — e.g. "Allied Property &
         # Casualty" — must be doubled.
-        return "\n".join(f"{n.replace('&', '&&')} " for n in self._footer_names())
+        end = " " if trailing_space else ""
+        return "\n".join(f"{n.replace('&', '&&')}{end}" for n in names)
+
+    @staticmethod
+    def _stored_length(*sections: str) -> int:
+        # What Excel measures: "&L"/"&C"/"&R" markers + each section's text.
+        return 6 + sum(len(t) for t in sections)
+
+    def _fit_footer_names(self, center_text: str) -> str:
+        """
+        Left-footer text listing the companies, shortened only as much as
+        needed for the whole footer to stay within Excel's length limit.
+        Full names exactly as before whenever they fit; otherwise drop the
+        trailing spaces, then abbreviate step by step ("Insurance Company" ->
+        "Ins Co", "Property & Casualty" -> "P&C", "Nationwide" -> "NW", ...).
+        If even that can't fit every company, keep as many as fit plus a
+        "+N more" line rather than ever writing a workbook Excel rejects.
+        """
+        prefix = len(f'&"{self.footerFont}"&{self.footerFontSize}')
+        budget = _HF_STORED_LIMIT - 6 - prefix - (prefix + len(center_text))
+        names = self._footer_names()
+
+        def fits(text):
+            return len(text) <= budget
+
+        for level, trailing in ((0, True), (0, False), (1, False), (2, False), (3, False)):
+            short = names
+            for lv in range(1, level + 1):
+                for old, new in _ABBREVIATION_LEVELS[lv]:
+                    short = [n.replace(old, new) for n in short]
+            text = self._companies_text(short, trailing)
+            if fits(text):
+                return text
+
+        for keep in range(len(short) - 1, 0, -1):
+            text = self._companies_text(short[:keep] + [_OVERFLOW_LINE.format(n=len(short) - keep)], False)
+            if fits(text):
+                print(f"[ExcelSettingsBOP] WARNING: {len(names)} footer company names exceed Excel's footer "
+                      f"length limit; listing {keep} and '+{len(short) - keep} more'.")
+                return text
+        return ""
 
     @staticmethod
     def _set_hf_part(part, text: str, font: str, size: int) -> None:
@@ -222,6 +283,11 @@ class Excel:
         embed directly in .text and skip .font/.size entirely, avoiding the
         stray space.
         """
+        if not text:
+            # An empty section's font code alone costs 15 of the 255
+            # characters Excel allows the whole footer; leave it out.
+            part.text = None
+            return
         part.text = f'&"{font}"&{size}{text}'
 
     def _apply_standard_header(self, ws) -> None:
@@ -232,8 +298,14 @@ class Excel:
 
     def _apply_default_footer(self, ws) -> None:
         hf = self._cfg.header_footer
-        self._set_hf_part(ws.oddFooter.left, self._token_sub(hf.get("FooterLeftTemplate", "")), self.footerFont, self.footerFontSize)
-        self._set_hf_part(ws.oddFooter.center, self._token_sub(hf.get("FooterCenterTemplate", "")), self.footerFont, self.footerFontSize)
+        center = self._token_sub(hf.get("FooterCenterTemplate", ""))
+        left_template = hf.get("FooterLeftTemplate", "")
+        if left_template.strip() == "{companies}":
+            left = self._fit_footer_names(center)
+        else:
+            left = self._token_sub(left_template)
+        self._set_hf_part(ws.oddFooter.left, left, self.footerFont, self.footerFontSize)
+        self._set_hf_part(ws.oddFooter.center, center, self.footerFont, self.footerFontSize)
         self._set_hf_part(ws.oddFooter.right, self._token_sub(hf.get("FooterRightTemplate", "")), self.footerFont, self.footerFontSize)
 
     def _apply_page_header_footer(self, ws) -> None:

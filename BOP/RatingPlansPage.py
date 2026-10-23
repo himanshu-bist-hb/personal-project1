@@ -266,11 +266,13 @@ class RatingPlans:
     # and 3-decimal factor format.
     def formatCompanyDeviation(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(340)
-        ws.column_dimensions['B'].width = self.pixelsToInches(150)
+        ws.column_dimensions['B'].width = self.pixelsToInches(190)
+        ws['B3'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
         for row in range(4, ws.max_row + 1):
             name, factor = ws['A' + str(row)], ws['B' + str(row)]
             name.alignment = Alignment(horizontal='left', vertical='bottom', wrap_text=False, indent=1)
             factor.number_format = '0.000'
+            factor.alignment = Alignment(horizontal='center', vertical='bottom')
 
     # Sets up the Rating Plans Excel file and creates a separate worksheet
     # for each of the given dataframes, then applies each table's bespoke

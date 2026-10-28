@@ -106,10 +106,10 @@ class Hab:
                 rename(columns={'ConstructionClassDisplay Name': 'Construction'})
         if coverage.casefold() == 'building':
             return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
         elif coverage.casefold() == 'bpp':
             return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
 
     # Builds the year built modifier table for the given coverage (either building or bpp)
     # Returns a dataframe
@@ -125,9 +125,9 @@ class Hab:
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + '+',
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + ' - ' + filteredYearBuiltModifier['Year_Built_Max'])
         if coverage.casefold() == 'building':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products', 'WF', 'NC-BINC'], errors='ignore')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['WF'], errors='ignore')
         elif coverage.casefold() == 'bpp':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products', 'WF', 'NC-BINC'], errors='ignore')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['WF'], errors='ignore')
 
     # Builds the equipment breakdown base rate table
     # Returns a dataframe

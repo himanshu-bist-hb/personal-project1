@@ -15,7 +15,8 @@
 # -> LIAB-Other) already applied to Retail/Service's Construction
 # Factor/Theft Options/Year Built Modifier tables — the root-level OfficePage.py
 # still only dropped 'L-Products' by itself, an older/narrower version of the
-# same fix.
+# same fix. NOTE: in this BP-2.0 file only, L-Products and NC-BINC are now
+# KEPT in those three tables (OfficePageCurrent.py/Pre2.0 still drops them).
 #
 # All Excel formatting (fonts, column widths, sub-header labels, page setup)
 # lives in ExcelSettingsBOP.py, driven by "BOP/BOP Input File.xlsx". Most of
@@ -129,10 +130,10 @@ class Office:
                 rename(columns={'ConstructionClassDisplay Name': 'Construction'})
         if coverage.casefold() == 'building':
             return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF'], errors='ignore')
         elif coverage.casefold() == 'bpp':
             return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction'). \
-                    drop(columns=['L-Products', 'L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF', 'NC-BINC'], errors='ignore').rename(columns={'L-SlipFall': 'LIAB-Other'})
+                    drop(columns=['L-Violence', 'L-OtherMed', 'L-OtherPrem', 'WF'], errors='ignore')
 
     # Builds the exclude theft options table
     # Returns a dataframe
@@ -140,7 +141,7 @@ class Office:
         theftOptions = self.buildDataFrame("BP7_Peril_BPP_Theft_Options_Factor")
         filteredTheftOptions = theftOptions.query(f'Class_Code_Min == {self.officeProgramCode} & `Peril TypeCode` in {self.perils} & `Theft Option` != "Full Theft"'). \
                 replace({'Peril TypeCode': self.perilsConversions})
-        filteredTheftOptions = filteredTheftOptions.drop(filteredTheftOptions[filteredTheftOptions['Peril TypeCode'].isin(['L-Products', 'NC-BINC', 'WF'])].index)
+        filteredTheftOptions = filteredTheftOptions.drop(filteredTheftOptions[filteredTheftOptions['Peril TypeCode'].isin(['WF'])].index)
         return filteredTheftOptions.pivot(index='Peril TypeCode', columns='Theft Option', values='BPP Theft Options Factor').reset_index('Peril TypeCode'). \
                 rename(columns={'Peril TypeCode': 'Peril', 'Excluded Theft': 'Excluded', 'Limited Theft': 'Limited'})
 
@@ -158,9 +159,9 @@ class Office:
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + '+',
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + ' - ' + filteredYearBuiltModifier['Year_Built_Max'])
         if coverage.casefold() == 'building':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products', 'WF', 'NC-BINC'], errors='ignore')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['WF'], errors='ignore')
         elif coverage.casefold() == 'bpp':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products', 'WF', 'NC-BINC'], errors='ignore')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['WF'], errors='ignore')
 
     # Builds the equipment breakdown base rate table
     # Returns a dataframe

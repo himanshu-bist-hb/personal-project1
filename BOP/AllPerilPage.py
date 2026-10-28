@@ -11,6 +11,7 @@
 # All Peril-specific column profiles use the *_AP layout keys there.
 
 import math
+import numbers
 
 import pandas as pd
 
@@ -195,7 +196,8 @@ class AllPeril:
                     rename(columns={'Class_Code_Min': 'Program', 'BPPTIB_AmtofInsurance_Min': 'BPP Min', 'BPPTIB_AmtofInsurance_Max': 'BPP Max', 'BLDG_AmtofInsurance': 'Building'})
         updatedWHDeductibleFactor = filteredWHDeductibleFactor[filteredWHDeductibleFactor['WH_PercentOrAmount'].notnull()] # Filtering out the missing values from the WH_PercentOrAmount column
         sortedWHDeductibleFactor = updatedWHDeductibleFactor.fillna({'BPP Max': '+'}).sort_values(by=['Program', 'BPP Min', 'BPP Max', 'Building']) # Filling in missing values and sorting
-        return sortedWHDeductibleFactor.astype({'WH_PercentOrAmount': 'int32'}).pivot(index=['Program', 'BPP Min', 'BPP Max', 'Building'], columns='WH_PercentOrAmount', values='WH Factor').reset_index(['Program', 'BPP Min', 'BPP Max', 'Building'])
+        return sortedWHDeductibleFactor.astype({'WH_PercentOrAmount': 'int32'}).pivot(index=['Program', 'BPP Min', 'BPP Max', 'Building'], columns='WH_PercentOrAmount', values='WH Factor').reset_index(['Program', 'BPP Min', 'BPP Max', 'Building']). \
+            rename(columns=lambda c: f'${c:,}' if isinstance(c, numbers.Integral) else c) # Dollar sign on the deductible amount headers
 
     # Builds the wind/hail deductible per building factor table for the given coverage (either Building or BPP)
     # Returns a dataframe

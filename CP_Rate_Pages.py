@@ -3744,12 +3744,12 @@ if v10.get() == 1 and v13.get() == 1:
     CivilTimeMM.column_dimensions['E'].width = 14
 
     Cosmetic = wb2.create_sheet(title='Cosmetic Exclusion')
-    formatwkst(wkstname=Cosmetic, titlerows='3', A1title='COSMETIC EXCLUSION ON COVERAGE FOR SIDING', A2title='Multiply the Basic Group II building rate by the below factor', dfname=CosmeticDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
+    formatwkstMM(wkstname=Cosmetic, titlerows='3', A1title='COSMETIC EXCLUSION ON COVERAGE FOR SIDING', A2title='Multiply the Basic Group II building rate by the below factor', dfname=CosmeticDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
     borderfnct(Cosmetic)
     addlformat(Cosmetic)
 
     Terrorism = wb2.create_sheet(title='Terrorism')
-    formatwkst(wkstname=Terrorism, titlerows='3', A1title='Coverage for Certified Acts of Terrorism', A2title='', dfname=TerrorismDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
+    formatwkstMM(wkstname=Terrorism, titlerows='3', A1title='Coverage for Certified Acts of Terrorism', A2title='', dfname=TerrorismDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
     borderfnct(Terrorism)
     addlformat(Terrorism)
 

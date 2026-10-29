@@ -8601,7 +8601,8 @@ class Auto:
     # Format LEASINGORRENTALCONCERNS Table
     def formatLEASINGORRENTALCONCERNS(self, ws, italicFont):
         # Normal rule 275 formatting
-        if self.StateAbb != "VA":
+        # VA EXCEPTION (disabled): was `if self.StateAbb != "VA":`; the VA elif below is now unreachable
+        if True:
             ws.column_dimensions['A'].width = 25
             ws.column_dimensions['B'].width = 14
             ws.insert_rows(3)
@@ -9799,19 +9800,24 @@ class Auto:
             if len(self.CompanyListDif) == 1:
                 self.title_company_name = ""  # Every Company, no point in putting in sheet name.
 
-            if self.StateAbb == "VA":
-                subtitles = self._VA_RULE_SUBTITLES["Rule 241"]
-            else:
-                subtitles = ['241.D.1.d Mechanical Lift Factor',
-                             '241.E.1.c. Commercial Lay-up Credit']
+            # VA EXCEPTION (disabled): VA now follows the standard subtitles/tables
+            # if self.StateAbb == "VA":
+            #     subtitles = self._VA_RULE_SUBTITLES["Rule 241"]
+            # else:
+            #     subtitles = ['241.D.1.d Mechanical Lift Factor',
+            #                  '241.E.1.c. Commercial Lay-up Credit']
+            subtitles = ['241.D.1.d Mechanical Lift Factor',
+                         '241.E.1.c. Commercial Lay-up Credit']
 
-            if self.StateAbb == "VA":
-                tables = [self.buildMechanicalLiftFactor(comp_name),
-                          self.buildSpecifiecCausesofLossCoverageFactor(comp_name),
-                          self.buildLayupFactors(comp_name)]
-            else:
-                tables = [self.buildMechanicalLiftFactor(comp_name),
-                          self.buildLayupFactors(comp_name)]
+            # if self.StateAbb == "VA":
+            #     tables = [self.buildMechanicalLiftFactor(comp_name),
+            #               self.buildSpecifiecCausesofLossCoverageFactor(comp_name),
+            #               self.buildLayupFactors(comp_name)]
+            # else:
+            #     tables = [self.buildMechanicalLiftFactor(comp_name),
+            #               self.buildLayupFactors(comp_name)]
+            tables = [self.buildMechanicalLiftFactor(comp_name),
+                      self.buildLayupFactors(comp_name)]
 
             RatePages.generateWorksheetTablesX('Rule 241 '+ self.title_company_name, 'RULE 241. PUBLIC AUTO PREMIUM DEVELOPMENT - ZONE-RATED AUTOS ' + self.title_company_name, subtitles, tables, False, True)
             self.overideFooter(RatePages.getWB()['Rule 241 '+ self.title_company_name], CompanyTest)
@@ -9824,7 +9830,8 @@ class Auto:
     def _page_rule_243(self, RatePages):
         # Rule 243
         self.compareCompanies("FarmLaborContractorPassengerHazardFactor")
-        if self.StateAbb == "FL" or self.StateAbb == "VA":
+        # VA EXCEPTION (disabled): if self.StateAbb == "FL" or self.StateAbb == "VA":
+        if self.StateAbb == "FL":
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
                 self.title_company_name = CompanyTest
@@ -9906,17 +9913,20 @@ class Auto:
     def _page_rule_267(self, RatePages):
         # Rule 267
         self.compareCompanies("SpecialTypesAutoBodyFactor")
-        if self.StateAbb == "FL" or self.StateAbb == "VA":
+        # VA EXCEPTION (disabled): if self.StateAbb == "FL" or self.StateAbb == "VA":
+        if self.StateAbb == "FL":
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
                 self.title_company_name = CompanyTest
                 if len(self.CompanyListDif) == 1:
                     self.title_company_name = ""  # Every Company, no point in putting in sheet name.
 
-                if self.StateAbb == "VA":
-                    subtitles = self._VA_RULE_SUBTITLES["Rule 267"]
-                else:
-                    subtitles = ['267.B.2. Auto Body Manufacturers And Installers Factor:']
+                # VA EXCEPTION (disabled)
+                # if self.StateAbb == "VA":
+                #     subtitles = self._VA_RULE_SUBTITLES["Rule 267"]
+                # else:
+                #     subtitles = ['267.B.2. Auto Body Manufacturers And Installers Factor:']
+                subtitles = ['267.B.2. Auto Body Manufacturers And Installers Factor:']
 
                 tables = [self.buildFL_AutoBody(comp_name)]
 
@@ -9942,12 +9952,16 @@ class Auto:
             if len(self.CompanyListDif) == 1:
                 self.title_company_name = ""  # Every Company, no point in putting in sheet name.
 
-            if self.StateAbb == "VA":
-                subtitles = self._VA_RULE_SUBTITLES["Rule 268"]
-            else:
-                subtitles = ["268.C. Driver Training Owned Auto Factors",
-                             "268.E.2.c.(3). Instructors in Excess of Owned Autos Used For Driver Training Liability and Medical Payments Coverages",
-                             "268.E.2.d. Medical Payments Coverage Factors"]
+            # VA EXCEPTION (disabled)
+            # if self.StateAbb == "VA":
+            #     subtitles = self._VA_RULE_SUBTITLES["Rule 268"]
+            # else:
+            #     subtitles = ["268.C. Driver Training Owned Auto Factors",
+            #                  "268.E.2.c.(3). Instructors in Excess of Owned Autos Used For Driver Training Liability and Medical Payments Coverages",
+            #                  "268.E.2.d. Medical Payments Coverage Factors"]
+            subtitles = ["268.C. Driver Training Owned Auto Factors",
+                         "268.E.2.c.(3). Instructors in Excess of Owned Autos Used For Driver Training Liability and Medical Payments Coverages",
+                         "268.E.2.d. Medical Payments Coverage Factors"]
             tables = [self.buildRule68table1(comp_name),
                       self.buildRule68table3(comp_name),
                       self.buildRule68table4(comp_name)]
@@ -9966,7 +9980,8 @@ class Auto:
     def _page_rule_269(self, RatePages):
         # Rule 269
         self.compareCompanies("SpecialTypesDriveAwayContractorFactor")
-        if self.StateAbb == "FL" or self.StateAbb == "VA":
+        # VA EXCEPTION (disabled): if self.StateAbb == "FL" or self.StateAbb == "VA":
+        if self.StateAbb == "FL":
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
                 self.title_company_name = CompanyTest
@@ -10078,24 +10093,26 @@ class Auto:
 
     def _page_rule_275(self, RatePages):
         #Rule 275
-        if self.StateAbb == "VA":
-            self.compareCompanies("LeasingOrRentalConcernsContingentBasePremium_Ext")
-            for CompanyTest in self.CompanyListDif:
-                comp_name = self.extract_company_name(CompanyTest)
-                subtitles = self._VA_RULE_SUBTITLES["Rule 275"]
-                tables = [self.buildLeasingOrRentalConcernsFactors(comp_name),
-                          self.buildRule275VA_TTTFactors(comp_name),
-                          self.buildRule275VA_PPTFactors(comp_name),
-                          self.buildRule275VA_MotorcycleFactors(comp_name),
-                          self.buildRule275VA_SnowmobilesFactors(comp_name),
-                          self.buildRule275VA_ExceptMotorHomesFactors(comp_name),
-                          self.buildRule275VA_MotorHomesFactors(comp_name)]
-                self.title_company_name = CompanyTest
-                if len(self.CompanyListDif) == 1:
-                    self.title_company_name = ""  # Every Company, no point in putting in sheet name.
-                RatePages.generateWorksheetTablesX('Rule 275 '+ self.title_company_name, 'RULE 275. LEASING OR RENTAL CONCERNS ' + self.title_company_name, subtitles, tables, False, True)
-                self.overideFooter(RatePages.getWB()['Rule 275 '+ self.title_company_name], CompanyTest)
-        else:
+        # VA EXCEPTION (disabled): VA now uses the standard Rule 275 page below
+        # if self.StateAbb == "VA":
+        #     self.compareCompanies("LeasingOrRentalConcernsContingentBasePremium_Ext")
+        #     for CompanyTest in self.CompanyListDif:
+        #         comp_name = self.extract_company_name(CompanyTest)
+        #         subtitles = self._VA_RULE_SUBTITLES["Rule 275"]
+        #         tables = [self.buildLeasingOrRentalConcernsFactors(comp_name),
+        #                   self.buildRule275VA_TTTFactors(comp_name),
+        #                   self.buildRule275VA_PPTFactors(comp_name),
+        #                   self.buildRule275VA_MotorcycleFactors(comp_name),
+        #                   self.buildRule275VA_SnowmobilesFactors(comp_name),
+        #                   self.buildRule275VA_ExceptMotorHomesFactors(comp_name),
+        #                   self.buildRule275VA_MotorHomesFactors(comp_name)]
+        #         self.title_company_name = CompanyTest
+        #         if len(self.CompanyListDif) == 1:
+        #             self.title_company_name = ""  # Every Company, no point in putting in sheet name.
+        #         RatePages.generateWorksheetTablesX('Rule 275 '+ self.title_company_name, 'RULE 275. LEASING OR RENTAL CONCERNS ' + self.title_company_name, subtitles, tables, False, True)
+        #         self.overideFooter(RatePages.getWB()['Rule 275 '+ self.title_company_name], CompanyTest)
+        # else:
+        if True:
             self.compareCompanies("LeasingOrRentalConcernsContingentBasePremium_Ext")
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
@@ -10244,12 +10261,15 @@ class Auto:
         self.compareCompanies("SpecialTypesSpecialEquipmentFactor1")
         for CompanyTest in self.CompanyListDif:
             comp_name = self.extract_company_name(CompanyTest)
-            if self.StateAbb == "VA":
-                subtitles = self._VA_RULE_SUBTITLES["Rule 281"]
-            else:
-                subtitles = ["281.C.2. Premium Computation",
-                             "281.D.2.b. Cost of Hire Basis Coverage Factors",
-                             "281.E Rental Period Basis Factors"]
+            # if self.StateAbb == "VA":
+                # subtitles = self._VA_RULE_SUBTITLES["Rule 281"]
+            # else:
+                # subtitles = ["281.C.2. Premium Computation",
+                             # "281.D.2.b. Cost of Hire Basis Coverage Factors",
+                             # "281.E Rental Period Basis Factors"]
+            subtitles = ["281.C.2. Premium Computation",
+                         "281.D.2.b. Cost of Hire Basis Coverage Factors",
+                         "281.E Rental Period Basis Factors"]
             tables = [self.buildMobileandFarmPremiumFactor(comp_name),
                       self.buildMobileandFarmCostOfHireFactor(comp_name),
                       self.buildRentalBasisFactors(comp_name)]
@@ -10759,58 +10779,58 @@ class Auto:
     def _page_rule_301c(self, RatePages):
         # 301.C
         # VA uses different numbers, but this is the contents of most other states rule 301.C
-        if self.StateAbb == "VA":
-            self.compareCompanies(
-                "TrailerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
-            for CompanyTest in self.CompanyListDif:
-                comp_name = self.extract_company_name(CompanyTest)
+        # if self.StateAbb == "VA":
+            # self.compareCompanies(
+                # "TrailerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
+            # for CompanyTest in self.CompanyListDif:
+                # comp_name = self.extract_company_name(CompanyTest)
 
-                tables_301A = [
-                    self.build101A1(comp_name),
-                    self.build101A2(comp_name),
-                    self.build101A3(comp_name),
-                    self.build101A4(comp_name),
-                    self.build101A5(comp_name),
-                    self.build101B1(comp_name),
-                    self.build101B2(comp_name),
-                    self.build101B3(comp_name)
-                ]
+                # tables_301A = [
+                    # self.build101A1(comp_name),
+                    # self.build101A2(comp_name),
+                    # self.build101A3(comp_name),
+                    # self.build101A4(comp_name),
+                    # self.build101A5(comp_name),
+                    # self.build101B1(comp_name),
+                    # self.build101B2(comp_name),
+                    # self.build101B3(comp_name)
+                # ]
 
-                tables_301B = [
-                    self.buildZoneRatedTrailersVVFColl(comp_name),
-                    self.buildZoneRatedNonTrailersVVFColl(comp_name),
-                    self.buildPPTVVFColl(comp_name),
-                    self.buildNonZoneRatedNonTrailersVVFColl(comp_name),
-                    self.buildAllOtherVehiclesVVFColl(comp_name),
-                    self.buildZoneRatedVehiclesVVFOTC(comp_name),
-                    self.buildPPTVehiclesVVFOTC(comp_name),
-                    self.buildAllOtherVehiclesVVFOTC(comp_name)
-                ]
+                # tables_301B = [
+                    # self.buildZoneRatedTrailersVVFColl(comp_name),
+                    # self.buildZoneRatedNonTrailersVVFColl(comp_name),
+                    # self.buildPPTVVFColl(comp_name),
+                    # self.buildNonZoneRatedNonTrailersVVFColl(comp_name),
+                    # self.buildAllOtherVehiclesVVFColl(comp_name),
+                    # self.buildZoneRatedVehiclesVVFOTC(comp_name),
+                    # self.buildPPTVehiclesVVFOTC(comp_name),
+                    # self.buildAllOtherVehiclesVVFOTC(comp_name)
+                # ]
 
-                subtitles_301A = self._VA_RULE_SUBTITLES["Rule 301.A"]
-                subtitles_301B = self._VA_RULE_SUBTITLES["Rule 301.B"]
+                # subtitles_301A = self._VA_RULE_SUBTITLES["Rule 301.A"]
+                # subtitles_301B = self._VA_RULE_SUBTITLES["Rule 301.B"]
 
-                self.title_company_name = CompanyTest
-                if len(self.CompanyListDif) == 1:
-                    self.title_company_name = ""  # Every Company, no point in putting in sheet name.
-                RatePages.generateWorksheetTablesX('Rule 301.A ' + self.title_company_name,
-                                                   'RULE 301.A Vehicle Age and Price Bracket - Actual Cash Value' + self.title_company_name, subtitles_301A,
-                                                   tables_301A,
-                                                   False, True)
+                # self.title_company_name = CompanyTest
+                # if len(self.CompanyListDif) == 1:
+                    # self.title_company_name = ""  # Every Company, no point in putting in sheet name.
+                # RatePages.generateWorksheetTablesX('Rule 301.A ' + self.title_company_name,
+                                                   # 'RULE 301.A Vehicle Age and Price Bracket - Actual Cash Value' + self.title_company_name, subtitles_301A,
+                                                   # tables_301A,
+                                                   # False, True)
 
-                self.overideFooter(RatePages.getWB()['Rule 301.A ' + self.title_company_name], CompanyTest)
+                # self.overideFooter(RatePages.getWB()['Rule 301.A ' + self.title_company_name], CompanyTest)
 
-                self.title_company_name = CompanyTest
-                if len(self.CompanyListDif) == 1:
-                    self.title_company_name = ""  # Every Company, no point in putting in sheet name.
-                RatePages.generateWorksheetTablesX('Rule 301.B ' + self.title_company_name,
-                                                   'RULE 301.B Vehicle Age and Price Bracket - Stated Amount Rating' + self.title_company_name, subtitles_301B,
-                                                   tables_301B,
-                                                   False, True)
+                # self.title_company_name = CompanyTest
+                # if len(self.CompanyListDif) == 1:
+                    # self.title_company_name = ""  # Every Company, no point in putting in sheet name.
+                # RatePages.generateWorksheetTablesX('Rule 301.B ' + self.title_company_name,
+                                                   # 'RULE 301.B Vehicle Age and Price Bracket - Stated Amount Rating' + self.title_company_name, subtitles_301B,
+                                                   # tables_301B,
+                                                   # False, True)
 
-                self.overideFooter(RatePages.getWB()['Rule 301.B ' + self.title_company_name], CompanyTest)
+                # self.overideFooter(RatePages.getWB()['Rule 301.B ' + self.title_company_name], CompanyTest)
 
-        else:
+        if True:  # VA EXCEPTION (disabled): VA now follows the standard path; old VA branch commented out below
             self.compareCompanies(["TrailerTypesCollisionVehicleValueFactorsStatedAmountVehicles_Ext",
                                    "TrucksAndTruckTractorsCollisionVehicleValueFactorsStatedAmountVehicles_Ext",
                                    "TrucksTractorsAndTrailersOtherThanCollisionVehicleValueFactorStatedAmountVehicle_Ext",
@@ -10873,18 +10893,18 @@ class Auto:
                 self.overideFooter(RatePages.getWB()['Rule 301.C ' + self.title_company_name], CompanyTest)
 
         _wb = RatePages.getWB()
-        if self.StateAbb != "VA":
+        if True:  # VA EXCEPTION (disabled): VA now follows the standard path; old VA branch commented out below
             for _sn in _wb.sheetnames:
                 if _sn.startswith("Rule 301.C"):
                     self.format301(_wb[_sn])
-        else:
-            for _sn in _wb.sheetnames:
-                if _sn.startswith("Rule 301.A") or _sn.startswith("Rule 301.B"):
-                    self.format301VA(_wb[_sn])
+        # else:
+            # for _sn in _wb.sheetnames:
+                # if _sn.startswith("Rule 301.A") or _sn.startswith("Rule 301.B"):
+                    # self.format301VA(_wb[_sn])
 
     def _page_rule_301d1(self, RatePages):
         # 301.D.1
-        if self.StateAbb != "VA":
+        if True:  # VA EXCEPTION (disabled): VA now follows the standard path; old VA branch commented out below
             self.compareCompanies("LiabilityOriginalCostNewFactor_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
@@ -10900,36 +10920,36 @@ class Auto:
                                                    False, True)
 
                 self.overideFooter(RatePages.getWB()['Rule 301.D.1 ' + self.title_company_name], CompanyTest)
-        else:
-            self.compareCompanies("LiabilityOriginalCostNewFactor_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
-            for CompanyTest in self.CompanyListDif:
-                comp_name = self.extract_company_name(CompanyTest)
+        # else:
+            # self.compareCompanies("LiabilityOriginalCostNewFactor_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
+            # for CompanyTest in self.CompanyListDif:
+                # comp_name = self.extract_company_name(CompanyTest)
 
-                tables = [self.build301D1(comp_name)]
+                # tables = [self.build301D1(comp_name)]
 
-                subtitles = self._VA_RULE_SUBTITLES["Rule 301.C.1"]
+                # subtitles = self._VA_RULE_SUBTITLES["Rule 301.C.1"]
 
-                self.title_company_name = CompanyTest
-                if len(self.CompanyListDif) == 1:
-                    self.title_company_name = ""  # Every Company, no point in putting in sheet name.
-                RatePages.generateWorksheetTablesX('Rule 301.C.1 ' + self.title_company_name, 'RULE 301.C.1. LIABILITY ORIGINAL COST NEW FACTORS' + self.title_company_name, subtitles, tables,
-                                                   False, True)
+                # self.title_company_name = CompanyTest
+                # if len(self.CompanyListDif) == 1:
+                    # self.title_company_name = ""  # Every Company, no point in putting in sheet name.
+                # RatePages.generateWorksheetTablesX('Rule 301.C.1 ' + self.title_company_name, 'RULE 301.C.1. LIABILITY ORIGINAL COST NEW FACTORS' + self.title_company_name, subtitles, tables,
+                                                   # False, True)
 
-                self.overideFooter(RatePages.getWB()['Rule 301.C.1 ' + self.title_company_name], CompanyTest)
+                # self.overideFooter(RatePages.getWB()['Rule 301.C.1 ' + self.title_company_name], CompanyTest)
 
         _wb = RatePages.getWB()
-        if self.StateAbb != "VA":
+        if True:  # VA EXCEPTION (disabled): VA now follows the standard path; old VA branch commented out below
             for _sn in _wb.sheetnames:
                 if _sn.startswith("Rule 301.D.1"):
                     self.format301D1(_wb[_sn])
-        else:
-            for _sn in _wb.sheetnames:
-                if _sn.startswith("Rule 301.C.1"):
-                    self.format301D1(_wb[_sn])
+        # else:
+            # for _sn in _wb.sheetnames:
+                # if _sn.startswith("Rule 301.C.1"):
+                    # self.format301D1(_wb[_sn])
 
     def _page_rule_301d2(self, RatePages):
         # 301.D.2
-        if self.StateAbb != "VA":
+        if True:  # VA EXCEPTION (disabled): VA now follows the standard path; old VA branch commented out below
             self.compareCompanies(["LiabilityVehicleAgeFactorsStatedAmountVehicles_Ext","LiabilityVehicleAgeFactorsOriginalCostNewVehicle_Ext"])  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
@@ -10947,36 +10967,36 @@ class Auto:
                                                    False, True)
 
                 self.overideFooter(RatePages.getWB()['Rule 301.D.2 ' + self.title_company_name], CompanyTest)
-        else:
-            self.compareCompanies(
-                "LiabilityOriginalCostNewFactor_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
-            for CompanyTest in self.CompanyListDif:
-                comp_name = self.extract_company_name(CompanyTest)
+        # else:
+            # self.compareCompanies(
+                # "LiabilityOriginalCostNewFactor_Ext")  # Just a temp replacement, don't know what to do about this sheet, doesn't fit well.
+            # for CompanyTest in self.CompanyListDif:
+                # comp_name = self.extract_company_name(CompanyTest)
 
-                tables = [self.build301D3(comp_name),
-                          self.build301D2(comp_name)]
+                # tables = [self.build301D3(comp_name),
+                          # self.build301D2(comp_name)]
 
-                subtitles = self._VA_RULE_SUBTITLES["Rule 301.C.2/3"]
+                # subtitles = self._VA_RULE_SUBTITLES["Rule 301.C.2/3"]
 
-                self.title_company_name = CompanyTest
-                if len(self.CompanyListDif) == 1:
-                    self.title_company_name = ""  # Every Company, no point in putting in sheet name.
-                RatePages.generateWorksheetTablesX('Rule 301.C.2 and 301.C.3' + self.title_company_name,
-                                                   'RULE 301.C.2. & 301.C.3.' + self.title_company_name,
-                                                   subtitles, tables,
-                                                   False, True)
+                # self.title_company_name = CompanyTest
+                # if len(self.CompanyListDif) == 1:
+                    # self.title_company_name = ""  # Every Company, no point in putting in sheet name.
+                # RatePages.generateWorksheetTablesX('Rule 301.C.2 and 301.C.3' + self.title_company_name,
+                                                   # 'RULE 301.C.2. & 301.C.3.' + self.title_company_name,
+                                                   # subtitles, tables,
+                                                   # False, True)
 
-                self.overideFooter(RatePages.getWB()['Rule 301.C.2 and 301.C.3' + self.title_company_name], CompanyTest)
+                # self.overideFooter(RatePages.getWB()['Rule 301.C.2 and 301.C.3' + self.title_company_name], CompanyTest)
 
         _wb = RatePages.getWB()
-        if self.StateAbb != "VA":
+        if True:  # VA EXCEPTION (disabled): VA now follows the standard path; old VA branch commented out below
             for _sn in _wb.sheetnames:
                 if _sn.startswith("Rule 301.D.2"):
                     self.format301D2(_wb[_sn])
-        else:
-            for _sn in _wb.sheetnames:
-                if _sn.startswith("Rule 301.C.2"):
-                    self.format301D2(_wb[_sn])
+        # else:
+            # for _sn in _wb.sheetnames:
+                # if _sn.startswith("Rule 301.C.2"):
+                    # self.format301D2(_wb[_sn])
 
     def _page_rule_303(self, RatePages):
         #Rule 303
@@ -11051,7 +11071,8 @@ class Auto:
 
     def _page_rule_309(self, RatePages):
         # Rule 309
-        if self.StateAbb == "FL" or self.StateAbb == "VA":
+        # VA EXCEPTION (disabled): if self.StateAbb == "FL" or self.StateAbb == "VA":
+        if self.StateAbb == "FL":
             self.compareCompanies(["AutoLoanLeaseGapCoverageFactor"])
             for CompanyTest in self.CompanyListDif:
                 comp_name = self.extract_company_name(CompanyTest)
@@ -11607,8 +11628,9 @@ class Auto:
             print("Warning: Additional PIP Base Rate Tables for 222, 232, 239 will be absent.")
         if self.StateAbb == "MI":
             print("Warning: Base Rate Formatting incomplete. 298 has special exceptions not yet built.")
-        if self.StateAbb == "VA":
-            print("Warning: Due to large shifts in manual presentation, this manual is incomplete.")
+        # VA EXCEPTION (disabled)
+        # if self.StateAbb == "VA":
+        #     print("Warning: Due to large shifts in manual presentation, this manual is incomplete.")
         if self.StateAbb in ("NY", "CA"):
             print("Warning: Rule 297 for this state was not built out.")
 

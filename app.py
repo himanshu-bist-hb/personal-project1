@@ -164,7 +164,11 @@ CP_SLOT_KEYS = [k for k, _, _ in CP_SLOTS]
 CP_SLOT_LABELS = {k: lbl for k, lbl, _ in CP_SLOTS}
 st.session_state.setdefault("cp_files",        {})      # {slot: {"name","bytes"} | {"error","names"}}
 st.session_state.setdefault("cp_manual_assign", {})     # {filename: slot} for files detection couldn't place
-st.session_state.setdefault("cp_mode",         "pages") # "pages" | "hex"
+st.session_state.setdefault("cp_mode",         "individual") # "individual" | "small_market" | "hex"
+st.session_state.setdefault("cp_sm_files",     {})      # Small Market mode: SM / MM / ATA / CW
+st.session_state.setdefault("cp_terr_files",   {})      # Hex + Territory Coordinates (both modes)
+st.session_state.setdefault("cp_sm_reset",     0)
+st.session_state.setdefault("cp_terr_reset",   0)
 st.session_state.setdefault("cp_upload_reset", 0)
 st.session_state.setdefault("cp_save_dir",     "")
 st.session_state.setdefault("cp_run_status",   "idle")  # idle | success | error
@@ -946,10 +950,10 @@ else:
             if active_lob == "Farm Auto":
                 nr = n_fa_req()
             elif active_lob == "Commercial Property":
-                nr = sum(1 for v in st.session_state.cp_files.values() if "error" not in v)
+                nr = sum(1 for v in {**(st.session_state.cp_sm_files if st.session_state.cp_mode == "small_market" else st.session_state.cp_files), **st.session_state.cp_terr_files}.values() if "error" not in v)
             else:
                 nr = n_req()
-            tot = len(CP_SLOT_KEYS) if active_lob == "Commercial Property" else len(REQUIRED); pct = int(nr/tot*100)
+            tot = 8 if active_lob == "Commercial Property" else len(REQUIRED); pct = int(nr/tot*100)
             fg = "#196B38" if nr == tot else "#1A5DAB"
             st.markdown(f"""
             <div style="text-align:right;padding-top:4px;">
@@ -2922,18 +2926,18 @@ elif active_lob == "Commercial Property":
     cp_files = st.session_state.cp_files
 
     # ── Mode toggle ───────────────────────────────────────────────────────────
+    # Mirrors BOP's "Individual Company" / "Small Market" toggle. Individual:
+    # lower-level companies (NACO / NAFF / NICOF) -> NGIC -> CW. Small Market:
+    # Small Market / Middle Market -> Applies to All (state) -> CW.
     cp_mode = st.session_state.cp_mode
-    cm1, cm2, _ = st.columns([2, 2, 8])
-    with cm1:
-        if st.button("Rate Pages", key="cp_btn_pages", use_container_width=True,
-                     type="primary" if cp_mode == "pages" else "secondary"):
-            if cp_mode != "pages":
-                st.session_state.cp_mode = "pages"; st.rerun()
-    with cm2:
-        if st.button("Hex Validation", key="cp_btn_hex", use_container_width=True,
-                     type="primary" if cp_mode == "hex" else "secondary"):
-            if cp_mode != "hex":
-                st.session_state.cp_mode = "hex"; st.rerun()
+    cm1, cm2, cm3, _ = st.columns([2, 2, 2, 6])
+    for col, mode_key, label in ((cm1, "individual", "Individual Company"), (cm2, "small_market", "Small Market"), (cm3, "hex", "Hex Validation")):
+        with col:
+            if st.button(label, key=f"cp_btn_{mode_key}", use_container_width=True,
+                         type="primary" if cp_mode == mode_key else "secondary"):
+                if cp_mode != mode_key:
+                    st.session_state.cp_mode = mode_key
+                    st.session_state.cp_confirm_step = "idle"; st.rerun()
     spacer(16)
 
     def cp_save_location(widget_key):
@@ -2958,7 +2962,8 @@ elif active_lob == "Commercial Property":
     # ══════════════════════════════════════════════════════════════════════════
     # RATE PAGES MODE
     # ══════════════════════════════════════════════════════════════════════════
-    if cp_mode == "pages":
+    if cp_mode in ("individual", "small_market"):
+        cp_is_sm = cp_mode == "small_market"
 
         # ── Market contents ───────────────────────────────────────────────────
         st.markdown('<div class="sec-label">&#128209; &nbsp;Markets &amp; Contents</div>', unsafe_allow_html=True)
@@ -3001,64 +3006,86 @@ elif active_lob == "Commercial Property":
         L, R = st.columns([13, 7], gap="large")
 
         # ── Ratebook upload & assignment ──────────────────────────────────────
+        CP_IND_KEYS = ["NGIC", "NACO", "NAFF", "NICOF", "MM", "CW"]
+        CP_SM_LABELS = {"SM": "Small Market", "MM": "Middle Market", "ATA": "Applies to All / State", "CW": "Countrywide"}
+        ind_slots = [(k, rx) for k, _, rx in CP_SLOTS if k in CP_IND_KEYS]
+        cp_terr = st.session_state.cp_terr_files
+        sm_on, mm_on = cp_opts["sm_enabled"], cp_opts["mm_enabled"]
+        hex_needed = (sm_on and cp_opts["sm_territory"]) or (mm_on and cp_opts["mm_territory"])
+
         with L:
             st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
-            uploaded = st.file_uploader(
-                "Select all ratebook files at once — filenames should contain the company code (NGIC, NACO, MM, SM, Hex, …)",
-                type=["xlsx", "xlsm", "xls"],
-                accept_multiple_files=True,
-                key=f"cp_multi_up_{st.session_state.cp_upload_reset}",
-            )
+            if not cp_is_sm:
+                st.markdown('<p class="f-hint">Lookup hierarchy: <b>NACO / NAFF / NICOF</b> &rarr; <b>NGIC</b> &rarr; <b>Countrywide</b>. Middle Market pages use the MM ratebook.</p>', unsafe_allow_html=True)
+                uploaded = st.file_uploader(
+                    "Select all ratebook files at once — filenames must contain the company code (NGIC, NACO, NAFF, NICOF, MM, CW)",
+                    type=["xlsx", "xlsm", "xls"], accept_multiple_files=True,
+                    key=f"cp_multi_up_{st.session_state.cp_upload_reset}",
+                )
+                # Filename detection (first match wins); files nothing matches are assigned by hand.
+                unmatched = []
+                if uploaded:
+                    grouped = {}
+                    for f in uploaded:
+                        slot = st.session_state.cp_manual_assign.get(f.name) or next(
+                            (k for k, rx in ind_slots if re.search(rx, f.name.upper())), None)
+                        if slot is None:
+                            unmatched.append(f)
+                        else:
+                            grouped.setdefault(slot, []).append(f)
+                    new_files = {}
+                    for slot, files in grouped.items():
+                        if len(files) == 1:
+                            new_files[slot] = {"name": files[0].name, "bytes": files[0].getvalue()}
+                        else:
+                            new_files[slot] = {"error": "multiple", "names": [f.name for f in files]}
+                    st.session_state.cp_files = cp_files = new_files
+                if unmatched:
+                    st.markdown('<p class="f-hint">&#9888; These files did not match a ratebook name — pick where each belongs:</p>', unsafe_allow_html=True)
+                    for f in unmatched:
+                        uc1, uc2 = st.columns([3, 2])
+                        with uc1:
+                            st.markdown(f'<div style="font-size:12px;padding-top:8px;">{f.name}</div>', unsafe_allow_html=True)
+                        with uc2:
+                            pick = st.selectbox(f"Assign {f.name}", ["— choose —"] + CP_IND_KEYS, key=f"cp_assign_{f.name}",
+                                                label_visibility="collapsed")
+                        if pick != "— choose —":
+                            st.session_state.cp_manual_assign[f.name] = pick; st.rerun()
+                active_keys = CP_IND_KEYS
+                labels = {k: CP_SLOT_LABELS[k] for k in CP_IND_KEYS}
+                cp_active = cp_files
+                required = {"NGIC": sm_on, "MM": mm_on}
+            else:
+                st.markdown('<p class="f-hint">Lookup hierarchy: <b>Small Market / Middle Market</b> &rarr; <b>Applies to All (State)</b> &rarr; <b>Countrywide</b>.</p>', unsafe_allow_html=True)
+                for slot, label in (("SM", "Select the Small Market ratebook"), ("MM", "Select the Middle Market ratebook"),
+                                    ("ATA", "Select the Applies to All / State ratebook"), ("CW", "Select the Countrywide ratebook (optional)")):
+                    up = st.file_uploader(label, type=["xlsx", "xlsm", "xls"], accept_multiple_files=False,
+                                          key=f"cp_sm_up_{slot}_{st.session_state.cp_sm_reset}")
+                    if up:
+                        st.session_state.cp_sm_files[slot] = {"name": up.name, "bytes": up.getvalue()}
+                    spacer(2)
+                active_keys = ["SM", "MM", "ATA", "CW"]
+                labels = CP_SM_LABELS
+                cp_active = st.session_state.cp_sm_files
+                required = {"SM": sm_on, "MM": mm_on, "ATA": True}
 
-            # Filename detection (first match in CP_SLOTS order wins); files nothing matches
-            # are assigned by hand below.
-            unmatched = []
-            if uploaded:
-                grouped = {}
-                for f in uploaded:
-                    slot = st.session_state.cp_manual_assign.get(f.name) or next(
-                        (k for k, _, rx in CP_SLOTS if re.search(rx, f.name.upper())), None)
-                    if slot is None:
-                        unmatched.append(f)
-                    else:
-                        grouped.setdefault(slot, []).append(f)
-                new_files = {}
-                for slot, files in grouped.items():
-                    if len(files) == 1:
-                        new_files[slot] = {"name": files[0].name, "bytes": files[0].getvalue()}
-                    else:
-                        new_files[slot] = {"error": "multiple", "names": [f.name for f in files]}
-                st.session_state.cp_files = cp_files = new_files
-
-            if unmatched:
-                st.markdown('<p class="f-hint">&#9888; These files did not match a ratebook name — pick where each belongs:</p>', unsafe_allow_html=True)
-                for f in unmatched:
-                    uc1, uc2 = st.columns([3, 2])
-                    with uc1:
-                        st.markdown(f'<div style="font-size:12px;padding-top:8px;">{f.name}</div>', unsafe_allow_html=True)
-                    with uc2:
-                        pick = st.selectbox(f"Assign {f.name}", ["— choose —"] + CP_SLOT_KEYS,
-                                            format_func=lambda k: CP_SLOT_LABELS.get(k, k),
-                                            key=f"cp_assign_{f.name}", label_visibility="collapsed")
-                    if pick != "— choose —":
-                        st.session_state.cp_manual_assign[f.name] = pick; st.rerun()
+            # ── Territory files (both modes) ──────────────────────────────────
+            spacer(6)
+            st.markdown('<div class="sec-label">&#128506; &nbsp;Territory Files</div>', unsafe_allow_html=True)
+            for slot, label in (("HEX", "Select the Hex / Territory ratebook" + (" (needed for Territory Adjustment)" if hex_needed else " (optional)")),
+                                ("COORDS", "Select the Territory Coordinates file (optional — read from the network if omitted)")):
+                up = st.file_uploader(label, type=["xlsx", "xlsm", "xls"], accept_multiple_files=False,
+                                      key=f"cp_terr_up_{slot}_{st.session_state.cp_terr_reset}")
+                if up:
+                    cp_terr[slot] = {"name": up.name, "bytes": up.getvalue()}
+                spacer(2)
 
             # ── Assignment table ──────────────────────────────────────────────
-            sm_on, mm_on = cp_opts["sm_enabled"], cp_opts["mm_enabled"]
-            hex_needed = (sm_on and cp_opts["sm_territory"]) or (mm_on and cp_opts["mm_territory"])
-            BADGE = {
-                "NGIC":  "Any one" if sm_on else "", "SM": "Any one" if sm_on else "", "ATA": "Any one" if sm_on else "",
-                "MM":    "Required" if mm_on else "",
-                "HEX":   "Required" if hex_needed else "",
-            }
             rows_html = ""; n_ok = n_err = 0
-            for key in CP_SLOT_KEYS:
-                val = cp_files.get(key)
-                label = CP_SLOT_LABELS[key]
-                if BADGE.get(key):
-                    bh = f'<span class="ab-req">{BADGE[key]}</span>'
-                else:
-                    bh = '<span class="ab-opt">Optional</span>'
+            table = [(k, labels[k], cp_active.get(k), required.get(k, False)) for k in active_keys] + \
+                    [("HEX", "Hex / Territory", cp_terr.get("HEX"), bool(hex_needed)), ("COORDS", "Territory Coordinates", cp_terr.get("COORDS"), False)]
+            for key, label, val, req in table:
+                bh = '<span class="ab-req">Required</span>' if req else '<span class="ab-opt">Optional</span>'
                 if val is None:
                     rows_html += f'<div class="arow arow-empty"><span class="aco">{label} {bh}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
                 elif "error" in val:
@@ -3069,18 +3096,19 @@ elif active_lob == "Commercial Property":
                     rows_html += f'<div class="arow arow-ok"><span class="aco">{label} {bh}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
             summary = f'{n_ok} assigned' + (f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err>1 else ""}</span>' if n_err else '')
             st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>', unsafe_allow_html=True)
-            st.markdown('<p class="f-hint">The Countrywide ratebook is optional — the shared CP countrywide file is used when none is uploaded. '
-                        'Territory Coordinates is optional too; without it the state\'s Smoothed Relativities file is read from the network.</p>',
-                        unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Without a Countrywide upload the shared CP countrywide file is used.</p>', unsafe_allow_html=True)
 
-            if cp_files or st.session_state.cp_manual_assign:
+            if cp_active or cp_terr or st.session_state.cp_manual_assign:
                 spacer(8)
                 _, clr = st.columns([5, 1])
                 with clr:
                     if st.button("Clear all", type="secondary", key="cp_clear_btn"):
-                        st.session_state.cp_files = {}
-                        st.session_state.cp_manual_assign = {}
-                        st.session_state.cp_upload_reset += 1
+                        if cp_is_sm:
+                            st.session_state.cp_sm_files = {}; st.session_state.cp_sm_reset += 1
+                        else:
+                            st.session_state.cp_files = {}; st.session_state.cp_manual_assign = {}
+                            st.session_state.cp_upload_reset += 1
+                        st.session_state.cp_terr_files = {}; st.session_state.cp_terr_reset += 1
                         st.session_state.cp_run_status = "idle"
                         st.rerun()
 
@@ -3090,14 +3118,17 @@ elif active_lob == "Commercial Property":
             cp_save_location("pages")
             spacer(6)
 
+            cp_all = {**cp_active, **cp_terr}
+
             def cp_valid(k):
-                v = cp_files.get(k)
+                v = cp_all.get(k)
                 return v is not None and "error" not in v
 
-            has_base = any(cp_valid(k) for k in ("NGIC", "SM", "ATA"))
+            # Small Market mode: SM / MM need the Applies to All (state) ratebook behind them.
+            has_base = (cp_valid("SM") and cp_valid("ATA")) if cp_is_sm else cp_valid("NGIC")
             n_markets = int(sm_on) + int(mm_on)
             save_ok = bool(st.session_state.cp_save_dir)
-            conflicts = [CP_SLOT_LABELS[k] for k, v in cp_files.items() if "error" in v]
+            conflicts = [labels.get(k, k) for k, v in cp_all.items() if "error" in v]
             bad_caps = [t.upper() for t in ("sm", "mm")
                         if cp_opts[f"{t}_enabled"] and cp_opts[f"{t}_capping"]
                         and not cp_opts[f"{t}_cap_min"] < cp_opts[f"{t}_cap_max"]]
@@ -3107,9 +3138,12 @@ elif active_lob == "Commercial Property":
                        ", ".join(n for n, on in (("Small Market", sm_on), ("Middle Market", mm_on)) if on) or "Not yet selected",
                        "market selection")]
             if sm_on:
-                checks.append((has_base, "Small Market ratebook", "Uploaded" if has_base else "Upload NGIC, Small Market or Applies to All", "NGIC / SM / ATA ratebook"))
+                need = "Small Market + Applies to All" if cp_is_sm else "NGIC"
+                checks.append((has_base, "Small Market ratebooks", "Uploaded" if has_base else f"Upload {need}", f"{need} ratebook"))
             if mm_on:
-                checks.append((cp_valid("MM"), "Middle Market ratebook", "Uploaded" if cp_valid("MM") else "Upload the MM ratebook", "MM ratebook"))
+                mm_ok = cp_valid("MM") and (cp_valid("ATA") if cp_is_sm else True)
+                need = "Middle Market + Applies to All" if cp_is_sm else "MM"
+                checks.append((mm_ok, "Middle Market ratebooks", "Uploaded" if mm_ok else f"Upload {need}", f"{need} ratebook"))
             if hex_needed:
                 checks.append((cp_valid("HEX"), "Hex ratebook", "Uploaded" if cp_valid("HEX") else "Required for Territory Adjustment", "Hex ratebook"))
             if bad_caps:
@@ -3169,7 +3203,7 @@ elif active_lob == "Commercial Property":
                 from CP.CPRatePages import run as run_cp_rate_pages
                 try:
                     def _cpb(k):
-                        f = cp_files.get(k)
+                        f = cp_all.get(k)
                         return f["bytes"] if f and "error" not in f else None
                     st.session_state.cp_results = run_cp_rate_pages(
                         folder_selected=st.session_state.cp_save_dir,

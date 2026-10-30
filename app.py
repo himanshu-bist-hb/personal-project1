@@ -20,7 +20,7 @@ from openpyxl.worksheet.properties import PageSetupProperties
 
 import subprocess, sys
 
-from config.constants import BOP_DETECT_ORDER
+from config.constants import BOP_DETECT_ORDER, CP_SLOTS
 
 st.set_page_config(
     page_title="RatePage Builder · Nationwide",
@@ -159,6 +159,35 @@ st.session_state.setdefault("bop_audit_detail",        None)    # pd.DataFrame
 st.session_state.setdefault("bop_audit_completeness",  None)    # pd.DataFrame
 st.session_state.setdefault("bop_audit_report_bytes",  None)
 
+# ─── CP (Commercial Property) session state ─────────────────────────────────
+CP_SLOT_KEYS = [k for k, _, _ in CP_SLOTS]
+CP_SLOT_LABELS = {k: lbl for k, lbl, _ in CP_SLOTS}
+st.session_state.setdefault("cp_files",        {})      # {slot: {"name","bytes"} | {"error","names"}}
+st.session_state.setdefault("cp_manual_assign", {})     # {filename: slot} for files detection couldn't place
+st.session_state.setdefault("cp_mode",         "pages") # "pages" | "hex"
+st.session_state.setdefault("cp_upload_reset", 0)
+st.session_state.setdefault("cp_save_dir",     "")
+st.session_state.setdefault("cp_run_status",   "idle")  # idle | success | error
+st.session_state.setdefault("cp_run_msg",      "")
+st.session_state.setdefault("cp_results",      [])      # [{"market","xlsx","pdf"}]
+st.session_state.setdefault("cp_pdf_status",   "idle")
+st.session_state.setdefault("cp_confirm_step", "idle")
+# Option values live in a plain dict mirrored from the widgets (same gotcha as
+# the BOP program checkboxes: Streamlit drops key-bound widget state when the
+# widget isn't rendered, e.g. while the Hex Validation mode is showing).
+st.session_state.setdefault("cp_opts", {
+    "sm_enabled": False, "sm_lcm": False, "sm_pmf": False, "sm_territory": False, "sm_capping": False,
+    "sm_cap_min": 0.0, "sm_cap_max": 0.0, "sm_deductible": False, "sm_full_manual": False,
+    "mm_enabled": False, "mm_lcm": False, "mm_pmf": False, "mm_territory": False, "mm_capping": False,
+    "mm_cap_min": 0.0, "mm_cap_max": 0.0, "mm_deductible": False, "mm_full_manual": False,
+    "mm_segmentation_removal": False,
+})
+st.session_state.setdefault("cp_hex_files",    {})      # {"HEX"|"SM"|"MM": {"name","bytes"}}
+st.session_state.setdefault("cp_hex_reset",    0)
+st.session_state.setdefault("cp_hex_status",   "idle")
+st.session_state.setdefault("cp_hex_msg",      "")
+st.session_state.setdefault("cp_hex_result",   None)
+
 # ─── Small & Middle Market session state ───────────────────────────────────
 st.session_state.setdefault("file_SM",          None)
 st.session_state.setdefault("file_MM",          None)
@@ -191,6 +220,7 @@ st.session_state.setdefault("cmp_mass_output_path",    "")
 LOB_NAV = [("Business Auto","🚗"),
     ("Farm Auto",         "🚜"),
     ("Business Owners Policy", "🏢"),
+    ("Commercial Property", "🏬"),
     ("General Liability", "⚖️"),
     ("Property",          "🏠"),
 ]
@@ -857,13 +887,14 @@ with st.sidebar:
 active_lob  = st.session_state.lob
 active_tool = st.session_state.active_tool
 
-LOB_ICONS = {"Business Auto":"🚗","General Liability":"⚖️","Farm Auto":"🚜","Property":"🏠","Business Owners Policy":"🏢"}
+LOB_ICONS = {"Business Auto":"🚗","General Liability":"⚖️","Farm Auto":"🚜","Property":"🏠","Business Owners Policy":"🏢","Commercial Property":"🏬"}
 LOB_SUBS  = {
     "Business Auto":     "Upload proposed ratebooks &nbsp;&middot;&nbsp; Configure options &nbsp;&middot;&nbsp; Generate output",
     "General Liability": "General Liability rate page configuration",
     "Farm Auto":         "Farm Auto rate page configuration",
     "Property":          "Property rate page configuration",
     "Business Owners Policy": "All Programs rate page configuration",
+    "Commercial Property": "Upload ratebooks &nbsp;&middot;&nbsp; Choose Small / Middle Market contents &nbsp;&middot;&nbsp; Generate output",
 }
 
 if active_tool == "comparator":
@@ -911,12 +942,14 @@ else:
         <p style="font-size:13px;color:#6B7A9E;margin:0;">{LOB_SUBS[active_lob]}</p>
         """, unsafe_allow_html=True)
     with h2:
-        if active_lob in ("Business Auto", "Farm Auto"):
+        if active_lob in ("Business Auto", "Farm Auto", "Commercial Property"):
             if active_lob == "Farm Auto":
                 nr = n_fa_req()
+            elif active_lob == "Commercial Property":
+                nr = sum(1 for v in st.session_state.cp_files.values() if "error" not in v)
             else:
                 nr = n_req()
-            tot = len(REQUIRED); pct = int(nr/tot*100)
+            tot = len(CP_SLOT_KEYS) if active_lob == "Commercial Property" else len(REQUIRED); pct = int(nr/tot*100)
             fg = "#196B38" if nr == tot else "#1A5DAB"
             st.markdown(f"""
             <div style="text-align:right;padding-top:4px;">
@@ -2878,6 +2911,415 @@ elif active_lob == "Business Owners Policy":
         )
     elif st.session_state.bop_audit_status == "error":
         spacer(10); st.error(f"Consistency check failed: {st.session_state.bop_audit_msg}")
+
+
+# ─── COMMERCIAL PROPERTY ──────────────────────────────────────────────────────
+elif active_lob == "Commercial Property":
+
+    from CP.CPRates import MarketOptions
+
+    cp_opts = st.session_state.cp_opts
+    cp_files = st.session_state.cp_files
+
+    # ── Mode toggle ───────────────────────────────────────────────────────────
+    cp_mode = st.session_state.cp_mode
+    cm1, cm2, _ = st.columns([2, 2, 8])
+    with cm1:
+        if st.button("Rate Pages", key="cp_btn_pages", use_container_width=True,
+                     type="primary" if cp_mode == "pages" else "secondary"):
+            if cp_mode != "pages":
+                st.session_state.cp_mode = "pages"; st.rerun()
+    with cm2:
+        if st.button("Hex Validation", key="cp_btn_hex", use_container_width=True,
+                     type="primary" if cp_mode == "hex" else "secondary"):
+            if cp_mode != "hex":
+                st.session_state.cp_mode = "hex"; st.rerun()
+    spacer(16)
+
+    def cp_save_location(widget_key):
+        """Save-location widget shared by both modes (one cp_save_dir)."""
+        st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
+        typed = st.text_input(f"cp_save_path_{widget_key}", value=st.session_state.cp_save_dir,
+                              placeholder="Paste path or click Browse", label_visibility="collapsed")
+        if typed != st.session_state.cp_save_dir: st.session_state.cp_save_dir = typed
+        if st.button("Browse", key=f"cp_browse_{widget_key}"):
+            folder = browse_folder()
+            if folder: st.session_state.cp_save_dir = folder; st.rerun()
+        if st.session_state.cp_save_dir:
+            p = st.session_state.cp_save_dir
+            st.markdown(f'<p class="f-ok">&#10003; &nbsp;{("…"+p[-38:]) if len(p)>40 else p}</p>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p class="f-hint">Browse your device or paste the full folder path</p>', unsafe_allow_html=True)
+
+    def cp_rdy(ok, title, sub):
+        d = "dot-ok" if ok else "dot-wait"; i = "&#10003;" if ok else "&#9675;"
+        return f'<div class="rdy-row"><div class="rdy-dot {d}">{i}</div><div><div class="rdy-title">{title}</div><div class="rdy-sub">{sub}</div></div></div>'
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # RATE PAGES MODE
+    # ══════════════════════════════════════════════════════════════════════════
+    if cp_mode == "pages":
+
+        # ── Market contents ───────────────────────────────────────────────────
+        st.markdown('<div class="sec-label">&#128209; &nbsp;Markets &amp; Contents</div>', unsafe_allow_html=True)
+
+        def cp_check(label, name, disabled=False, help=None):
+            cp_opts[name] = st.checkbox(label, key=f"cp_w_{name}", value=cp_opts[name],
+                                        disabled=disabled, help=help)
+            return cp_opts[name]
+
+        mkt_cols = st.columns(2, gap="large")
+        for col, tag, title in ((mkt_cols[0], "sm", "Small Market"), (mkt_cols[1], "mm", "Middle Market")):
+            with col, st.container(border=True):
+                on = cp_check(f"Build {title} rate pages", f"{tag}_enabled")
+                a, b = st.columns(2)
+                with a:
+                    cp_check("Loss Cost Multiplier + Crime", f"{tag}_lcm", disabled=not on,
+                             help="LCM and Crime Endorsement pages")
+                    cp_check("Territory Adjustment", f"{tag}_territory", disabled=not on,
+                             help="Needs the Hex ratebook")
+                    cp_check("Deductible", f"{tag}_deductible", disabled=not on)
+                    if tag == "mm":
+                        cp_check("Segmentation Removal", "mm_segmentation_removal", disabled=not on,
+                                 help="Adds the Tiering / LEAF / Age of Building pages; changes the Full Rate Manual AOI pages")
+                with b:
+                    cp_check("Package Modification Factor", f"{tag}_pmf", disabled=not on)
+                    cp_check("Capping Range", f"{tag}_capping", disabled=not on)
+                    cp_check("Full Rate Manual", f"{tag}_full_manual", disabled=not on)
+                if on and cp_opts[f"{tag}_capping"]:
+                    n1, n2 = st.columns(2)
+                    with n1:
+                        cp_opts[f"{tag}_cap_min"] = st.number_input(
+                            "Min cap (decimal, e.g. -0.5)", key=f"cp_w_{tag}_cap_min", value=float(cp_opts[f"{tag}_cap_min"]),
+                            min_value=-1.0, max_value=10.0, step=0.05, format="%.3f")
+                    with n2:
+                        cp_opts[f"{tag}_cap_max"] = st.number_input(
+                            "Max cap (decimal, e.g. 0.5)", key=f"cp_w_{tag}_cap_max", value=float(cp_opts[f"{tag}_cap_max"]),
+                            min_value=-1.0, max_value=10.0, step=0.05, format="%.3f")
+        spacer(16)
+
+        L, R = st.columns([13, 7], gap="large")
+
+        # ── Ratebook upload & assignment ──────────────────────────────────────
+        with L:
+            st.markdown('<div class="sec-label">&#128194; &nbsp;Proposed Ratebooks</div>', unsafe_allow_html=True)
+            uploaded = st.file_uploader(
+                "Select all ratebook files at once — filenames should contain the company code (NGIC, NACO, MM, SM, Hex, …)",
+                type=["xlsx", "xlsm", "xls"],
+                accept_multiple_files=True,
+                key=f"cp_multi_up_{st.session_state.cp_upload_reset}",
+            )
+
+            # Filename detection (first match in CP_SLOTS order wins); files nothing matches
+            # are assigned by hand below.
+            unmatched = []
+            if uploaded:
+                grouped = {}
+                for f in uploaded:
+                    slot = st.session_state.cp_manual_assign.get(f.name) or next(
+                        (k for k, _, rx in CP_SLOTS if re.search(rx, f.name.upper())), None)
+                    if slot is None:
+                        unmatched.append(f)
+                    else:
+                        grouped.setdefault(slot, []).append(f)
+                new_files = {}
+                for slot, files in grouped.items():
+                    if len(files) == 1:
+                        new_files[slot] = {"name": files[0].name, "bytes": files[0].getvalue()}
+                    else:
+                        new_files[slot] = {"error": "multiple", "names": [f.name for f in files]}
+                st.session_state.cp_files = cp_files = new_files
+
+            if unmatched:
+                st.markdown('<p class="f-hint">&#9888; These files did not match a ratebook name — pick where each belongs:</p>', unsafe_allow_html=True)
+                for f in unmatched:
+                    uc1, uc2 = st.columns([3, 2])
+                    with uc1:
+                        st.markdown(f'<div style="font-size:12px;padding-top:8px;">{f.name}</div>', unsafe_allow_html=True)
+                    with uc2:
+                        pick = st.selectbox(f"Assign {f.name}", ["— choose —"] + CP_SLOT_KEYS,
+                                            format_func=lambda k: CP_SLOT_LABELS.get(k, k),
+                                            key=f"cp_assign_{f.name}", label_visibility="collapsed")
+                    if pick != "— choose —":
+                        st.session_state.cp_manual_assign[f.name] = pick; st.rerun()
+
+            # ── Assignment table ──────────────────────────────────────────────
+            sm_on, mm_on = cp_opts["sm_enabled"], cp_opts["mm_enabled"]
+            hex_needed = (sm_on and cp_opts["sm_territory"]) or (mm_on and cp_opts["mm_territory"])
+            BADGE = {
+                "NGIC":  "Any one" if sm_on else "", "SM": "Any one" if sm_on else "", "ATA": "Any one" if sm_on else "",
+                "MM":    "Required" if mm_on else "",
+                "HEX":   "Required" if hex_needed else "",
+            }
+            rows_html = ""; n_ok = n_err = 0
+            for key in CP_SLOT_KEYS:
+                val = cp_files.get(key)
+                label = CP_SLOT_LABELS[key]
+                if BADGE.get(key):
+                    bh = f'<span class="ab-req">{BADGE[key]}</span>'
+                else:
+                    bh = '<span class="ab-opt">Optional</span>'
+                if val is None:
+                    rows_html += f'<div class="arow arow-empty"><span class="aco">{label} {bh}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
+                elif "error" in val:
+                    n_err += 1
+                    rows_html += f'<div class="arow arow-error"><span class="aco">{label} {bh}</span><span class="afile afile-err">&#9888;&nbsp; Multiple files: {", ".join(val["names"])}</span><span class="astat astat-err">&#10005;</span></div>'
+                else:
+                    n_ok += 1
+                    rows_html += f'<div class="arow arow-ok"><span class="aco">{label} {bh}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+            summary = f'{n_ok} assigned' + (f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err>1 else ""}</span>' if n_err else '')
+            st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">The Countrywide ratebook is optional — the shared CP countrywide file is used when none is uploaded. '
+                        'Territory Coordinates is optional too; without it the state\'s Smoothed Relativities file is read from the network.</p>',
+                        unsafe_allow_html=True)
+
+            if cp_files or st.session_state.cp_manual_assign:
+                spacer(8)
+                _, clr = st.columns([5, 1])
+                with clr:
+                    if st.button("Clear all", type="secondary", key="cp_clear_btn"):
+                        st.session_state.cp_files = {}
+                        st.session_state.cp_manual_assign = {}
+                        st.session_state.cp_upload_reset += 1
+                        st.session_state.cp_run_status = "idle"
+                        st.rerun()
+
+        # ── Configuration / readiness / run ───────────────────────────────────
+        with R:
+            st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
+            cp_save_location("pages")
+            spacer(6)
+
+            def cp_valid(k):
+                v = cp_files.get(k)
+                return v is not None and "error" not in v
+
+            has_base = any(cp_valid(k) for k in ("NGIC", "SM", "ATA"))
+            n_markets = int(sm_on) + int(mm_on)
+            save_ok = bool(st.session_state.cp_save_dir)
+            conflicts = [CP_SLOT_LABELS[k] for k, v in cp_files.items() if "error" in v]
+            bad_caps = [t.upper() for t in ("sm", "mm")
+                        if cp_opts[f"{t}_enabled"] and cp_opts[f"{t}_capping"]
+                        and not cp_opts[f"{t}_cap_min"] < cp_opts[f"{t}_cap_max"]]
+
+            # (ok, title, subtitle, blocker text) — rows only for what the chosen markets need
+            checks = [(n_markets > 0, f'Market(s) Selected &nbsp;<span style="font-size:10px;color:#6B7A9E;font-weight:400;">{n_markets}/2</span>',
+                       ", ".join(n for n, on in (("Small Market", sm_on), ("Middle Market", mm_on)) if on) or "Not yet selected",
+                       "market selection")]
+            if sm_on:
+                checks.append((has_base, "Small Market ratebook", "Uploaded" if has_base else "Upload NGIC, Small Market or Applies to All", "NGIC / SM / ATA ratebook"))
+            if mm_on:
+                checks.append((cp_valid("MM"), "Middle Market ratebook", "Uploaded" if cp_valid("MM") else "Upload the MM ratebook", "MM ratebook"))
+            if hex_needed:
+                checks.append((cp_valid("HEX"), "Hex ratebook", "Uploaded" if cp_valid("HEX") else "Required for Territory Adjustment", "Hex ratebook"))
+            if bad_caps:
+                checks.append((False, "Capping range", f"{' / '.join(bad_caps)}: min must be below max", "capping range"))
+            if conflicts:
+                checks.append((False, "File conflicts", f"Multiple files for: {', '.join(conflicts)}", "file conflicts"))
+            sdv = st.session_state.cp_save_dir
+            checks.append((save_ok, "Save location", (("…"+sdv[-36:]) if len(sdv)>38 else sdv) if save_ok else "Not yet selected", "save location"))
+
+            st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rdy-card">' + "".join(cp_rdy(ok, t, s) for ok, t, s, _ in checks) + '</div>', unsafe_allow_html=True)
+            blockers = [b for ok, _, _, b in checks if not ok]
+            ready = not blockers
+
+            def cp_market_options(tag):
+                return MarketOptions(
+                    enabled=cp_opts[f"{tag}_enabled"], lcm=cp_opts[f"{tag}_lcm"], pmf=cp_opts[f"{tag}_pmf"],
+                    territory=cp_opts[f"{tag}_territory"], capping=cp_opts[f"{tag}_capping"],
+                    cap_min=cp_opts[f"{tag}_cap_min"], cap_max=cp_opts[f"{tag}_cap_max"],
+                    deductible=cp_opts[f"{tag}_deductible"], full_manual=cp_opts[f"{tag}_full_manual"],
+                    segmentation_removal=cp_opts.get(f"{tag}_segmentation_removal", False))
+
+            step = st.session_state.cp_confirm_step
+            if step == "idle":
+                if ready:
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button("Create Rate Pages", key="cp_run_btn", use_container_width=True):
+                        st.session_state.cp_confirm_step = "confirm"; st.session_state.cp_run_status = "idle"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                    st.button(f"Waiting — {', '.join(blockers)}", key="cp_run_btn_dis", use_container_width=True, disabled=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            elif step == "confirm":
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                st.button("Create Rate Pages", key="cp_run_btn_cfm", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="warn-box"><div class="wb-head"><span class="wb-icon">⚠️</span><span class="wb-title">Close &amp; save all open Excel files</span></div><p class="wb-body">The builder needs exclusive access to the workbooks. Please save and close any open <code>.xlsx</code> / <code>.xlsm</code> files before proceeding.</p></div>', unsafe_allow_html=True)
+                spacer(8)
+                bc1, bc2 = st.columns(2)
+                with bc1:
+                    if st.button("Cancel", key="cp_cancel_btn", use_container_width=True, type="secondary"):
+                        st.session_state.cp_confirm_step = "idle"; st.rerun()
+                with bc2:
+                    if st.button("Proceed", key="cp_proceed_btn", use_container_width=True, type="primary"):
+                        st.session_state.cp_confirm_step = "processing"; st.rerun()
+
+            elif step == "processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Processing Excel...", key="cp_run_btn_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph = st.empty()
+                def cp_progress(msg):
+                    loader_ph.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Creating Excel rate pages…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                cp_progress("Please wait while the workbooks are processed.")
+                from CP.CPRatePages import run as run_cp_rate_pages
+                try:
+                    def _cpb(k):
+                        f = cp_files.get(k)
+                        return f["bytes"] if f and "error" not in f else None
+                    st.session_state.cp_results = run_cp_rate_pages(
+                        folder_selected=st.session_state.cp_save_dir,
+                        small_market=cp_market_options("sm"), middle_market=cp_market_options("mm"),
+                        NGICRatebook=_cpb("NGIC"), NACORatebook=_cpb("NACO"), NAFFRatebook=_cpb("NAFF"),
+                        NICOFRatebook=_cpb("NICOF"), MMRatebook=_cpb("MM"), SMRatebook=_cpb("SM"),
+                        ATARatebook=_cpb("ATA"), HexRatebook=_cpb("HEX"), CWRatebook=_cpb("CW"),
+                        TerrCoordsRatebook=_cpb("COORDS"),
+                        progress_callback=cp_progress)
+                    st.session_state.cp_run_status = "success"; st.session_state.cp_pdf_status = "idle"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.cp_run_status = "error"; st.session_state.cp_run_msg = str(e)
+                st.session_state.cp_confirm_step = "idle"; st.rerun()
+
+            elif step == "pdf_processing":
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button("Generating PDF...", key="cp_pdf_btn_proc", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                loader_ph2 = st.empty()
+                def cp_pdf_progress(msg):
+                    loader_ph2.markdown(f'<div class="inline-loader"><div class="spin-ring"></div><div><div class="loader-label">Converting to PDF…</div><div class="loader-sub">{msg}</div></div></div>', unsafe_allow_html=True)
+                from CP.CPRatePages import generate_pdf_only as cp_generate_pdf_only
+                try:
+                    for res in st.session_state.cp_results:
+                        cp_pdf_progress(f"{Path(res['xlsx']).name}")
+                        cp_generate_pdf_only(res["xlsx"], res["pdf"], progress_callback=cp_pdf_progress)
+                    st.session_state.cp_pdf_status = "success"
+                except Exception as e:
+                    import traceback; traceback.print_exc()
+                    st.session_state.cp_pdf_status = "error"; st.session_state.cp_run_msg = str(e)
+                st.session_state.cp_confirm_step = "idle"; st.rerun()
+
+            if st.session_state.cp_run_status == "success":
+                spacer(10)
+                for res in st.session_state.cp_results:
+                    st.success(f"&#10003;  Excel created: {Path(res['xlsx']).name}")
+                if st.session_state.cp_pdf_status != "success":
+                    st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                    if st.button("Generate PDF Document" + ("s" if len(st.session_state.cp_results) > 1 else ""),
+                                 key="cp_gen_pdf_btn", use_container_width=True):
+                        st.session_state.cp_confirm_step = "pdf_processing"; st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    if st.session_state.cp_pdf_status == "error":
+                        st.error(f"PDF Error: {st.session_state.cp_run_msg}")
+                else:
+                    for res in st.session_state.cp_results:
+                        st.success(f"&#10003;  PDF created: {Path(res['pdf']).name}")
+            elif st.session_state.cp_run_status == "error":
+                spacer(10); st.error(st.session_state.cp_run_msg)
+
+            spacer(24)
+            st.markdown('<div style="padding-top:14px;border-top:1px solid var(--border);"><p style="font-size:10px;color:#8892A4;letter-spacing:0.8px;text-transform:uppercase;text-align:center;margin:0;line-height:1.9;">Nationwide Insurance &nbsp;&middot;&nbsp; CP Analytics Division<br>Internal Use Only</p></div>', unsafe_allow_html=True)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # HEX VALIDATION MODE
+    # ══════════════════════════════════════════════════════════════════════════
+    else:
+        hex_files = st.session_state.cp_hex_files
+        L, R = st.columns([13, 7], gap="large")
+
+        with L:
+            st.markdown('<div class="sec-label">&#128194; &nbsp;Files to Compare</div>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Compares the Territory sheet factors (BGI / BGII / SCOL) of the rate pages against the Hexbook. '
+                        'Upload the Hexbook and at least one of the SM / MM Excel rate page files.</p>', unsafe_allow_html=True)
+            spacer(4)
+            for slot, label in (("HEX", "Select the Hexbook"), ("SM", "Select the SM Excel rate page file"), ("MM", "Select the MM Excel rate page file")):
+                up = st.file_uploader(label, type=["xlsx", "xlsm", "xls"], accept_multiple_files=False,
+                                      key=f"cp_hex_up_{slot}_{st.session_state.cp_hex_reset}")
+                if up:
+                    hex_files[slot] = {"name": up.name, "bytes": up.getvalue()}
+                spacer(4)
+
+            rows_html = ""; n_ok = 0
+            for slot, label, req in (("HEX", "Hexbook", True), ("SM", "SM Rate Pages", False), ("MM", "MM Rate Pages", False)):
+                val = hex_files.get(slot)
+                bh = '<span class="ab-req">Required</span>' if req else '<span class="ab-opt">One of SM / MM</span>'
+                if val is None:
+                    rows_html += f'<div class="arow arow-empty"><span class="aco">{label} {bh}</span><span class="afile">Not uploaded</span><span class="astat astat-empty">—</span></div>'
+                else:
+                    n_ok += 1
+                    rows_html += f'<div class="arow arow-ok"><span class="aco">{label} {bh}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
+            st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{n_ok} assigned</span></div>{rows_html}</div>', unsafe_allow_html=True)
+
+            if hex_files:
+                spacer(8)
+                _, clr = st.columns([5, 1])
+                with clr:
+                    if st.button("Clear all", type="secondary", key="cp_hex_clear_btn"):
+                        st.session_state.cp_hex_files = {}
+                        st.session_state.cp_hex_reset += 1
+                        st.session_state.cp_hex_status = "idle"
+                        st.rerun()
+
+        with R:
+            st.markdown('<div class="sec-label">&#9881; &nbsp;Configuration</div>', unsafe_allow_html=True)
+            cp_save_location("hex")
+            spacer(6)
+            hex_ok = "HEX" in hex_files and ("SM" in hex_files or "MM" in hex_files)
+            save_ok = bool(st.session_state.cp_save_dir)
+            sdv = st.session_state.cp_save_dir
+            st.markdown('<div class="sec-label">&#128203; &nbsp;Readiness</div>', unsafe_allow_html=True)
+            st.markdown('<div class="rdy-card">'
+                + cp_rdy("HEX" in hex_files, "Hexbook", "Uploaded" if "HEX" in hex_files else "Required")
+                + cp_rdy("SM" in hex_files or "MM" in hex_files, "SM and/or MM rate pages", "Uploaded" if ("SM" in hex_files or "MM" in hex_files) else "Upload at least one")
+                + cp_rdy(save_ok, "Save location", (("…"+sdv[-36:]) if len(sdv)>38 else sdv) if save_ok else "Not yet selected")
+                + '</div>', unsafe_allow_html=True)
+
+            if hex_ok and save_ok:
+                st.markdown('<div class="btn-ready">', unsafe_allow_html=True)
+                run_hex = st.button("Create Validation File", key="cp_hex_run_btn", use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+                if run_hex:
+                    from CP.CPHexValidate import validate as cp_validate_hex
+                    try:
+                        with st.spinner("Comparing factors…"):
+                            st.session_state.cp_hex_result = cp_validate_hex(
+                                hex_files["HEX"]["bytes"],
+                                sm_pages=hex_files["SM"]["bytes"] if "SM" in hex_files else None,
+                                mm_pages=hex_files["MM"]["bytes"] if "MM" in hex_files else None,
+                                folder=st.session_state.cp_save_dir)
+                        st.session_state.cp_hex_status = "success"
+                    except Exception as e:
+                        import traceback; traceback.print_exc()
+                        st.session_state.cp_hex_status = "error"; st.session_state.cp_hex_msg = str(e)
+                    st.rerun()
+            else:
+                missing = (["Hexbook"] if "HEX" not in hex_files else []) \
+                        + (["SM / MM rate pages"] if not ("SM" in hex_files or "MM" in hex_files) else []) \
+                        + (["save location"] if not save_ok else [])
+                st.markdown('<div class="btn-wait">', unsafe_allow_html=True)
+                st.button(f"Waiting — {', '.join(missing)}", key="cp_hex_run_btn_dis", use_container_width=True, disabled=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            if st.session_state.cp_hex_status == "success" and st.session_state.cp_hex_result:
+                res = st.session_state.cp_hex_result
+                spacer(10)
+                st.success(f"&#10003;  Validation file created: {Path(res['path']).name}")
+                rows_html = ""
+                for sheet, n_diff in res["counts"].items():
+                    if n_diff == 0:
+                        rows_html += f'<div class="arow arow-ok"><span class="aco">{sheet}</span><span class="afile afile-assigned">No differences</span><span class="astat astat-ok">&#10003;</span></div>'
+                    else:
+                        rows_html += f'<div class="arow arow-error"><span class="aco">{sheet}</span><span class="afile afile-err">{n_diff:,} territor{"y" if n_diff == 1 else "ies"} differ</span><span class="astat astat-err">&#9888;</span></div>'
+                st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>{res["state"]} &middot; Result</span><span>{len(res["counts"])} comparison{"s" if len(res["counts"]) > 1 else ""}</span></div>{rows_html}</div>', unsafe_allow_html=True)
+                spacer(8)
+                st.download_button("Download validation file (.xlsx)", data=res["bytes"],
+                                   file_name=Path(res["path"]).name, key="cp_hex_download_btn", use_container_width=True)
+            elif st.session_state.cp_hex_status == "error":
+                spacer(10); st.error(st.session_state.cp_hex_msg)
 
 
 # ─── OTHER LOBs ───────────────────────────────────────────────────────────────

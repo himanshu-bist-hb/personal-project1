@@ -193,3 +193,48 @@ BOP_EQ_TERRITORY_DEFS_DIR = Path(
     r"\\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\BOP\Territory Defs"
     r"\4 Territory Defs (By Peril Grid)"
 )
+
+
+# ===========================================================================
+#  CP (COMMERCIAL PROPERTY)
+# ===========================================================================
+
+# Used automatically when the user doesn't upload their own CW ratebook, same
+# pattern as BA's CW_RATEBOOK_DEFAULT.
+CP_CW_RATEBOOK_DEFAULT = Path(
+    r"\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\Jiang\Rate Page Template"
+    r"\CP CW RB 2025.xlsx"
+)
+
+# One "<ST> Smoothed Relativities.xlsx" per state (Sheet1: Grid ID / Longitude /
+# Latitude) — joined to the Hex ratebook factors for the Territory sheet.
+CP_TERRITORY_COORDS_DIR = Path(
+    r"\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\Property"
+    r"\Territory Defs (Independent)\3.0\Development\R Shiny Interface"
+    r"\RShiny Smoothed Relativities"
+)
+
+# Tiering / LEAF / Age-of-Building pages for the Middle Market "Segmentation
+# Removal" option.
+CP_SEGMENTATION_REMOVAL_FILE = Path(
+    r"\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\Jiang"
+    r"\Segmentation Removal Pages\Segmentation Removal Rate Pages.xlsx"
+)
+
+# CP upload slots, in filename-detection order (most-specific-first, first
+# match wins). (key, label, regex matched against the upper-cased filename).
+# Short codes (SM / MM / ATA / CW) need a delimiter on both sides — a plain
+# substring check would match "COMMERCIAL", "SMALL" etc.
+_CP_DELIM = r"(?:^|[ +\-_])%s(?:[ +\-_.]|$)"
+CP_SLOTS: list[tuple[str, str, str]] = [
+    ("COORDS", "Territory Coordinates",  r"SMOOTH|RELATIVIT|COORD"),
+    ("HEX",   "Hex / Territory",         r"HEX|TERR"),
+    ("ATA",   "Applies to All",          r"APPLIES|" + _CP_DELIM % "ATA"),
+    ("CW",    "Countrywide",             r"COUNTRYWIDE|" + _CP_DELIM % "CW"),
+    ("NICOF", "NICOF",                   r"NICOF"),
+    ("NAFF",  "NAFF",                    r"NAFF"),
+    ("NACO",  "NACO",                    r"NACO"),
+    ("NGIC",  "NGIC",                    r"NGIC"),
+    ("SM",    "Small Market",            r"SMALL|" + _CP_DELIM % "SM"),
+    ("MM",    "Middle Market",           r"MIDDLE|" + _CP_DELIM % "MM"),
+]

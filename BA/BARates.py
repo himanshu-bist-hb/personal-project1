@@ -684,10 +684,17 @@ class Auto:
 
                         # Apply the group selection: find the column containing this group's value, filter, drop that column,
                         # and rename the last column to the group label (unchanged behavior).
+                        # Case-insensitive match (input file casing can differ from the ratebook,
+                        # e.g. VA "Specified Causes of Loss" vs ratebook "Specified Causes Of Loss").
+                        group_key = str(group).strip().lower()
                         for column in table.columns:
-                            if group in table[column].to_list():
-                                table = table[table[column] == group]
+                            col_vals = table[column].to_list()
+                            if group in col_vals or any(isinstance(v, str) and v.strip().lower() == group_key for v in col_vals):
+                                table = table[table[column].apply(lambda v: isinstance(v, str) and v.strip().lower() == group_key) | (table[column] == group)]
                                 table = table.drop(columns=[column])
+                                # Normalize the two OTC group labels so later renaming matches
+                                if group_key == "specified causes of loss":
+                                    group = "Specified Causes Of Loss"
                                 table.rename(columns={table.columns[-1]: group}, inplace=True)
                                 break  # stop after the first match for this group value
 

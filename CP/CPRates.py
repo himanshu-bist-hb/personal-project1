@@ -33,8 +33,9 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.pagebreak import Break
 
 from config.constants import (
-    CP_SEGMENTATION_REMOVAL_FILE,
-    CP_TERRITORY_COORDS_DIR,
+    CP_NETWORK_ROOTS,
+    CP_SEGMENTATION_REMOVAL_REL,
+    CP_TERRITORY_COORDS_REL,
     STATE_ABBREVIATIONS,
 )
 
@@ -96,27 +97,35 @@ class _RBSheets:
         self.sheetnames = [name for rb in rbs for name in rb.sheet_names]
 
 
+def network_candidates(rel: str):
+    """Every location a network file might live at (mapped drive first, then UNC)."""
+    return [root / rel for root in CP_NETWORK_ROOTS]
+
+
+def resolve_network_file(rel: str):
+    """First candidate that exists, else None."""
+    return next((p for p in network_candidates(rel) if p.exists()), None)
+
+
+def _open_network_excel(rel: str, what: str, hint: str = ""):
+    path = resolve_network_file(rel)
+    if path is None:
+        tried = "\n".join(f"  - {p}" for p in network_candidates(rel))
+        raise FileNotFoundError(f"{what} not reachable. Tried:\n{tried}\n{hint}".rstrip())
+    return pd.ExcelFile(str(path))
+
+
 def _open_territory_coords(uploaded, state_abb):
     """Grid ID / Longitude / Latitude workbook: the uploaded copy, else the network file."""
     if uploaded is not None and not isinstance(uploaded, str):
         return uploaded
-    path = CP_TERRITORY_COORDS_DIR / f"{state_abb} Smoothed Relativities.xlsx"
-    try:
-        return pd.ExcelFile(str(path))
-    except Exception as exc:
-        raise FileNotFoundError(
-            f"Territory coordinates file not reachable: {path}\n"
-            "Upload it in the 'Territory Coordinates' slot, or reconnect the network drive."
-        ) from exc
+    return _open_network_excel(f"{CP_TERRITORY_COORDS_REL}\{state_abb} Smoothed Relativities.xlsx",
+                               f"Territory coordinates file for {state_abb}",
+                               "Upload it in the 'Territory Coordinates' slot, or connect the network drive.")
 
 
 def _open_segmentation_removal():
-    try:
-        return pd.ExcelFile(str(CP_SEGMENTATION_REMOVAL_FILE))
-    except Exception as exc:
-        raise FileNotFoundError(
-            f"Segmentation Removal workbook not reachable: {CP_SEGMENTATION_REMOVAL_FILE}"
-        ) from exc
+    return _open_network_excel(CP_SEGMENTATION_REMOVAL_REL, "Segmentation Removal workbook")
 
 
 # ==============================================================================

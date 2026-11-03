@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 import pandas as pd
 
 from BA.BApagebreaks import _sanitize_xlsx, export_to_pdf
-from config.constants import CP_CW_RATEBOOK_DEFAULT
+from config.constants import CP_CW_RATEBOOK_REL
 from . import CPRates
 from .CPRates import MarketOptions, NOT_FOUND
 
@@ -114,9 +114,17 @@ def run(
     state, state_abb, effective = info
 
     say("Opening Countrywide ratebook...")
-    cw = load_ratebook(CWRatebook if CWRatebook else str(CP_CW_RATEBOOK_DEFAULT))
-    if cw == NOT_FOUND:
-        raise ValueError(f"CW ratebook could not be loaded: {CP_CW_RATEBOOK_DEFAULT}")
+    if CWRatebook:
+        cw = load_ratebook(CWRatebook)
+        if cw == NOT_FOUND:
+            raise ValueError("The uploaded Countrywide ratebook could not be opened.")
+    else:
+        cw_path = CPRates.resolve_network_file(CP_CW_RATEBOOK_REL)
+        if cw_path is None:
+            tried = "\n".join(f"  - {p}" for p in CPRates.network_candidates(CP_CW_RATEBOOK_REL))
+            raise ValueError("No Countrywide ratebook uploaded and the default CP countrywide file is not reachable. "
+                             f"Upload one, or connect the network drive. Tried:\n{tried}")
+        cw = load_ratebook(str(cw_path))
     coords = load_ratebook(TerrCoordsRatebook)
 
     books = CPRates.build_workbooks(

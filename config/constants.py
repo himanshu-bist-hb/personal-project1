@@ -199,27 +199,25 @@ BOP_EQ_TERRITORY_DEFS_DIR = Path(
 #  CP (COMMERCIAL PROPERTY)
 # ===========================================================================
 
-# Used automatically when the user doesn't upload their own CW ratebook, same
-# pattern as BA's CW_RATEBOOK_DEFAULT.
-CP_CW_RATEBOOK_DEFAULT = Path(
-    r"\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\Jiang\Rate Page Template"
-    r"\CP CW RB 2025.xlsx"
-)
+# CP network files, relative to the Actshare root. The root is tried as the mapped
+# drive first (what BA / BOP use) and then as the UNC path of the same share —
+# whichever the machine can actually reach wins (see CP/CPRates.resolve_network_file).
+CP_NETWORK_ROOTS = [
+    Path(r"M:\Actshare"),
+    Path(r"\\Urbdat01.allied.nwie.net\Actuary\Actshare"),
+]
+
+# Used automatically when the user doesn't upload their own CW ratebook.
+CP_CW_RATEBOOK_REL = r"Com\Jiang\Rate Page Template\CP CW RB 2025.xlsx"
 
 # One "<ST> Smoothed Relativities.xlsx" per state (Sheet1: Grid ID / Longitude /
 # Latitude) — joined to the Hex ratebook factors for the Territory sheet.
-CP_TERRITORY_COORDS_DIR = Path(
-    r"\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\Property"
-    r"\Territory Defs (Independent)\3.0\Development\R Shiny Interface"
-    r"\RShiny Smoothed Relativities"
-)
+CP_TERRITORY_COORDS_REL = (r"Com\Property\Territory Defs (Independent)\3.0\Development"
+                           r"\R Shiny Interface\RShiny Smoothed Relativities")
 
 # Tiering / LEAF / Age-of-Building pages for the Middle Market "Segmentation
 # Removal" option.
-CP_SEGMENTATION_REMOVAL_FILE = Path(
-    r"\Urbdat01.allied.nwie.net\Actuary\Actshare\Com\Jiang"
-    r"\Segmentation Removal Pages\Segmentation Removal Rate Pages.xlsx"
-)
+CP_SEGMENTATION_REMOVAL_REL = r"Com\Jiang\Segmentation Removal Pages\Segmentation Removal Rate Pages.xlsx"
 
 # CP upload slots, in filename-detection order (most-specific-first, first
 # match wins). (key, label, regex matched against the upper-cased filename).

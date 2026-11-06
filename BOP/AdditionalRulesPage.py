@@ -275,6 +275,13 @@ class AdditionalRules:
 
     def formatWHExclusion(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(125)
+        # Factors always show 3 decimals (0.600, not 0.6). Data cells share
+        # StyleArrays, so each gets a private copy before restyling.
+        for row in range(4, ws.max_row + 1):
+            for col in ('B', 'C'):
+                cell = ws[f'{col}{row}']
+                cell._style = copy(cell._style)
+                cell.number_format = '0.000'
 
     def formatLiabilityHazards(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(190)
@@ -397,6 +404,16 @@ class AdditionalRules:
     # Which sheets get built is genuinely state-specific business logic
     # (each state files its own Additional Rules tables) — not duplication,
     # so it stays as one per-state sheetSpecs list.
+    # AR Table A.3 (Windstorm or Hail Exclusion) is filed in these 12 states.
+    # MD and AL have always had it as part of their own state-specific sheet
+    # lists above; the rest fall through to the default branch below and get
+    # it appended after Rate Capping + Distribution Factor.
+    WH_EXCLUSION_STATES = frozenset({'AL', 'CT', 'DC', 'DE', 'FL', 'GA', 'MD', 'MS', 'NC', 'SC', 'TX', 'VA'})
+    WH_EXCLUSION_DEFAULT_BRANCH_STATES = WH_EXCLUSION_STATES - {'MD', 'AL'}
+
+    def _whExclusionSpec(self):
+        return ('WHE', 'AR Table A.3. Windstorm or Hail Exclusion (Coverages Not Included in By-peril Rating)', self.buildWHExclusion, False, True, None, self.formatWHExclusion)
+
     def _sheetSpecs(self):
         if self.state == "MD":
             return [
@@ -432,6 +449,8 @@ class AdditionalRules:
             ('RC', 'AR Table 98.C. Rate Capping', self.buildRateCappingFactors, False, True, None, self.formatRateCappingFactors),
             ('DF', 'AR - 2 Distribution Factor', self.buildDistributionFactors, False, True, None, self.formatDistributionFactors),
         ]
+        if self.state in self.WH_EXCLUSION_DEFAULT_BRANCH_STATES:
+            specs.append(self._whExclusionSpec())
         if self.state == "FL":  # Sinkhole Loss page is filed in Florida only
             specs.append(('SH', 'AR-2 Table A.2. Sinkhole Loss Coverage and Catastrophic Ground Cover Collapse', self.buildSinkholeLoss, False, True, None, self.formatSinkholeLoss))
         return specs

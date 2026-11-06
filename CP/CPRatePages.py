@@ -18,7 +18,6 @@ from typing import Any, Callable, Dict, List, Optional
 import pandas as pd
 
 from BA.BApagebreaks import _sanitize_xlsx, export_to_pdf
-from config.constants import CP_CW_RATEBOOK_REL
 from . import CPRates
 from .CPRates import MarketOptions, NOT_FOUND
 
@@ -113,18 +112,23 @@ def run(
     info = CPRates.get_rate_book_info(ratebooks)
     state, state_abb, effective = info
 
-    say("Opening Countrywide ratebook...")
     if CWRatebook:
+        say("Opening uploaded Countrywide ratebook...")
         cw = load_ratebook(CWRatebook)
         if cw == NOT_FOUND:
             raise ValueError("The uploaded Countrywide ratebook could not be opened.")
     else:
-        cw_path = CPRates.resolve_network_file(CP_CW_RATEBOOK_REL)
-        if cw_path is None:
-            tried = "\n".join(f"  - {p}" for p in CPRates.network_candidates(CP_CW_RATEBOOK_REL))
-            raise ValueError("No Countrywide ratebook uploaded and the default CP countrywide file is not reachable. "
-                             f"Upload one, or connect the network drive. Tried:\n{tried}")
+        # No upload: pick the official CW ratebook that serves this state.
+        try:
+            cw_path = CPRates.resolve_cw_ratebook(state_abb)
+        except (FileNotFoundError, ValueError) as exc:
+            raise ValueError(f"No Countrywide ratebook uploaded and the state's default could not be selected. "
+                             f"Upload one manually, or fix this: {exc}") from exc
+        say(f"Opening Countrywide ratebook for {state_abb}: {cw_path.name}")
         cw = load_ratebook(str(cw_path))
+        if cw == NOT_FOUND:
+            raise ValueError(f"The Countrywide ratebook could not be opened: {cw_path}")
+        logger.info("CW ratebook for %s: %s", state_abb, cw_path)
 
     books = CPRates.build_workbooks(
         ratebooks, cw, info, sm, mm,

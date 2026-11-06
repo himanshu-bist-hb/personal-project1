@@ -18,6 +18,8 @@
 
 import logging
 import math
+from pathlib import Path
+import re
 from copy import copy
 import warnings
 from dataclasses import dataclass
@@ -34,6 +36,9 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.pagebreak import Break
 
 from config.constants import (
+    CP_CW_RATEBOOK_DIR_REL,
+    CP_CW_VERSION_DEFAULT,
+    CP_CW_VERSION_STATES,
     CP_NETWORK_ROOTS,
     CP_SEGMENTATION_REMOVAL_REL,
     CP_TERRITORY_COORDS_REL,
@@ -115,6 +120,49 @@ def _open_network_excel(rel: str, what: str, hint: str = ""):
         raise FileNotFoundError(f"{what} not reachable. Tried:\n{tried}\n{hint}".rstrip())
     return pd.ExcelFile(str(path))
 
+
+
+def cw_version_for_state(state_abb: str) -> str:
+    """The CW ratebook version (MMDDYYYY) that serves this state."""
+    st = (state_abb or "").strip().upper()
+    for version, states in CP_CW_VERSION_STATES.items():
+        if st in states:
+            return version
+    return CP_CW_VERSION_DEFAULT
+
+
+def _cw_file_version(path: Path):
+    """Version token of a CW ratebook file: the last 8-digit group in its name, else None."""
+    groups = re.findall(r"(?<!\d)(\d{8})(?!\d)", path.stem)
+    return groups[-1] if groups else None
+
+
+def resolve_cw_ratebook(state_abb: str) -> Path:
+    """
+    Path of the state's Countrywide ratebook in the official CW Ratebooks folder.
+
+    Raises FileNotFoundError (with the folders tried) if the folder is unreachable or has no
+    matching file, and ValueError if it is ambiguous -- never guesses a different version,
+    since a wrong CW ratebook would silently produce wrong rates.
+    """
+    version = cw_version_for_state(state_abb)
+    folders = [root / CP_CW_RATEBOOK_DIR_REL for root in CP_NETWORK_ROOTS]
+    reachable = [d for d in folders if d.is_dir()]
+    if not reachable:
+        tried = "\n".join(f"  - {d}" for d in folders)
+        raise FileNotFoundError(f"The CP Countrywide ratebook folder is not reachable. Tried:\n{tried}")
+    for folder in reachable:
+        matches = [p for p in folder.glob("*.xlsx")
+                   if not p.name.startswith("~$") and _cw_file_version(p) == version]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            names = ", ".join(sorted(p.name for p in matches))
+            raise ValueError(f"More than one CP Countrywide ratebook ends in {version} in {folder} ({names}). "
+                             "Remove the extra file or upload the Countrywide ratebook manually.")
+    raise FileNotFoundError(
+        f"No CP Countrywide ratebook ending in {version} (needed for {state_abb}) found in "
+        + " or ".join(str(d) for d in reachable))
 
 
 def _open_segmentation_removal():

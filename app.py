@@ -3106,7 +3106,7 @@ elif active_lob == "Commercial Property":
                     rows_html += f'<div class="arow arow-ok"><span class="aco">{label} {bh}</span><span class="afile afile-assigned">{val["name"]}</span><span class="astat astat-ok">&#10003;</span></div>'
             summary = f'{n_ok} assigned' + (f' &nbsp;&middot;&nbsp; <span style="color:#C8102E;font-weight:700;">{n_err} conflict{"s" if n_err>1 else ""}</span>' if n_err else '')
             st.markdown(f'<div class="assign-wrap"><div class="assign-hdr"><span>File Assignment</span><span>{summary}</span></div>{rows_html}</div>', unsafe_allow_html=True)
-            st.markdown('<p class="f-hint">Without a Countrywide upload the shared CP countrywide file is used.</p>', unsafe_allow_html=True)
+            st.markdown('<p class="f-hint">Without a Countrywide upload, the official CW ratebook for the state is picked automatically (VT/KY, UT/MI/DE/TN/AL, NY and all other states each have their own).</p>', unsafe_allow_html=True)
 
             if cp_active or cp_terr or st.session_state.cp_manual_assign:
                 spacer(8)

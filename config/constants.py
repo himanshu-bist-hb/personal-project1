@@ -208,7 +208,18 @@ CP_NETWORK_ROOTS = [
 ]
 
 # Used automatically when the user doesn't upload their own CW ratebook.
-CP_CW_RATEBOOK_REL = r"Com\Jiang\Rate Page Template\CP CW RB 2025.xlsx"
+# The CW ratebook differs by state. The folder holds one workbook per version, named
+# like "CP7 - CW - 12012026 - 02012019.xlsx"; the LAST 8-digit group (MMDDYYYY) is the
+# version that decides which states it serves (per the CLT team):
+#   02012019 -> VT, KY          12012020 -> UT, MI, DE, TN, AL
+#   04012018 -> NY              12012019 -> every other state
+CP_CW_RATEBOOK_DIR_REL = r"Com\Property\Projects\CLT\CLT Rate Books\Official Ratebooks\CW Ratebooks"
+CP_CW_VERSION_STATES = {
+    "02012019": ("VT", "KY"),
+    "12012020": ("UT", "MI", "DE", "TN", "AL"),
+    "04012018": ("NY",),
+}
+CP_CW_VERSION_DEFAULT = "12012019"   # all states not listed above
 
 # Grid longitude/latitude for the Territory sheet; "{st}" is the state abbreviation.
 CP_TERRITORY_COORDS_REL = (r"Com\Property\Territory Defs (Independent).0\Development"

@@ -1208,6 +1208,32 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     else:
         ExpConstDF = pd.read_excel(CWRatebook, sheet_name='ExpenseConstant_Ext', skiprows=11)
 
+    # Lifetime Expense Allocation Factor (LEAF): 'Retention Grade Factor_Ext', grades A-F only.
+    # Looked up SM -> state -> NGIC, else the countrywide ratebook (per the CLT team).
+    LeafSM = None
+    if sm.enabled and sm.full_manual:
+        _step('Reading Lifetime Expense Allocation Factor')
+        _leaf_sheet = 'Retention Grade Factor_Ext'
+        _leaf_src = None
+        if _leaf_sheet in NGICwb.sheetnames:
+            _leaf_src = _rb_for(_leaf_sheet)
+        elif not isinstance(CWRatebook, str) and _leaf_sheet in CWRatebook.sheet_names:
+            _leaf_src = CWRatebook
+        if _leaf_src is None:
+            logger.warning("'%s' not found in the state or countrywide ratebook; LEAF sheet skipped.", _leaf_sheet)
+        else:
+            _raw = pd.read_excel(_leaf_src, sheet_name=_leaf_sheet, skiprows=11)
+            _raw.columns = [str(c).strip() for c in _raw.columns]
+            _leaf = _raw[['Retention Grade', 'Factor']].dropna(subset=['Retention Grade']).copy()
+            _leaf['Retention Grade'] = _leaf['Retention Grade'].astype(str).str.strip().str.upper()
+            _leaf = _leaf[_leaf['Retention Grade'].isin(list("ABCDEF"))]
+            _leaf = _leaf.drop_duplicates(subset='Retention Grade').sort_values('Retention Grade')
+            _leaf['Factor'] = pd.to_numeric(_leaf['Factor'], errors='coerce').map(lambda v: round_half_up(v, 3))
+            _leaf = _leaf.rename(columns={'Retention Grade': 'Lifetime Expense Allocation Grade'})
+            LeafSM = _leaf.reset_index(drop=True) if len(_leaf) else None
+            if LeafSM is None:
+                logger.warning("'%s' has no grade A-F rows; LEAF sheet skipped.", _leaf_sheet)
+
     ExpConstDF.iloc[0, 0] = "All Policies"
     ExpConstDF['Premium'] = '$' + ExpConstDF['Premium'].astype(str)
 
@@ -3074,6 +3100,13 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, TieringSCOLSM.max_column + 1):
                 cell = TieringSCOLSM[get_column_letter(col) + str(row)]
                 cell.number_format = rateFormat
+
+        if LeafSM is not None:
+            LeafWS = wb.create_sheet(title='LEAF')
+            formatwkstSM(wkstname=LeafWS, titlerows='3', A1title='LIFETIME EXPENSE ALLOCATION FACTOR', A2title='', dfname=LeafSM, statename=State, stabb=StateAbb, effdate=EffectiveDate)
+            borderfnct(LeafWS)
+            for row in range(4, LeafWS.max_row + 1):
+                LeafWS['B' + str(row)].number_format = '0.000'
 
         EmergencySM = wb.create_sheet(title='Emergency Evacuation')
         formatwkstSM(wkstname=EmergencySM, titlerows='3', A1title='EMERGENCY EVACUATION INCLUDING CIVIL AUTHORITY COVERAGE', A2title='', dfname=EmergencyDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)

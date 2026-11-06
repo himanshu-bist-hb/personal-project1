@@ -134,9 +134,9 @@ class Retail:
         filteredConstructionType = constructionType.query(f'Class_Code_Min == {self.retailProgramCode} & `Peril TypeCode` in {self.perils}').replace({'Peril TypeCode': self.perilsConversions}). \
                 rename(columns={'ConstructionClassDisplay Name': 'Construction'})
         if coverage.casefold() == 'building':
-            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction')
+            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BldgConstructionClassFactor').reset_index('Construction').drop(columns=['L-Products'], errors='ignore')
         elif coverage.casefold() == 'bpp':
-            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction')
+            return filteredConstructionType.pivot(index='Construction', columns='Peril TypeCode', values='BPPConstructionClassFactor').reset_index('Construction').drop(columns=['L-Products'], errors='ignore')
 
     # Builds the exclude theft options table
     # Returns a dataframe
@@ -144,6 +144,7 @@ class Retail:
         theftOptions = self.buildDataFrame("BP7_Peril_BPP_Theft_Options_Factor")
         filteredTheftOptions = theftOptions.query(f'Class_Code_Min == {self.retailProgramCode} & `Peril TypeCode` in {self.perils} & `Theft Option` != "Full Theft"'). \
                 replace({'Peril TypeCode': self.perilsConversions})
+        filteredTheftOptions = filteredTheftOptions.drop(filteredTheftOptions[filteredTheftOptions['Peril TypeCode'].isin(['L-Products'])].index)
         return filteredTheftOptions.pivot(index='Peril TypeCode', columns='Theft Option', values='BPP Theft Options Factor').reset_index('Peril TypeCode'). \
                 rename(columns={'Peril TypeCode': 'Peril', 'Excluded Theft': 'Excluded', 'Limited Theft': 'Limited'})
 
@@ -161,9 +162,9 @@ class Retail:
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + '+',
                                                                  filteredYearBuiltModifier['Year_Built_Min'] + ' - ' + filteredYearBuiltModifier['Year_Built_Max'])
         if coverage.casefold() == 'building':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='Bldg_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products'], errors='ignore')
         elif coverage.casefold() == 'bpp':
-            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range')
+            return filteredYearBuiltModifier.pivot(index='Year Built Range', columns='Peril TypeCode', values='BPP_Year_Built_Factor').reset_index('Year Built Range').drop(columns=['L-Products'], errors='ignore')
 
     # Builds the equipment breakdown base rate table
     # Returns a dataframe
@@ -366,9 +367,12 @@ class Retail:
     # Returns a dataframe
     def buildPSProfLiab(self):
         psProfLiab = self.buildDataFrame("BP7_PetServicesProfessionalLiability").copy()
-        psProfLiab['Limits'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
-        psProfLiab = psProfLiab.sort_values(by='Limits').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
-        psProfLiab['Limits'] = psProfLiab['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        # Limit code is "occurrence/aggregate" (e.g. 300000/900000); show both
+        # halves as dollar amounts ("$300,000 / $900,000"), sorted by occurrence.
+        psProfLiab['Occurrence'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
+        psProfLiab['Aggregate'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[1].astype('int64')
+        psProfLiab = psProfLiab.sort_values(by='Occurrence').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
+        psProfLiab['Limits'] = psProfLiab.apply(lambda r: "${0:,.0f} / ${1:,.0f}".format(r['Occurrence'], r['Aggregate']), axis=1)
         psProfLiab['Rate'] = psProfLiab['Rate'].apply(lambda x: "${0:,.0f}".format(x))
         return psProfLiab.filter(items=['Limits', 'Rate'])
 
@@ -531,7 +535,7 @@ class Retail:
             ('PSS', 'R Table 4.E. Pet Services Specialized Endorsement', self.buildPSSplzdEndo, False, True, None,
              lambda ws: self._formatPSSplzdEndo(ws, Retail.fontBold, Retail.font, self.buildPSMobileEquipment(),
                                                  self.buildPSBusinessIncomeVehicle(), self.buildPSBusinessIncomeWorker())),
-            ('PSPL', 'R Table 4.F. Pet Services Professional Liability', self.buildPSProfLiab, False, True, 'PED', None),
+            ('PSPL', 'R Table 4.F. Pet Services Professional Liability', self.buildPSProfLiab, False, True, 'PSPL_RETAIL', None),
         ]
         return sheetSpecs
 

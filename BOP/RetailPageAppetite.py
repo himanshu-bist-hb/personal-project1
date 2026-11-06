@@ -129,9 +129,12 @@ class _RetailAppetiteMixin:
     # from RetailPage.Retail.buildPSProfLiab (BP-2.0).
     def buildPSProfLiab(self):
         psProfLiab = self.buildDataFrame("BP7_PetServicesProfessionalLiability").copy()
-        psProfLiab['Limits'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
-        psProfLiab = psProfLiab.sort_values(by='Limits').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
-        psProfLiab['Limits'] = psProfLiab['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        # Limit code is "occurrence/aggregate" (e.g. 300000/900000); show both
+        # halves as dollar amounts ("$300,000 / $900,000"), sorted by occurrence.
+        psProfLiab['Occurrence'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
+        psProfLiab['Aggregate'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[1].astype('int64')
+        psProfLiab = psProfLiab.sort_values(by='Occurrence').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
+        psProfLiab['Limits'] = psProfLiab.apply(lambda r: "${0:,.0f} / ${1:,.0f}".format(r['Occurrence'], r['Aggregate']), axis=1)
         psProfLiab['Rate'] = psProfLiab['Rate'].apply(lambda x: "${0:,.0f}".format(x))
         return psProfLiab.filter(items=['Limits', 'Rate'])
 
@@ -154,7 +157,7 @@ class _RetailAppetiteMixin:
         codes = {spec[0] for spec in sheetSpecs}
         if 'PSPL' not in codes:
             insertAt = next((i for i, spec in enumerate(sheetSpecs) if spec[0] == 'PSS'), len(sheetSpecs) - 1) + 1
-            sheetSpecs.insert(insertAt, ('PSPL', 'R Table 4.F. Pet Services Professional Liability', self.buildPSProfLiab, False, True, 'PED', None))
+            sheetSpecs.insert(insertAt, ('PSPL', 'R Table 4.F. Pet Services Professional Liability', self.buildPSProfLiab, False, True, 'PSPL_RETAIL', None))
 
         return sheetSpecs
 

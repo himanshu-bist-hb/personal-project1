@@ -141,7 +141,10 @@ class RatingPlans:
     # One Peril/Grade/Factor block for the given grade band, tagged with the
     # given program label. Called once per program band by buildTieringFactor.
     def _buildTieringBlock(self, grades, programLabel):
-        block = self.buildDataFrame("BP7_Peril_Tiering_Factor").query(f'`Peril TypeCode` in {self.perils}'). \
+        # "allperil" isn't in the configured perils list (individual program
+        # pages append it themselves), so add it here so Table 91.C gets its
+        # AllPeril rows.
+        block = self.buildDataFrame("BP7_Peril_Tiering_Factor").query(f'`Peril TypeCode` in {list(self.perils) + ["allperil"]}'). \
                 replace({'Peril TypeCode': self.perilsConversions}).rename(columns={'TierFactor': 'Factor'})
         block = block[block['Grade'].isin(grades)]
         block['Program'] = programLabel
@@ -154,7 +157,9 @@ class RatingPlans:
         asfsw  = self._buildTieringBlock(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"], 'AS/FS/W')
         ors    = self._buildTieringBlock(["K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"], 'O/R/S')
         tieringFactor = pd.concat([hab, asfsw, ors])
-        return tieringFactor.sort_values(by='Program', ascending=False).sort_values(by=['Peril TypeCode', 'Grade']). \
+        # AllPeril rows always lead the table; the other perils follow alphabetically.
+        tieringFactor['_order'] = (tieringFactor['Peril TypeCode'] != self.perilsConversions.get('allperil', 'allperil')).astype(int)
+        return tieringFactor.sort_values(by='Program', ascending=False).sort_values(by=['_order', 'Peril TypeCode', 'Grade']). \
                 rename(columns={'Peril TypeCode': 'Peril'}).filter(items=['Peril', 'Program', 'Grade', 'Factor'])
 
     # Builds the State Individual Risk Premium Modification Eligibility

@@ -87,7 +87,7 @@ def run(
     middle_market: Optional[MarketOptions] = None,
     NGICRatebook=None, NACORatebook=None, NAFFRatebook=None, NICOFRatebook=None,
     MMRatebook=None, SMRatebook=None, ATARatebook=None, HexRatebook=None,
-    CWRatebook=None, TerrCoordsRatebook=None,
+    CWRatebook=None,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> List[Dict[str, str]]:
     """
@@ -125,11 +125,9 @@ def run(
             raise ValueError("No Countrywide ratebook uploaded and the default CP countrywide file is not reachable. "
                              f"Upload one, or connect the network drive. Tried:\n{tried}")
         cw = load_ratebook(str(cw_path))
-    coords = load_ratebook(TerrCoordsRatebook)
 
     books = CPRates.build_workbooks(
         ratebooks, cw, info, sm, mm,
-        terr_coords=None if coords == NOT_FOUND else coords,
         progress=say,
     )
 

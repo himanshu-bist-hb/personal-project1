@@ -17,9 +17,11 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 FACTOR_COLS = ["Territory", "BGI Factor", "BGII Factor", "SCOL Factor"]
 
-# The Territory sheet holds three side-by-side blocks (Territory, Longitude,
-# Latitude, BGI, BGII, SCOL) — these are the Territory + factor columns of each.
-_BLOCKS = ([0, 3, 4, 5], [7, 10, 11, 12], [14, 17, 18, 19])
+# The Territory sheet holds three side-by-side blocks (Territory, BGI, BGII,
+# SCOL) separated by a blank column. Pages built before Longitude/Latitude were
+# dropped have 6-column blocks, handled by _BLOCKS_LEGACY.
+_BLOCKS = ([0, 1, 2, 3], [5, 6, 7, 8], [10, 11, 12, 13])
+_BLOCKS_LEGACY = ([0, 3, 4, 5], [7, 10, 11, 12], [14, 17, 18, 19])
 
 
 def _bytes(source) -> bytes:
@@ -34,7 +36,8 @@ def _bytes(source) -> bytes:
 def _page_grid(page_bytes: bytes) -> pd.DataFrame:
     sheet = pd.read_excel(io.BytesIO(page_bytes), sheet_name="Territory", skiprows=2)
     blocks = []
-    for cols in _BLOCKS:
+    legacy = any(str(c).startswith("Longitude") for c in sheet.columns)
+    for cols in (_BLOCKS_LEGACY if legacy else _BLOCKS):
         block = sheet.iloc[:, cols].copy()
         block.columns = FACTOR_COLS
         blocks.append(block)

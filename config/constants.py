@@ -210,11 +210,6 @@ CP_NETWORK_ROOTS = [
 # Used automatically when the user doesn't upload their own CW ratebook.
 CP_CW_RATEBOOK_REL = r"Com\Jiang\Rate Page Template\CP CW RB 2025.xlsx"
 
-# One "<ST> Smoothed Relativities.xlsx" per state (Sheet1: Grid ID / Longitude /
-# Latitude) — joined to the Hex ratebook factors for the Territory sheet.
-CP_TERRITORY_COORDS_REL = (r"Com\Property\Territory Defs (Independent)\3.0\Development"
-                           r"\R Shiny Interface\RShiny Smoothed Relativities")
-
 # Tiering / LEAF / Age-of-Building pages for the Middle Market "Segmentation
 # Removal" option.
 CP_SEGMENTATION_REMOVAL_REL = r"Com\Jiang\Segmentation Removal Pages\Segmentation Removal Rate Pages.xlsx"
@@ -225,7 +220,6 @@ CP_SEGMENTATION_REMOVAL_REL = r"Com\Jiang\Segmentation Removal Pages\Segmentatio
 # substring check would match "COMMERCIAL", "SMALL" etc.
 _CP_DELIM = r"(?:^|[ +\-_])%s(?:[ +\-_.]|$)"
 CP_SLOTS: list[tuple[str, str, str]] = [
-    ("COORDS", "Territory Coordinates",  r"SMOOTH|RELATIVIT|COORD"),
     ("HEX",   "Hex / Territory",         r"HEX|TERR"),
     ("ATA",   "Applies to All",          r"APPLIES|" + _CP_DELIM % "ATA"),
     ("CW",    "Countrywide",             r"COUNTRYWIDE|" + _CP_DELIM % "CW"),

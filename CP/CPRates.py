@@ -12,8 +12,8 @@
 #   * the 15 tkinter checkboxes / 4 capping entries are now MarketOptions;
 #   * formatting helpers are module-level, share style objects instead of
 #     rebuilding Border/Font per cell, and the SM/MM variants are one function;
-#   * network files (territory coordinates, segmentation removal) go through
-#     config/constants.py, with the coordinates file also uploadable.
+#   * network files (segmentation removal, countrywide) go through
+#     config/constants.py.
 # ==============================================================================
 
 import logging
@@ -35,7 +35,6 @@ from openpyxl.worksheet.pagebreak import Break
 from config.constants import (
     CP_NETWORK_ROOTS,
     CP_SEGMENTATION_REMOVAL_REL,
-    CP_TERRITORY_COORDS_REL,
     STATE_ABBREVIATIONS,
 )
 
@@ -114,14 +113,6 @@ def _open_network_excel(rel: str, what: str, hint: str = ""):
         raise FileNotFoundError(f"{what} not reachable. Tried:\n{tried}\n{hint}".rstrip())
     return pd.ExcelFile(str(path))
 
-
-def _open_territory_coords(uploaded, state_abb):
-    """Grid ID / Longitude / Latitude workbook: the uploaded copy, else the network file."""
-    if uploaded is not None and not isinstance(uploaded, str):
-        return uploaded
-    return _open_network_excel(f"{CP_TERRITORY_COORDS_REL}\{state_abb} Smoothed Relativities.xlsx",
-                               f"Territory coordinates file for {state_abb}",
-                               "Upload it in the 'Territory Coordinates' slot, or connect the network drive.")
 
 
 def _open_segmentation_removal():
@@ -304,7 +295,6 @@ def build_workbooks(
     info,
     sm: MarketOptions,
     mm: MarketOptions,
-    terr_coords=None,
     progress: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Workbook]:
     """
@@ -314,12 +304,12 @@ def build_workbooks(
     """
     steps = _Steps(progress)
     try:
-        return _build(ratebooks, cw_ratebook, info, sm, mm, terr_coords, steps)
+        return _build(ratebooks, cw_ratebook, info, sm, mm, steps)
     except Exception as exc:
         raise RuntimeError(f"Rate page build failed in '{steps.current}': {exc}") from exc
 
 
-def _build(ratebooks, CWRatebook, info, sm, mm, terr_coords, _step):
+def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     warnings.simplefilter("ignore")
     pd.options.mode.chained_assignment = None
 
@@ -530,10 +520,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, terr_coords, _step):
              axis=1
             )
 
-        TerrCoord = _open_territory_coords(terr_coords, StateAbb)
-        Coords = pd.read_excel(TerrCoord,sheet_name='Sheet1',usecols=[1,2,3], names=['Grid ID', 'Longitude', 'Latitude']).round(7)
-        GridFac = pd.merge(GridFac, Coords, how='inner', on='Grid ID')
-        GridFac = GridFac[['Grid ID','Longitude','Latitude','BGI Factor','BGII Factor','SCOL Factor']]
+        GridFac = GridFac[['Grid ID','BGI Factor','BGII Factor','SCOL Factor']]
         GridFac = GridFac.rename(columns={"Grid ID":"Territory"})
         GridFac = GridFac.drop_duplicates().reset_index(drop=True)
         GridLen = math.ceil(GridFac.shape[0]/3)
@@ -541,8 +528,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, terr_coords, _step):
         GridFac2 = GridFac.iloc[GridLen:2*GridLen].reset_index(drop=True)
         GridFac3 = GridFac.iloc[2*GridLen:].reset_index(drop=True)
         GridFacXL = pd.concat([GridFac1,GridFac2,GridFac3],axis=1).fillna("   ")
-        GridFacXL.insert(6,'','')
-        GridFacXL.insert(13,' ','')
+        GridFacXL.insert(4,'','')
+        GridFacXL.insert(9,' ','')
     else:
         pass
     # </editor-fold>

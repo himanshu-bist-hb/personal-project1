@@ -244,6 +244,8 @@ def build():
         ["HE", 1, 1, 170], ["HE", 2, 2, 190],
         ["OPTI", 1, 1, 170], ["OPTI", 2, 2, 120],
         ["PED", 1, 1, 170], ["PED", 2, 2, 180],
+        # Retail Table 4.F (PSPL): wider Limits column for "$X / $Y" occurrence/aggregate text.
+        ["PSPL_RETAIL", 1, 1, 230], ["PSPL_RETAIL", 2, 2, 180],
         ["RTS", 1, 1, 350],
         # Retail's own Liability Size of Risk shape — different sub-header
         # text ("Building plus Business Personal Property" vs Auto Service's
@@ -445,6 +447,7 @@ def build():
         ["HE", 2, 2, 4, "$#,##0.00"],
         ["OPTI", 2, 2, 4, "$#,##0.00"],
         ["PED", 2, 2, 4, "$#,##0.00"],
+        ["PSPL_RETAIL", 2, 2, 4, "$#,##0.00"],
         ["RTS", 1, 1, 4, "$#,##0.00"],
         ["LS_RETAIL", 1, 2, 5, "$#,##0"],
         ["LS_RETAIL_CURRENT", 1, 2, 5, "$#,##0"],
@@ -470,8 +473,15 @@ def build():
         # base rate with plain factors and so is deliberately left on the
         # default value format rather than forced to "$").
         ["YBBI", 1, 1, 4, "###0"],
-        ["SPO", 2, 2, 4, "$#,##0.00"],
+        ["SPO", 2, 2, 4, "0.000"],  # no "$", always 3 decimals
         ["VAL", 2, 2, 4, "$#,##0.00"],
+        # Class Modifier (Table 3.C): every factor column (col 2 onward) is
+        # shown to 3 decimals, not as an integer.
+        ["CLBG", 2, "REST", 4, "0.000"],
+        ["CLPP", 2, "REST", 4, "0.000"],
+        ["CLBI", 2, "REST", 4, "0.000"],
+        ["CLGL", 2, "REST", 4, "0.000"],
+        ["CLEB", 2, "REST", 4, "0.000"],
     ])
 
     # =======================================================================

@@ -166,7 +166,7 @@ st.session_state.setdefault("cp_files",        {})      # {slot: {"name","bytes"
 st.session_state.setdefault("cp_manual_assign", {})     # {filename: slot} for files detection couldn't place
 st.session_state.setdefault("cp_mode",         "individual") # "individual" | "small_market" | "hex"
 st.session_state.setdefault("cp_sm_files",     {})      # Small Market mode: SM / MM / ATA / CW
-st.session_state.setdefault("cp_terr_files",   {})      # Hex + Territory Coordinates (both modes)
+st.session_state.setdefault("cp_terr_files",   {})      # Hex / Territory (both modes)
 st.session_state.setdefault("cp_sm_reset",     0)
 st.session_state.setdefault("cp_terr_reset",   0)
 st.session_state.setdefault("cp_upload_reset", 0)
@@ -3072,8 +3072,7 @@ elif active_lob == "Commercial Property":
             # ── Territory files (both modes) ──────────────────────────────────
             spacer(6)
             st.markdown('<div class="sec-label">&#128506; &nbsp;Territory Files</div>', unsafe_allow_html=True)
-            for slot, label in (("HEX", "Select the Hex / Territory ratebook" + (" (needed for Territory Adjustment)" if hex_needed else " (optional)")),
-                                ("COORDS", "Select the Territory Coordinates file (optional — read from the network if omitted)")):
+            for slot, label in (("HEX", "Select the Hex / Territory ratebook" + (" (needed for Territory Adjustment)" if hex_needed else " (optional)")),):
                 up = st.file_uploader(label, type=["xlsx", "xlsm", "xls"], accept_multiple_files=False,
                                       key=f"cp_terr_up_{slot}_{st.session_state.cp_terr_reset}")
                 if up:
@@ -3083,7 +3082,7 @@ elif active_lob == "Commercial Property":
             # ── Assignment table ──────────────────────────────────────────────
             rows_html = ""; n_ok = n_err = 0
             table = [(k, labels[k], cp_active.get(k), required.get(k, False)) for k in active_keys] + \
-                    [("HEX", "Hex / Territory", cp_terr.get("HEX"), bool(hex_needed)), ("COORDS", "Territory Coordinates", cp_terr.get("COORDS"), False)]
+                    [("HEX", "Hex / Territory", cp_terr.get("HEX"), bool(hex_needed))]
             for key, label, val, req in table:
                 bh = '<span class="ab-req">Required</span>' if req else '<span class="ab-opt">Optional</span>'
                 if val is None:
@@ -3211,7 +3210,6 @@ elif active_lob == "Commercial Property":
                         NGICRatebook=_cpb("NGIC"), NACORatebook=_cpb("NACO"), NAFFRatebook=_cpb("NAFF"),
                         NICOFRatebook=_cpb("NICOF"), MMRatebook=_cpb("MM"), SMRatebook=_cpb("SM"),
                         ATARatebook=_cpb("ATA"), HexRatebook=_cpb("HEX"), CWRatebook=_cpb("CW"),
-                        TerrCoordsRatebook=_cpb("COORDS"),
                         progress_callback=cp_progress)
                     st.session_state.cp_run_status = "success"; st.session_state.cp_pdf_status = "idle"
                 except Exception as e:

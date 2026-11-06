@@ -210,6 +210,10 @@ CP_NETWORK_ROOTS = [
 # Used automatically when the user doesn't upload their own CW ratebook.
 CP_CW_RATEBOOK_REL = r"Com\Jiang\Rate Page Template\CP CW RB 2025.xlsx"
 
+# Grid longitude/latitude for the Territory sheet; "{st}" is the state abbreviation.
+CP_TERRITORY_COORDS_REL = (r"Com\Property\Territory Defs (Independent).0\Development"
+                           r"\R Shiny Interface\RShiny Smoothed Relativities\{st} Smoothed Relativities.xlsx")
+
 # Tiering / LEAF / Age-of-Building pages for the Middle Market "Segmentation
 # Removal" option.
 CP_SEGMENTATION_REMOVAL_REL = r"Com\Jiang\Segmentation Removal Pages\Segmentation Removal Rate Pages.xlsx"

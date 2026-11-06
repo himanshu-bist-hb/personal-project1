@@ -36,6 +36,7 @@ from openpyxl.worksheet.pagebreak import Break
 from config.constants import (
     CP_NETWORK_ROOTS,
     CP_SEGMENTATION_REMOVAL_REL,
+    CP_TERRITORY_COORDS_REL,
     STATE_ABBREVIATIONS,
 )
 
@@ -586,7 +587,13 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
              axis=1
             )
 
-        GridFac = GridFac[['Grid ID','BGI Factor','BGII Factor','SCOL Factor']]
+        # Longitude / Latitude per grid, from the state's Smoothed Relativities workbook
+        coord_book = _open_network_excel(
+            CP_TERRITORY_COORDS_REL.format(st=StateAbb), f"{StateAbb} Smoothed Relativities workbook (Territory coordinates)")
+        Coords = pd.read_excel(coord_book, sheet_name='Sheet1', usecols=[1, 2, 3],
+                               names=['Grid ID', 'Longitude', 'Latitude']).round(7)
+        GridFac = pd.merge(GridFac, Coords, how='inner', on='Grid ID')
+        GridFac = GridFac[['Grid ID','Longitude','Latitude','BGI Factor','BGII Factor','SCOL Factor']]
         GridFac = GridFac.rename(columns={"Grid ID":"Territory"})
         GridFac = GridFac.drop_duplicates().reset_index(drop=True)
         GridLen = math.ceil(GridFac.shape[0]/3)
@@ -594,8 +601,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         GridFac2 = GridFac.iloc[GridLen:2*GridLen].reset_index(drop=True)
         GridFac3 = GridFac.iloc[2*GridLen:].reset_index(drop=True)
         GridFacXL = pd.concat([GridFac1,GridFac2,GridFac3],axis=1).fillna("   ")
-        GridFacXL.insert(4,'','')
-        GridFacXL.insert(9,' ','')
+        GridFacXL.insert(6,'','')
+        GridFacXL.insert(13,' ','')
     else:
         pass
     # </editor-fold>

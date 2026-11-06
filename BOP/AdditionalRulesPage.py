@@ -153,6 +153,46 @@ class AdditionalRules:
             wm[col] = 1 - wm[col]
         return wm
 
+    # Builds the Sinkhole Loss Coverage Factor table (FL only). The ratebook
+    # lists one row per county; counties sharing a factor are collapsed into
+    # one cell as "Name (code), Name (code), and Name (code)". A blank
+    # CountyCode is the factor for the remainder of the state. Rows with
+    # CoverageIndicator TRUE are not shown.
+    # Returns a dataframe
+    def buildSinkholeLoss(self):
+        sh = self.buildDataFrame("BP7_SinkholeLoss_CoverageFactor")
+
+        def isTrue(v):
+            return str(v).strip().upper() in ('TRUE', '1', '1.0', 'YES', 'Y')
+
+        def isBlank(v):
+            return pd.isna(v) or str(v).strip() == ''
+
+        sh = sh[~sh['CoverageIndicator'].apply(isTrue)]
+
+        groups = {}  # factor -> {'counties': [(code, name)], 'remainder': bool}
+        for _, row in sh.iterrows():
+            factor = round(float(row['Factor']), 6)
+            entry = groups.setdefault(factor, {'counties': [], 'remainder': False})
+            if isBlank(row['CountyCode']):
+                entry['remainder'] = True
+            else:
+                entry['counties'].append((int(float(row['CountyCode'])), str(row['County Name']).strip()))
+
+        rows = []
+        for factor, entry in groups.items():
+            if entry['counties']:
+                labels = [f"{name} ({code:03d})" for code, name in sorted(entry['counties'])]
+                if len(labels) > 2:
+                    text = ', '.join(labels[:-1]) + ', and ' + labels[-1]
+                else:
+                    text = ', '.join(labels)
+                rows.append((False, factor, text))
+            if entry['remainder']:
+                rows.append((True, factor, 'Remainder of State'))
+        rows.sort(key=lambda r: (r[0], r[1]))  # remainder of state last, then ascending factor
+        return pd.DataFrame([(text, factor) for _, factor, text in rows], columns=['Counties', 'Factor'])
+
     # Builds the Mine Subsidence Insurance table (IN/KY only) — Dwelling and
     # Non-Dwelling structure charges side by side by Amount of Insurance.
     # Returns a dataframe
@@ -289,6 +329,14 @@ class AdditionalRules:
             for cell in ws[f'{row_num}:{row_num}']:
                 cell.font = boldFont
 
+    def formatSinkholeLoss(self, ws):
+        ws.column_dimensions['A'].width = self.pixelsToInches(420)
+        ws.column_dimensions['B'].width = self.pixelsToInches(90)
+        for row in range(4, ws.max_row + 1):
+            ws[f'A{row}'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            ws[f'B{row}'].number_format = '0.000'
+            ws[f'B{row}'].alignment = Alignment(horizontal='center', vertical='center')
+
     def formatMineSubsidence(self, ws):
         self._applyCurrencyFormat(ws, min_col=1)
         ws.column_dimensions['A'].width = self.pixelsToInches(175)
@@ -365,10 +413,13 @@ class AdditionalRules:
                 ('SGLIL', 'AR-1 Table C.2 Stop Gap - Employers Liability Coverage Increased Limits', lambda: self._buildStopGapIncreasedLimits('BP7_Stop_Gap_Base_Rate'), False, True, None, self._formatStopGapIncreasedLimits),
                 ('SGLPD', 'AR-1 Table D. Stop Gap - Employers Liability Coverage Premium Determination', lambda: self._buildStopGapPremiumDetermination('BP7_Stop_Gap_Base_Rate'), False, True, None, self._formatStopGapPremiumDetermination),
             ]
-        return [
+        specs = [
             ('RC', 'AR Table 98.C. Rate Capping', self.buildRateCappingFactors, False, True, None, self.formatRateCappingFactors),
             ('DF', 'AR - 2 Distribution Factor', self.buildDistributionFactors, False, True, None, self.formatDistributionFactors),
         ]
+        if self.state == "FL":  # Sinkhole Loss page is filed in Florida only
+            specs.append(('SH', 'AR-2 Table A.2. Sinkhole Loss Coverage and Catastrophic Ground Cover Collapse', self.buildSinkholeLoss, False, True, None, self.formatSinkholeLoss))
+        return specs
 
     # Sets up the Additional Rules Excel file and creates a worksheet for
     # each of this state's tables, then applies each table's postFormat.

@@ -140,6 +140,23 @@ _MM_FOOTER = ("\nNationwide Insurance Company of America \nNationwide Mutual Ins
 _MM_FOOTER_WI = "\nNationwide Insurance Company of America \nNationwide Mutual Insurance Company"
 
 
+# Print layout shared with the BOP rate pages (BOP Input File.xlsx ->
+# "Formatting Defaults"), so every LOB's PDF has the same margins and footer
+# font. The bottom margin grows with the number of footer company lines.
+_PAGE_LEFT = _PAGE_RIGHT = 0.25
+_PAGE_TOP = 1.25
+_PAGE_BOTTOM_MIN = 0.95
+_PAGE_HEADER = 0.5
+_PAGE_FOOTER = 0.25
+_FOOTER_FONT_SIZE = 8
+_FOOTER_LINE_INCHES = 0.14   # one 8pt footer line, with leading
+
+
+def _bottom_margin(footer_text):
+    lines = len([ln for ln in footer_text.split("\n") if ln.strip()])
+    return max(_PAGE_BOTTOM_MIN, round(_PAGE_FOOTER + lines * _FOOTER_LINE_INCHES + 0.05, 2))
+
+
 def _format_wkst(wkstname, titlerows, A1title, A2title, dfname, statename, stabb, effdate,
                  footer_text, footer_size):
     """Write a DataFrame under the two title rows and apply the print header/footer."""
@@ -154,12 +171,12 @@ def _format_wkst(wkstname, titlerows, A1title, A2title, dfname, statename, stabb
     wkstname.page_setup.useFirstPageNumber = True
     wkstname.sheet_view.showGridLines = False
     wkstname.print_title_rows = "1:" + titlerows
-    wkstname.page_margins.left = 0.5
-    wkstname.page_margins.right = 0.5
-    wkstname.page_margins.top = 2.25
-    wkstname.page_margins.bottom = 1.5
-    wkstname.page_margins.header = 1.5
-    wkstname.page_margins.footer = 0.5
+    wkstname.page_margins.left = _PAGE_LEFT
+    wkstname.page_margins.right = _PAGE_RIGHT
+    wkstname.page_margins.top = _PAGE_TOP
+    wkstname.page_margins.bottom = _bottom_margin(footer_text)
+    wkstname.page_margins.header = _PAGE_HEADER
+    wkstname.page_margins.footer = _PAGE_FOOTER
     wkstname.print_options.horizontalCentered = True
 
     hdr = wkstname.oddHeader
@@ -330,7 +347,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 return rb
         return _RB_CHAIN[0] if _RB_CHAIN else _fallback
 
-    formatwkstMM = partial(_format_wkst, footer_text=_MM_FOOTER_WI if StateAbb == "WI" else _MM_FOOTER, footer_size=10)
+    formatwkstMM = partial(_format_wkst, footer_text=_MM_FOOTER_WI if StateAbb == "WI" else _MM_FOOTER, footer_size=_FOOTER_FONT_SIZE)
     SMLCMTable = None
     SMCapTable = None
     MMCapTable = None
@@ -450,7 +467,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     # Companies shown in SM footers / capping table, driven by whichever LCM table was built
     SMCompanyList = list(SMLCMTable['Company']) if SMLCMTable is not None else []
     SMFooterText = "\n" + " \n".join(SMCompanyList).replace("&", "&&")  # a single & is a header/footer control code in Excel
-    formatwkstSM = partial(_format_wkst, footer_text=SMFooterText, footer_size=7)
+    formatwkstSM = partial(_format_wkst, footer_text=SMFooterText, footer_size=_FOOTER_FONT_SIZE)
     if MMRatebook != "Not found":
         if StateAbb != "WI":
             MMLCMs = [['Nationwide Insurance Company of America', NICOALCM], ['Nationwide Mutual Insurance Company', NWMLCM],
@@ -1581,13 +1598,13 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     headerFontName = 'Arial'
     headerFontSize = 10
     footerFontName = 'Arial'
-    footerFontSize = 10
-    leftMargin = 0.5
-    rightMargin = 0.5
-    topMargin = 2.25
-    bottomMargin = 1.5
-    headerMargin = 1.5
-    footerMargin = 0.5
+    footerFontSize = _FOOTER_FONT_SIZE
+    leftMargin = _PAGE_LEFT
+    rightMargin = _PAGE_RIGHT
+    topMargin = _PAGE_TOP
+    bottomMargin = _bottom_margin(SMFooterText)
+    headerMargin = _PAGE_HEADER
+    footerMargin = _PAGE_FOOTER
 
     #Building Fonts and Formats
     font = Font(name=fontName, size=fontSize)

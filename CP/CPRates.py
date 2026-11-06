@@ -140,29 +140,29 @@ _MM_FOOTER = ("\nNationwide Insurance Company of America \nNationwide Mutual Ins
 _MM_FOOTER_WI = "\nNationwide Insurance Company of America \nNationwide Mutual Insurance Company"
 
 
-def _format_wkst(ws, titlerows, A1title, A2title, dfname, statename, stabb, effdate,
+def _format_wkst(wkstname, titlerows, A1title, A2title, dfname, statename, stabb, effdate,
                  footer_text, footer_size):
     """Write a DataFrame under the two title rows and apply the print header/footer."""
-    ws["A1"] = A1title
-    ws["A2"] = A2title
-    ws["A2"].alignment = Alignment(horizontal="left", vertical="center")
+    wkstname["A1"] = A1title
+    wkstname["A2"] = A2title
+    wkstname["A2"].alignment = Alignment(horizontal="left", vertical="center")
     for r in dataframe_to_rows(dfname, False, True):
-        ws.append(r)
+        wkstname.append(r)
 
-    ws.page_setup.orientation = "portrait"
-    ws.page_setup.firstPageNumber = 1       # restart the footer page counter on every sheet
-    ws.page_setup.useFirstPageNumber = True
-    ws.sheet_view.showGridLines = False
-    ws.print_title_rows = "1:" + titlerows
-    ws.page_margins.left = 0.5
-    ws.page_margins.right = 0.5
-    ws.page_margins.top = 2.25
-    ws.page_margins.bottom = 1.5
-    ws.page_margins.header = 1.5
-    ws.page_margins.footer = 0.5
-    ws.print_options.horizontalCentered = True
+    wkstname.page_setup.orientation = "portrait"
+    wkstname.page_setup.firstPageNumber = 1       # restart the footer page counter on every sheet
+    wkstname.page_setup.useFirstPageNumber = True
+    wkstname.sheet_view.showGridLines = False
+    wkstname.print_title_rows = "1:" + titlerows
+    wkstname.page_margins.left = 0.5
+    wkstname.page_margins.right = 0.5
+    wkstname.page_margins.top = 2.25
+    wkstname.page_margins.bottom = 1.5
+    wkstname.page_margins.header = 1.5
+    wkstname.page_margins.footer = 0.5
+    wkstname.print_options.horizontalCentered = True
 
-    hdr = ws.oddHeader
+    hdr = wkstname.oddHeader
     hdr.left.text = ("Commercial Lines Manual: Commercial Property Non-Residential" if statename == "Florida"
                      else "Commercial Lines Manual: Commercial Property")
     hdr.left.font, hdr.left.size = _HF_FONT, _FONT_SIZE
@@ -171,7 +171,7 @@ def _format_wkst(ws, titlerows, A1title, A2title, dfname, statename, stabb, effd
     hdr.right.text = "Effective Date: " + effdate
     hdr.right.font, hdr.right.size = _HF_FONT, _FONT_SIZE
 
-    ftr = ws.oddFooter
+    ftr = wkstname.oddFooter
     ftr.left.text = footer_text
     ftr.left.font, ftr.left.size = _HF_FONT, footer_size
     ftr.center.text = stabb + " - SRP - &[Tab] - &P"

@@ -329,24 +329,26 @@ def _blank(v):
     return v is None or (isinstance(v, str) and v.strip() == "")
 
 
-def _header_rows(ws, first_hdr, last_hdr):
+def _header_rows(rows_vals, first_hdr, last_hdr):
     """Row numbers that are column-header rows: the sheet's own header block plus the header
     row of every further table stacked below it (a text-only row that starts a table, i.e. follows
-    a blank row / another header row and is followed by data)."""
-    max_row, max_col = ws.max_row, ws.max_column
-    vals = {r: [c.value for c in ws[r][:max_col]] for r in range(1, max_row + 2) if r <= max_row}
-    vals[max_row + 1] = []
+    a blank row / another header row and is followed by data).
+
+    rows_vals: list of row-value lists, rows_vals[0] being sheet row 1 (one pass over the sheet).
+    """
+    n = len(rows_vals)
+    nonblank = [[v for v in row if not _blank(v)] for row in rows_vals]   # per-row non-blank values
     rows = set(range(first_hdr, last_hdr + 1))
     prev_is_header = True
     prev_is_label = False
-    for r in range(last_hdr + 1, max_row + 1):
-        filled = [v for v in vals[r] if not _blank(v)]
+    for r in range(last_hdr + 1, n + 1):
+        filled = nonblank[r - 1]
         if not filled:
             prev_is_header = prev_is_label = False
             continue
-        prev_blank = not any(not _blank(v) for v in vals.get(r - 1, []))
+        prev_blank = not nonblank[r - 2] if r >= 2 else True
         text_only = len(filled) >= 2 and all(isinstance(v, str) for v in filled)
-        has_next = any(not _blank(v) for v in vals.get(r + 1, []))
+        has_next = r < n and bool(nonblank[r])
         if text_only and has_next and (prev_blank or prev_is_header or prev_is_label):
             rows.add(r)
             prev_is_header, prev_is_label = True, False
@@ -358,7 +360,11 @@ def _header_rows(ws, first_hdr, last_hdr):
 
 def _left_align_and_box_headers(book):
     """Final pass: no horizontal centering on the page, and every table's column headers
-    (including tables stacked further down a sheet) are bold with a border."""
+    (including tables stacked further down a sheet) are bold with a border.
+
+    Fast: each sheet is read once with iter_rows(values_only) and only the header cells are
+    touched (openpyxl's ws[row] / ws.max_row rescan the whole sheet on every call)."""
+    bold_cache = {}
     for ws in book.worksheets:
         if ws.title == "Index":
             continue
@@ -369,13 +375,24 @@ def _left_align_and_box_headers(book):
             last_hdr = int(rows.split(":")[-1].replace("$", ""))
         except ValueError:
             last_hdr = 3
-        for r in _header_rows(ws, 3, max(3, last_hdr)):
-            for cell in ws[r][:ws.max_column]:
-                if not _blank(cell.value):
-                    cell.border = _BOX
-                    f = copy(cell.font)
-                    f.bold = True
-                    cell.font = f
+        rows_vals = [list(r) for r in ws.iter_rows(values_only=True)]
+        if not rows_vals:
+            continue
+        for r in _header_rows(rows_vals, 3, max(3, last_hdr)):
+            if r > len(rows_vals):
+                continue
+            for c, value in enumerate(rows_vals[r - 1], start=1):
+                if _blank(value):
+                    continue
+                cell = ws.cell(row=r, column=c)
+                cell.border = _BOX
+                f = cell.font
+                bold = bold_cache.get(id(f))
+                if bold is None:
+                    bold = copy(f)
+                    bold.bold = True
+                    bold_cache[id(f)] = bold
+                cell.font = bold
 
 
 def _link_index(book):

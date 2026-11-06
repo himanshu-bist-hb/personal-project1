@@ -20,6 +20,7 @@ import logging
 import math
 from pathlib import Path
 import re
+import threading
 from copy import copy
 import warnings
 from dataclasses import dataclass
@@ -108,9 +109,43 @@ def network_candidates(rel: str):
     return [root / rel for root in CP_NETWORK_ROOTS]
 
 
+NETWORK_TIMEOUT_SECONDS = 25
+
+
+def _with_timeout(fn, seconds, what):
+    """
+    Run fn() but give up after `seconds`. A disconnected share can block a plain
+    Path.exists() / read for minutes, which looks like the app "loading forever";
+    this turns that into a clear error instead. (The blocked worker is a daemon thread
+    and is simply abandoned.)
+    """
+    box = {}
+
+    def _work():
+        try:
+            box["value"] = fn()
+        except BaseException as exc:   # re-raised in the caller
+            box["error"] = exc
+
+    t = threading.Thread(target=_work, daemon=True)
+    t.start()
+    t.join(seconds)
+    if t.is_alive():
+        raise TimeoutError(f"{what} did not respond within {seconds}s (is the network drive connected / VPN on?).")
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
+
 def resolve_network_file(rel: str):
-    """First candidate that exists, else None."""
-    return next((p for p in network_candidates(rel) if p.exists()), None)
+    """First candidate that exists, else None (each probe is time-limited)."""
+    for p in network_candidates(rel):
+        try:
+            if _with_timeout(p.exists, NETWORK_TIMEOUT_SECONDS, f"Checking {p}"):
+                return p
+        except TimeoutError as exc:
+            logger.warning("%s", exc)
+    return None
 
 
 def _open_network_excel(rel: str, what: str, hint: str = ""):
@@ -118,7 +153,7 @@ def _open_network_excel(rel: str, what: str, hint: str = ""):
     if path is None:
         tried = "\n".join(f"  - {p}" for p in network_candidates(rel))
         raise FileNotFoundError(f"{what} not reachable. Tried:\n{tried}\n{hint}".rstrip())
-    return pd.ExcelFile(str(path))
+    return _with_timeout(lambda: pd.ExcelFile(str(path)), 120, f"Opening {path.name}")
 
 
 
@@ -147,13 +182,19 @@ def resolve_cw_ratebook(state_abb: str) -> Path:
     """
     version = cw_version_for_state(state_abb)
     folders = [root / CP_CW_RATEBOOK_DIR_REL for root in CP_NETWORK_ROOTS]
-    reachable = [d for d in folders if d.is_dir()]
+    reachable = []
+    for d in folders:
+        try:
+            if _with_timeout(d.is_dir, NETWORK_TIMEOUT_SECONDS, f"Checking {d}"):
+                reachable.append(d)
+        except TimeoutError as exc:
+            logger.warning("%s", exc)
     if not reachable:
         tried = "\n".join(f"  - {d}" for d in folders)
         raise FileNotFoundError(f"The CP Countrywide ratebook folder is not reachable. Tried:\n{tried}")
     for folder in reachable:
-        matches = [p for p in folder.glob("*.xlsx")
-                   if not p.name.startswith("~$") and _cw_file_version(p) == version]
+        listing = _with_timeout(lambda: list(folder.glob("*.xlsx")), NETWORK_TIMEOUT_SECONDS, f"Listing {folder}")
+        matches = [p for p in listing if not p.name.startswith("~$") and _cw_file_version(p) == version]
         if len(matches) == 1:
             return matches[0]
         if len(matches) > 1:
@@ -635,6 +676,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
              axis=1
             )
 
+        _step('Reading Territory coordinates (network file)')
         # Longitude / Latitude per grid, from the state's Smoothed Relativities workbook
         coord_book = _open_network_excel(
             CP_TERRITORY_COORDS_REL.format(st=StateAbb), f"{StateAbb} Smoothed Relativities workbook (Territory coordinates)")

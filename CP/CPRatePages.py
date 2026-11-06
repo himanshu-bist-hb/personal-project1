@@ -99,7 +99,13 @@ def run(
     t0 = time.perf_counter()
     sm = small_market or MarketOptions()
     mm = middle_market or MarketOptions()
-    say = progress_callback or (lambda _msg: None)
+    ui_say = progress_callback or (lambda _msg: None)
+
+    def say(msg):
+        """Progress goes to the terminal (with timings, so a stall is visible) and to the UI."""
+        print(f"[CP {time.perf_counter() - t0:7.1f}s] {msg}", flush=True)
+        logger.info(msg)
+        ui_say(msg)
 
     say("Opening ratebooks...")
     ratebooks = {
@@ -108,9 +114,11 @@ def run(
         "MM": load_ratebook(MMRatebook), "SM": load_ratebook(SMRatebook),
         "ATA": load_ratebook(ATARatebook), "HEX": load_ratebook(HexRatebook),
     }
+    say("Checking inputs...")
     validate_inputs(ratebooks, sm, mm)
     info = CPRates.get_rate_book_info(ratebooks)
     state, state_abb, effective = info
+    say(f"State: {state} ({state_abb}), effective {effective}")
 
     if CWRatebook:
         say("Opening uploaded Countrywide ratebook...")
@@ -119,6 +127,7 @@ def run(
             raise ValueError("The uploaded Countrywide ratebook could not be opened.")
     else:
         # No upload: pick the official CW ratebook that serves this state.
+        say(f"Locating the Countrywide ratebook for {state_abb} on the network...")
         try:
             cw_path = CPRates.resolve_cw_ratebook(state_abb)
         except (FileNotFoundError, ValueError) as exc:

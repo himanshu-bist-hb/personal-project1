@@ -177,7 +177,7 @@ def _format_wkst(wkstname, titlerows, A1title, A2title="", dfname=None, statenam
     wkstname.page_margins.bottom = _bottom_margin(footer_text)
     wkstname.page_margins.header = _PAGE_HEADER
     wkstname.page_margins.footer = _PAGE_FOOTER
-    wkstname.print_options.horizontalCentered = True
+    wkstname.print_options.horizontalCentered = False
 
     hdr = wkstname.oddHeader
     hdr.left.text = ("Commercial Lines Manual: Commercial Property Non-Residential" if statename == "Florida"
@@ -227,16 +227,29 @@ def borderfnct(ws):
 
 
 def addlformat(ws):
-    """Centre the titles and shift the table right by four spare columns."""
-    ws["A1"].alignment = Alignment(horizontal="center")
-    ws["A2"].alignment = Alignment(horizontal="center")
-    ws.insert_cols(0, 4)
-    for letter in "ABCD":
-        ws.column_dimensions[letter].width = 9.1
-    ws["A3"] = "*"
-    ws["A3"].font = Font(color="FFFFFF")
-    ws.print_area = "A1:" + get_column_letter(ws.max_column + 4) + str(ws.max_row + 1)
+    """Left-align the titles and keep the table flush left (same as the BOP rate pages)."""
+    ws["A1"].alignment = Alignment(horizontal="left")
+    ws["A2"].alignment = Alignment(horizontal="left")
+    ws.print_area = "A1:" + get_column_letter(ws.max_column) + str(ws.max_row + 1)
     ws.page_setup.fitToPage = True
+
+
+def _left_align_and_box_headers(book):
+    """Final pass: no horizontal centering on the page, and a border on every column-header cell."""
+    for ws in book.worksheets:
+        if ws.title == "Index":
+            continue
+        ws.print_options.horizontalCentered = False
+        ws.print_options.verticalCentered = False
+        rows = str(ws.print_title_rows or "1:3")
+        try:
+            last_hdr = int(rows.split(":")[-1].replace("$", ""))
+        except ValueError:
+            last_hdr = 3
+        for row in ws.iter_rows(min_row=3, max_row=max(3, last_hdr), min_col=1, max_col=ws.max_column):
+            for cell in row:
+                if cell.value not in (None, "", " "):
+                    cell.border = _BOX
 
 
 def _link_index(book):
@@ -246,7 +259,7 @@ def _link_index(book):
     index = book["Index"]
     for i in range(1, len(names)):
         ws = book[names[i]]
-        target = "E1" if ws["A3"].value == "*" else "A1"   # '*' marks sheets shifted by addlformat
+        target = "A1"
         cell = index["A" + str(i)]
         cell.hyperlink = f"#'{names[i]}'!{target}"
         cell.value = ws[target].value
@@ -3765,6 +3778,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     if mm.enabled:
         books["MM"] = wb2
     for book in books.values():
+        _left_align_and_box_headers(book)
         _link_index(book)
         book.active = book["Index"]
     return books

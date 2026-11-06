@@ -45,6 +45,8 @@
 # against a real AL ratebook/PDF, same caveat as Optional Coverages' own
 # absolute-row formatters.
 
+from copy import copy
+
 import pandas as pd
 from openpyxl.styles import Alignment
 from openpyxl.styles.borders import Border, Side
@@ -337,11 +339,18 @@ class AdditionalRules:
         # so size each row explicitly from its text length.
         charsPerLine = 55  # ~420px column at the sheet's font size, with margin
         for row in range(4, ws.max_row + 1):
-            ws[f'A{row}'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-            lines = max(1, -(-len(str(ws[f'A{row}'].value or '')) // charsPerLine))
+            # Data cells share StyleArrays (see ExcelSettingsBOP._format_data_rows):
+            # give each cell a private copy first, or restyling column B
+            # would overwrite column A's wrap_text.
+            countiesCell = ws[f'A{row}']
+            countiesCell._style = copy(countiesCell._style)
+            countiesCell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            factorCell = ws[f'B{row}']
+            factorCell._style = copy(factorCell._style)
+            factorCell.number_format = '0.000'
+            factorCell.alignment = Alignment(horizontal='center', vertical='center')
+            lines = max(1, -(-len(str(countiesCell.value or '')) // charsPerLine))
             ws.row_dimensions[row].height = 15 * lines + 3
-            ws[f'B{row}'].number_format = '0.000'
-            ws[f'B{row}'].alignment = Alignment(horizontal='center', vertical='center')
 
     def formatMineSubsidence(self, ws):
         self._applyCurrencyFormat(ws, min_col=1)

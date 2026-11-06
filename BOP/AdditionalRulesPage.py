@@ -332,8 +332,14 @@ class AdditionalRules:
     def formatSinkholeLoss(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(420)
         ws.column_dimensions['B'].width = self.pixelsToInches(90)
+        # Excel doesn't auto-grow row heights for wrapped text written by
+        # openpyxl (the PDF export clips the long county list to one line),
+        # so size each row explicitly from its text length.
+        charsPerLine = 55  # ~420px column at the sheet's font size, with margin
         for row in range(4, ws.max_row + 1):
             ws[f'A{row}'].alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+            lines = max(1, -(-len(str(ws[f'A{row}'].value or '')) // charsPerLine))
+            ws.row_dimensions[row].height = 15 * lines + 3
             ws[f'B{row}'].number_format = '0.000'
             ws[f'B{row}'].alignment = Alignment(horizontal='center', vertical='center')
 

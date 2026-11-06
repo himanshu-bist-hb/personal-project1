@@ -18,6 +18,7 @@
 
 import logging
 import math
+from copy import copy
 import warnings
 from dataclasses import dataclass
 from functools import partial
@@ -234,8 +235,40 @@ def addlformat(ws):
     ws.page_setup.fitToPage = True
 
 
+def _blank(v):
+    return v is None or (isinstance(v, str) and v.strip() == "")
+
+
+def _header_rows(ws, first_hdr, last_hdr):
+    """Row numbers that are column-header rows: the sheet's own header block plus the header
+    row of every further table stacked below it (a text-only row that starts a table, i.e. follows
+    a blank row / another header row and is followed by data)."""
+    max_row, max_col = ws.max_row, ws.max_column
+    vals = {r: [c.value for c in ws[r][:max_col]] for r in range(1, max_row + 2) if r <= max_row}
+    vals[max_row + 1] = []
+    rows = set(range(first_hdr, last_hdr + 1))
+    prev_is_header = True
+    prev_is_label = False
+    for r in range(last_hdr + 1, max_row + 1):
+        filled = [v for v in vals[r] if not _blank(v)]
+        if not filled:
+            prev_is_header = prev_is_label = False
+            continue
+        prev_blank = not any(not _blank(v) for v in vals.get(r - 1, []))
+        text_only = len(filled) >= 2 and all(isinstance(v, str) for v in filled)
+        has_next = any(not _blank(v) for v in vals.get(r + 1, []))
+        if text_only and has_next and (prev_blank or prev_is_header or prev_is_label):
+            rows.add(r)
+            prev_is_header, prev_is_label = True, False
+        else:
+            prev_is_label = len(filled) == 1 and (prev_blank or prev_is_header)
+            prev_is_header = False
+    return sorted(rows)
+
+
 def _left_align_and_box_headers(book):
-    """Final pass: no horizontal centering on the page, and a border on every column-header cell."""
+    """Final pass: no horizontal centering on the page, and every table's column headers
+    (including tables stacked further down a sheet) are bold with a border."""
     for ws in book.worksheets:
         if ws.title == "Index":
             continue
@@ -246,10 +279,13 @@ def _left_align_and_box_headers(book):
             last_hdr = int(rows.split(":")[-1].replace("$", ""))
         except ValueError:
             last_hdr = 3
-        for row in ws.iter_rows(min_row=3, max_row=max(3, last_hdr), min_col=1, max_col=ws.max_column):
-            for cell in row:
-                if cell.value not in (None, "", " "):
+        for r in _header_rows(ws, 3, max(3, last_hdr)):
+            for cell in ws[r][:ws.max_column]:
+                if not _blank(cell.value):
                     cell.border = _BOX
+                    f = copy(cell.font)
+                    f.bold = True
+                    cell.font = f
 
 
 def _link_index(book):

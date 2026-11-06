@@ -1199,116 +1199,26 @@ class OptionalCoverages:
         data = data.query('WageAndHourLimitOfLiability != 0').rename(columns={'WageAndHourLimitOfLiability': 'Limit', 'WageAndHourCoverageFactor': 'Factor'})
         return data.sort_values('Limit').reset_index(drop=True).filter(items=['Limit', 'Factor'])
 
-    def buildEmploymentTypeFactor(self):
-
-        df_employee_type_factor = pd.DataFrame(
-            {
-                "Employee Type": [
-                    "Full-time (32 or more hours)",
-                    "Part-time (less than 32 hours)",
-                    "Temporary workers/leased workers",
-                    "Endorsed Independent contrators",  # spelled as provided
-                    "Independent Contractors - unendorsed",
-                ],
-                "Factor": ['1.00', '0.75', '0.75', '0.75', '0.10'],
-            }
-        )
-
-        return df_employee_type_factor
-
-    def buildDefenseInside(self):
-
-        df_employee_band_rates = pd.DataFrame(
-            {
-                "Band Label": ["1 - 100", "The next 150"],
-                "Band Range": ["1 - 100", "101 - 250"],
-                "Rate": ['54.62', '32.77'],
-            }
-        )
-
-        return df_employee_band_rates
-
-    def buildDefesneWithin(self):
-
-        data = pd.DataFrame(
-            {
-                "Limit": ['50,000', '100,000', '250,000', '500,000', '1,000,000'],
-                "2,500": ['45.90', '54.62', '83.38', 'NA', 'NA'],
-                "5,000": ['43.97', '52.70', '81.01', '102.69', '124.83'],
-                "10,000": ['41.08', '49.60', '77.05', '98.44', '120.41'],
-                "25,000": ['35.07', '42.72', '67.86', '88.42', '109.91'],
-            }
-        )
-
-        return data
-
-    def buildMatchingDefense(self):
-
-        data = pd.DataFrame(
-            {
-                "Indemnity Limit": ['50,000', '100,000', '250,000', '500,000', '1,000,000'],
-                "ALAE Limit": ['50,000', '100,000', '250,000', '500,000', '1,000,000'],
-                "2,500": ['62.38', '69.86',' 98.66', 'NA', 'NA'],
-                "5,000": ['60.07', '67.69', '96.19', '118.19', '138.29'],
-                "10,000": ['56.46', '64.09', '92.02', '113.82', '133.80'],
-                "25,000": ['48.54', '55.89', '82.25', '103.46', '123.11'],
-            }
-        )
-
-        return data
-
-    def buildEmploymentPractFactor(self):
-        df_factor = pd.DataFrame({"Factor": ['0.600']})
-
-        return df_factor
-
-    def buildEmploymentPracticesLiabilityState(self):
-
-        _state_pairs_in_order = [
-            ("AL", 0.847), ("KS", 0.858), ("NJ", 1.507), ("VT", 0.627),
-            ("AR", 0.759), ("KY", 0.561), ("NM", 1.023), ("WA", 0.726),
-            ("AZ", 0.913), ("MA", 'NA'), ("NV", 'NA'), ("WI", 0.715),
-            ("CA", 2.717), ("MD", 0.858), ("NY", 1.199), ("WV", 0.616),
-            ("CO", 0.814), ("ME", 0.660), ("OH", 0.968), ("WY", 0.715),
-            ("CT", 1.188), ("MI", 1.000), ("OR", 0.814),
-            ("DC", 1.903), ("MN", 0.616), ("PA", 0.979),
-            ("DE", 0.880), ("MO", 1.067), ("RI", 0.451),
-            ("FL", 0.847), ("MS", 0.814), ("SC", 0.781),
-            ("GA", 1.023), ("MT", 0.605), ("SD", 0.286),
-            ("IA", 0.704), ("NC", 0.858), ("TN", 0.869),
-            ("ID", 0.572), ("ND", 0.363), ("TX", 1.000),
-            ("IL", 1.012), ("NE", 0.880), ("UT", 0.561),
-            ("IN", 0.715), ("NH", 0.473), ("VA", 1.045),
-        ]
-
-        # Convert to strings; blank for missing numeric values
-        pairs_as_strings = [
-            (state, str(val))
-            for state, val in _state_pairs_in_order
-        ]
-
-        # Chunk into rows of 4 (State, Relativity) pairs
-        pairs_per_row = 4
-        rows: list[list[str]] = []
-        for i in range(0, len(pairs_as_strings), pairs_per_row):
-            chunk = pairs_as_strings[i:i + pairs_per_row]
-            # Pad the last row with empty pairs if needed
-            while len(chunk) < pairs_per_row:
-                chunk.append(("", ""))
-            # Flatten: [State1, Rel1, State2, Rel2, State3, Rel3, State4, Rel4]
-            flat = []
-            for s, r in chunk:
-                flat.extend([s, r])
-            rows.append(flat)
-
-        # Wide DataFrame: all string values, four state/relativity pairs per row
-        columns = ["State", "Factor", "State", "Factor", "State", "Factor", "State", "Factor"]
-        df_state_relativities_wide = pd.DataFrame(rows, columns=columns)
-
-        # Ensure dtype is string (object-strings)
-        df_state_relativities_wide = df_state_relativities_wide.astype(str)
-
-        return df_state_relativities_wide
+    # OC Table D.22.A.4 Employment Practices Liability Coverage For Injury To
+    # Named Independent Contractors. Only one row is shown on the ratepage:
+    # the Endorsed Independent Contractors factor from the ratebook's
+    # Employee Type factor table (the other employee types are not filed on
+    # this page). Note the ratebook table code really is spelled
+    # "Employement" — the correctly-spelled code is tried as a fallback.
+    def buildEmploymentPracticesLiabilityNamedIndCont(self):
+        for tableCode in ("BP7_EmployementPracticesLiability_EmployeeType_Factor", "BP7_EmploymentPracticesLiability_EmployeeType_Factor"):
+            try:
+                data = self.buildDataFrame(tableCode)
+                break
+            except KeyError:
+                continue
+        else:
+            raise KeyError("Ratebook table BP7_EmployementPracticesLiability_EmployeeType_Factor not found (needed for OC Table D.22.A.4)")
+        endorsed = data[data['EmployeeType'].astype(str).str.strip().str.lower() == 'independent contractors endorsed']
+        if endorsed.empty:
+            raise ValueError("OC Table D.22.A.4: no 'Independent Contractors Endorsed' row in the Employee Type factor table")
+        return pd.DataFrame({'Employee Type': ['Endorsed Independent Contractors'],
+                             'Factor': [float(endorsed['EmployeeTypeFactor'].iloc[0])]})
 
     def buildEmploymentPracticesLiabilityThirdParty(self):
         df_factor = pd.DataFrame({"Factor": ['0.15']})
@@ -2230,117 +2140,12 @@ class OptionalCoverages:
                     cell.number_format = self.twodecimal # Factor, e.g. 0.07 / 0.10
 
     def formatEmploymentPracticesLiabilityNamedIndCont(self, ws):
-        t = Side(style='thin', color='C1C1C1');
-        bd = Border(left=t, right=t, top=t, bottom=t)
-
-        def box(rng):
-            for row in ws[rng]:
-                for c in row:
-                    if c.value is not None and str(c.value) != "":
-                        c.border = bd
-
-        def bold_row(rng):
-            for c in ws[rng][0]:
-                if c.value is not None and str(c.value) != "":
-                    c.font = Font(bold=True)
-
-        # ---------- Insert missing rule text (hard-coded positions, bottom-safe ordering) ----------
-        ws.insert_rows(10, 2)  # before band section
-        ws['A10'] = 'Standard Rule - Defense Inside the Limit (DIL) Coverage'
-        ws['A11'] = 'Base limit of $100,000, deductible of $2,500'
-        ws['A10'].font = Font(bold=True)
-
-        ws.insert_rows(16, 1)  # before DIL rate table
-        ws['A16'] = 'Rates for Defense Within Limits - First 100 Employees'
-        ws['A16'].font = Font(bold=True)
-
-        ws.insert_rows(24, 1)  # before DOL table
-        ws['A24'] = 'Exception Rule - Matching Defense Limit (DOL) Coverage (as required by statute) - Rates First 100 Employees'
-        ws['A24'].font = Font(bold=True)
-
-        ws.insert_rows(32, 1)  # before 101-250 factor
-        ws['A32'] = 'For 101 - 250 Employees, apply the following factor to arrive at the corresponding rate from tables above:'
-
-        # state header was originally at row 31 -> after inserts it is at row 35; place section label above it
-        ws.insert_rows(35, 1)
-        ws['A35'] = 'State Relativities'
-        ws['A35'].font = Font(bold=True)
-
-        # ---------- Header merges (existing) ----------
-        ws.merge_cells('A1:H1');
-        ws['A1'].font = Font(bold=True)
-        ws.merge_cells('A3:B3');
-        bold_row('A3:B3')  # "Employee Type  Factor"
-
-
-
-        # ---------- Borders for each table (new row indices) ----------
-        for rng in ['A3:B8', 'A12:C14', 'A17:E22', 'A25:F30', 'A33:B34', 'A37:H49']:
-            box(rng)
-
-        # ---------- Bold header rows ----------
-        bold_row('A12:C12')  # Band header
-        bold_row('A17:E17')  # DIL header
-        bold_row('A25:F25')  # DOL header
-        ws['A33'].font = Font(bold=True)  # "Factor"
-        bold_row('A36:H36')  # State table header
-
-        # ---------- Number formats ----------
-        CUR, F3, R2 = '$#,##0', '0.000', '$0.00'
-
-        # Employee Type factors
-        for r in range(4, 9):
-            v = ws[f'B{r}'].value
-            ws[f'B{r}'].number_format = F3
-
-        # DIL table
-        for c in 'BCDE':
-            v = ws[f'{c}17'].value
-            ws[f'{c}17'].number_format = CUR  # deductibles
-        for r in range(18, 23):
-            if isinstance(ws[f'A{r}'].value, (int, float)): ws[f'A{r}'].number_format = CUR  # limits
-            for c in 'BCDE':
-                v = ws[f'{c}{r}'].value
-                ws[f'{c}{r}'].number_format = R2  # rates
-
-        # DOL table
-        for c in 'CDEF':
-            v = ws[f'{c}25'].value
-            ws[f'{c}25'].number_format = CUR  # deductibles row
-        for r in range(26, 31):
-            for c in 'AB':  # indemnity/ALAE limits
-                v = ws[f'{c}{r}'].value
-                ws[f'{c}{r}'].number_format = CUR
-            for c in 'CDEF':  # rates
-                v = ws[f'{c}{r}'].value
-                ws[f'{c}{r}'].number_format = R2
-
-        # 101–250 factor
-        if isinstance(ws['A34'].value, (int, float)): ws['A34'].number_format = F3
-
-        # State relativities (B,D,F,H numeric)
-        for r in range(37, 50):
-            for c in 'BDFH':
-                v = ws[f'{c}{r}'].value
-                if isinstance(v, (int, float)): ws[f'{c}{r}'].number_format = F3
-
-        # Final edits
-        ws.insert_rows(17,1)
-        ws["B17"] = "Deductible"
-        ws.merge_cells('B17:E17')
-        bold_row('B17:E17')
-
-        ws.insert_rows(26,1)
-        ws["C26"] = "Deductible"
-        ws.merge_cells('C26:F26')
-        bold_row('C26:F26')
-
-        bold_row('A34:B34')
-        for rng in ['B17:E17', 'C26:F26']:
-            box(rng)
-
-        ws.insert_rows(37,1)
-        bold_row('A40:H40')
+        ws.column_dimensions['A'].width = 260 / 7.0
+        ws.column_dimensions['B'].width = 100 / 7.0
+        for row in range(4, ws.max_row + 1):
+            factorCell = self._privateCell(ws, row, 2)  # data cells share StyleArrays
+            factorCell.number_format = self.twodecimal  # 0.75
+            factorCell.alignment = Alignment(horizontal='center', vertical='center')
 
     def formatEmploymentPracticesLiabilityThirdParty(self, ws):
         ws.insert_rows(2,3)
@@ -2779,9 +2584,9 @@ class OptionalCoverages:
         if self.appetite:
             i += 1
             if progress_callback: progress_callback(f"Building sheet {i}/{total}: EPLNIC...")
-            _, wsEPLNIC = OC.generateMultiTableWorksheet('EPLNIC', 'OC Table D.22.A.4 Employment Practices Liability Coverage For Injury To Named Independent Contractors',
-                                                          [self.buildEmploymentTypeFactor(), self.buildDefenseInside(), self.buildDefesneWithin(),
-                                                           self.buildMatchingDefense(), self.buildEmploymentPractFactor(), self.buildEmploymentPracticesLiabilityState()], False, True)
+            wsEPLNIC = OC.generateWorksheet('EPLNIC', 'OC Table D.22.A.4 Employment Practices Liability Coverage For Injury To Named Independent Contractors',
+                                            self.buildEmploymentPracticesLiabilityNamedIndCont(), False, True)
+            self._privatizeCellStyles(wsEPLNIC)
             self.formatEmploymentPracticesLiabilityNamedIndCont(wsEPLNIC)
 
         i += 1

@@ -157,8 +157,8 @@ def _bottom_margin(footer_text):
     return max(_PAGE_BOTTOM_MIN, round(_PAGE_FOOTER + lines * _FOOTER_LINE_INCHES + 0.05, 2))
 
 
-def _format_wkst(wkstname, titlerows, A1title, A2title, dfname, statename, stabb, effdate,
-                 footer_text, footer_size):
+def _format_wkst(wkstname, titlerows, A1title, A2title="", dfname=None, statename=None, stabb=None, effdate=None,
+                 footer_text="", footer_size=_FOOTER_FONT_SIZE):
     """Write a DataFrame under the two title rows and apply the print header/footer."""
     wkstname["A1"] = A1title
     wkstname["A2"] = A2title

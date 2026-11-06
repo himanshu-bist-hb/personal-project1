@@ -2940,6 +2940,15 @@ elif active_lob == "Commercial Property":
                     st.session_state.cp_confirm_step = "idle"; st.rerun()
     spacer(16)
 
+    def cp_file_chip(val):
+        """Persistent "file name" line under a single-file uploader. Streamlit
+        drops an uploader's own file chip whenever it isn't rendered for a run
+        (mode switch, option toggle), even though the file is still kept in
+        session_state — so echo the kept name, the way the ratebook table does."""
+        if val and "name" in val:
+            st.markdown(f'<div style="font-size:12px;color:#1a7f37;margin:-4px 0 2px 2px;">&#10003;&nbsp; {val["name"]}</div>',
+                        unsafe_allow_html=True)
+
     def cp_save_location(widget_key):
         """Save-location widget shared by both modes (one cp_save_dir)."""
         st.markdown('<p class="f-label">&#128193; &nbsp;Save Location</p>', unsafe_allow_html=True)
@@ -3063,6 +3072,7 @@ elif active_lob == "Commercial Property":
                                           key=f"cp_sm_up_{slot}_{st.session_state.cp_sm_reset}")
                     if up:
                         st.session_state.cp_sm_files[slot] = {"name": up.name, "bytes": up.getvalue()}
+                    cp_file_chip(st.session_state.cp_sm_files.get(slot))
                     spacer(2)
                 active_keys = ["SM", "MM", "ATA", "CW"]
                 labels = CP_SM_LABELS
@@ -3077,6 +3087,7 @@ elif active_lob == "Commercial Property":
                                       key=f"cp_terr_up_{slot}_{st.session_state.cp_terr_reset}")
                 if up:
                     cp_terr[slot] = {"name": up.name, "bytes": up.getvalue()}
+                cp_file_chip(cp_terr.get(slot))
                 spacer(2)
 
             # ── Assignment table ──────────────────────────────────────────────
@@ -3273,6 +3284,7 @@ elif active_lob == "Commercial Property":
                                       key=f"cp_hex_up_{slot}_{st.session_state.cp_hex_reset}")
                 if up:
                     hex_files[slot] = {"name": up.name, "bytes": up.getvalue()}
+                cp_file_chip(hex_files.get(slot))
                 spacer(4)
 
             rows_html = ""; n_ok = 0

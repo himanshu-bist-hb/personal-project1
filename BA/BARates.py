@@ -11839,6 +11839,9 @@ class Auto:
         self._page_rule_dp1(RatePages)
         self._page_rule_state_specific(RatePages)
 
+        # Final pass: box in table header rows that the per-rule formatters left without borders.
+        RatePages.apply_header_borders()
+
         RatePages.createIndex()
 
         if self.StateAbb == "FL":

@@ -805,6 +805,108 @@ class Excel:
                     cell.font   = self.fontBold
                     cell.border = None
 
+    # ==========================================================================
+    #  HEADER BORDERS — one final pass over the finished workbook
+    # ==========================================================================
+
+    @staticmethod
+    def _has_any_border(cell) -> bool:
+        try:
+            b = cell.border
+            return any(s is not None and s.style for s in (b.left, b.right, b.top, b.bottom))
+        except AttributeError:          # some format methods assign border=None
+            return False
+
+    @staticmethod
+    def _is_body_cell(cell) -> bool:
+        """A table body cell = one that already carries a left AND right border."""
+        try:
+            b = cell.border
+            return bool(b.left is not None and b.left.style and b.right is not None and b.right.style)
+        except AttributeError:
+            return False
+
+    def apply_header_borders(self, skip=("Index",)) -> int:
+        """
+        Box in the column-header row of every table that has none.
+
+        Most format* methods start the thin grid one row too low (data rows are
+        boxed, the header row above them is not).  Rather than touch every
+        format* method, this pass runs once over the finished workbook and
+        gives each unboxed header row the same thin border the table body uses.
+
+        A row is treated as an unboxed header row only when ALL of these hold:
+          • it has 2+ non-blank cells (so single-cell titles / subtitles are never boxed)
+          • none of its cells has a border yet (rows that are already styled are left alone)
+          • at least half of its non-blank cells sit directly above a boxed body cell
+        Blank corner cells that sit directly above the table body are boxed too, so the
+        header is a clean unbroken strip.  Merged header cells are boxed across their
+        whole range.  Two passes handle two-level headers.
+
+        Returns the number of header cells that received a border.
+        """
+        total = 0
+        for ws in self.wb.worksheets:
+            if ws.title in skip or ws.max_row < 2 or ws.max_column < 1:
+                continue
+            total += self._box_headers_in_sheet(ws)
+        return total
+
+    def _box_headers_in_sheet(self, ws) -> int:
+        max_r, max_c = ws.max_row, ws.max_column
+        rows = [list(r) for r in ws.iter_rows(min_row=1, max_row=max_r, max_col=max_c)]
+        merged_at = {(rng.min_row, rng.min_col): rng for rng in ws.merged_cells.ranges}
+
+        def blank(cell):
+            return cell.value is None or str(cell.value).strip() == ""
+
+        boxed = 0
+        for _ in range(2):                     # 2 passes → up to 2-level headers
+            changed = False
+            for ri in range(len(rows) - 1):
+                row, below = rows[ri], rows[ri + 1]
+                vals = [c for c in row if not blank(c)]
+                if len(vals) < 2:
+                    continue
+                if any(self._has_any_border(c) for c in row):
+                    continue
+                hits = [c for c in vals if self._is_body_cell(below[c.column - 1])]
+                if len(hits) < 2 or len(hits) * 2 < len(vals):
+                    continue
+
+                cols = {c.column for c in vals}
+                for c in vals:                 # merged header cells cover their whole range
+                    rng = merged_at.get((c.row, c.column))
+                    if rng:
+                        cols.update(range(rng.min_col, rng.max_col + 1))
+
+                grew = True                    # absorb blank corner / gap cells above the body
+                while grew:
+                    grew = False
+                    for col in list(cols):
+                        for nb in (col - 1, col + 1):
+                            if nb < 1 or nb > max_c or nb in cols:
+                                continue
+                            cell = row[nb - 1]
+                            if blank(cell) and not self._has_any_border(cell) \
+                                    and self._is_body_cell(below[nb - 1]):
+                                cols.add(nb)
+                                grew = True
+
+                for col in cols:
+                    row[col - 1].border = _THIN_BORDER
+                    boxed += 1
+                for c in vals:                 # vertical merges: box every row of the range
+                    rng = merged_at.get((c.row, c.column))
+                    if rng:
+                        for rr in range(rng.min_row, rng.max_row + 1):
+                            for cc in range(rng.min_col, rng.max_col + 1):
+                                rows[rr - 1][cc - 1].border = _THIN_BORDER
+                changed = True
+            if not changed:
+                break
+        return boxed
+
     def formatRule222(self, ws) -> None:
         """
         Format the Rule 222 fixed-layout worksheet.

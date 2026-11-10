@@ -450,7 +450,7 @@ class AdditionalRules:
             ('DF', 'AR - 2 Distribution Factor', self.buildDistributionFactors, False, True, None, self.formatDistributionFactors),
         ]
         if self.state == "FL":  # Sinkhole Loss (Table A.2) is filed in Florida only; goes before A.3
-            specs.append(('SH', 'AR-2 Table A.2. Sinkhole Loss Coverage and Catastrophic Ground Cover Collapse', self.buildSinkholeLoss, False, True, None, self.formatSinkholeLoss))
+            specs.append(('SH', 'AR Table A.2. Sinkhole Loss Coverage and Catastrophic Ground Cover Collapse', self.buildSinkholeLoss, False, True, None, self.formatSinkholeLoss))
         if self.state in self.WH_EXCLUSION_DEFAULT_BRANCH_STATES:
             specs.append(self._whExclusionSpec())  # Table A.3
         return specs

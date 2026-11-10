@@ -10499,6 +10499,9 @@ class Auto:
                 if len(self.CompanyListDif) == 1:
                     self.title_company_name = ""  # Every Company, no point in putting in sheet name.
                 RatePages.generateWorksheet2tables('Rule 292 '+ self.title_company_name, 'RULE 292. MEDICAL PAYMENTS ' + self.title_company_name, '292.A. Increased Limit Factors - Trucks, Tractors, Trailers, Public Autos and Private Passenger Types', self.buildMedPayments92A(comp_name), '292.B. Increased Limit Factors - Zone-Rates Autos', self.buildMedPayments92B(comp_name), False, True)
+                # Virginia only: three extra tables (Income Loss / Additional Autos) below 292.A and 292.B.
+                if self.StateAbb == "VA":
+                    self._append_va_rule_292_tables(RatePages, RatePages.getWB()['Rule 292 ' + self.title_company_name], comp_name)
                 self.overideFooter(RatePages.getWB()['Rule 292 ' + self.title_company_name], CompanyTest)
         except (KeyError) as e:
             warnings.warn(f"292 sheet has failed to build. This is intended if Medpay is not in your state.", MEDPAYWarning)
@@ -10510,6 +10513,117 @@ class Auto:
         for _sn in _wb.sheetnames:
             if _sn.startswith('Rule 292'):
                 self.format92(_wb[_sn])
+
+    # Limits shown on the Virginia 292.C ratepage. The ratebook also carries a $500 row (and may carry
+    # others); only these are printed.
+    VA_292C_LIMITS = (1000, 2000, 3000, 4000, 5000, 10000, 25000, 50000, 75000)
+
+    def _append_va_rule_292_tables(self, RatePages, ws, company):
+        """Virginia only: append the three extra Rule 292 tables underneath 292.A / 292.B.
+
+            292.B.2  Income Loss Benefits Coverage
+                     <- SpecialTypesMotorcycleIncomeLossBenefitsPremium  (Motorcycles)
+                     <- PrivatePassengerIncomeLossBenefitsPremium         (PP, by rating basis)
+                     <- AllOtherIncomeLossBenefitsPremium                 (All Others)
+            292.C    Additional Autos - Medical Expense Benefits Coverages
+                     <- AdditionalAutosMedicalExpenseBenefitsFactor       (limits in VA_292C_LIMITS only)
+            (none)   Additional Autos - Income Loss Benefits
+                     <- PrivatePassengerAdditionalAutosIncomeLossBenefitsPremium
+
+        Each table is built independently: if its ratebook sheet is missing, a warning is raised and
+        just that table is skipped, so 292.A / 292.B are never lost.
+        """
+        thin = Side(border_style='thin', color='C1C1C1')
+        box = Border(left=thin, right=thin, top=thin, bottom=thin)
+        font, bold, italic = RatePages.font, RatePages.fontBold, RatePages.fontItalic
+        center = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
+        left = Alignment(horizontal='left', vertical='bottom', wrap_text=False)
+
+        def num(v):
+            return float(str(v).replace(',', '').replace('$', '').strip())
+
+        def table(sheet):
+            raw = self.rateTables[company][sheet]
+            return pd.DataFrame(raw[1:], columns=raw[0])
+
+        def put(row, col, value, fnt, align, border=True):
+            cell = ws.cell(row=row, column=col, value=value)
+            cell.font = fnt
+            cell.alignment = align
+            if border:
+                cell.border = box
+            return cell
+
+        def write_title(title, note=None):
+            """Italic title, optional italic instruction line, then one blank row. Returns the header row."""
+            row = ws.max_row + 2
+            put(row, 1, title, italic, left, border=False)
+            if note:
+                row += 1
+                put(row, 1, note, italic, left, border=False)
+            return row + 2
+
+        def write_label_rate_table(title, first_header, rows, note=None):
+            # Label column spans A:D (merged), Rate sits in column E.
+            hdr = write_title(title, note)
+            ws.merge_cells(start_row=hdr, start_column=1, end_row=hdr, end_column=4)
+            for c in range(1, 5):
+                put(hdr, c, first_header if c == 1 else None, bold, left)
+            put(hdr, 5, "Rate", bold, center)
+            for i, (label, rate) in enumerate(rows, start=1):
+                r = hdr + i
+                ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=4)
+                for c in range(1, 5):
+                    put(r, c, label if c == 1 else None, font, left)
+                put(r, 5, f"{rate:.2f}", font, center)
+
+        def skip(name, err):
+            warnings.warn(f"VA Rule 292: '{name}' table was not built ({err!r}). Check the ratebook sheet.", MEDPAYWarning)
+
+        # ---- 292.B.2 Income Loss Benefits Coverage --------------------------------------------
+        try:
+            moto = num(table('SpecialTypesMotorcycleIncomeLossBenefitsPremium')['Premium'].iloc[0])
+            other = num(table('AllOtherIncomeLossBenefitsPremium')['Premium'].iloc[0])
+            pp_df = table('PrivatePassengerIncomeLossBenefitsPremium')
+            pp = {str(b).strip().lower(): num(p) for b, p in zip(pp_df.iloc[:, 0], pp_df['Premium'])}
+            rows = [
+                ('Motorcycles Per Vehicle', moto),
+                ('Private Passenger Type Principally Operated by Employee', pp['principally operated by employees']),
+                ('Private Passenger Type Not Principally Operated by Employee', pp['not principally operated by employees']),
+                ('All Others - Per Automobile', other),
+            ]
+            write_label_rate_table('292.B.2. Income Loss Benefits Coverage', 'Vehicle Type', rows)
+        except (KeyError, IndexError, ValueError) as e:
+            skip('292.B.2 Income Loss Benefits Coverage', e)
+
+        # ---- 292.C Additional Autos - Medical Expense Benefits Coverages ----------------------
+        try:
+            med = table('AdditionalAutosMedicalExpenseBenefitsFactor')
+            med['_limit'] = med['MedicalPaymentsLimitText'].map(lambda v: int(num(v)))
+            med = med[med['_limit'].isin(self.VA_292C_LIMITS)].sort_values('_limit')
+            if med.empty:
+                raise ValueError("no matching limits")
+            hdr = write_title('292.C. Additional Autos - Medical Expense Benefits Coverages',
+                              'Multiply the Private Passenger Type Liability premiums by the following factors:')
+            put(hdr, 1, "Limit", bold, center)
+            put(hdr, 2, "Factor", bold, center)
+            for i, (lim, fac) in enumerate(zip(med['_limit'], med['Factor']), start=1):
+                put(hdr + i, 1, f"${lim:,}", font, center)
+                put(hdr + i, 2, f"{num(fac):.3f}", font, center)
+        except (KeyError, IndexError, ValueError) as e:
+            skip('292.C Additional Autos - Medical Expense Benefits Coverages', e)
+
+        # ---- Additional Autos - Income Loss Benefits ------------------------------------------
+        try:
+            aa = table('PrivatePassengerAdditionalAutosIncomeLossBenefitsPremium')
+            aa = {str(b).strip().lower(): num(p) for b, p in zip(aa.iloc[:, 0], aa['Premium'])}
+            rows = [
+                ('Principally Operated by Employee', aa['principally operated by employees']),
+                ('Not Principally Operated by Employee', aa['not principally operated by employees']),
+            ]
+            write_label_rate_table('Additional Autos - Income Loss Benefits', 'Private Passenger Type', rows)
+        except (KeyError, IndexError, ValueError) as e:
+            skip('Additional Autos - Income Loss Benefits', e)
 
     def _page_rule_293(self, RatePages, shared):
         #Rule 293 (Varies by state)

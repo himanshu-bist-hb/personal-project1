@@ -242,23 +242,23 @@ class Office:
     # "300,000/900,000" — no "$", matching the rate page), sorted by the
     # occurrence half numerically.
     # Returns a dataframe
-    def _buildVetSpecializedLiabByPet(self, petType, tab="BP7_VeterinarianSpecializedProfessional"):
+    def _buildVetSpecializedLiabByPet(self, petType, tab="BP7_VeterinarianSpecializedProfessional", dollar=False):
         vetLiab = self.buildDataFrame(tab)
         filtered = vetLiab.query('PetType == @petType').copy()
         filtered['_occ'] = filtered['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
         filtered = filtered.sort_values(by='_occ')
         filtered['Limits'] = filtered['PerOccurrenceAggregateLimitCode'].apply(
-            lambda x: "/".join("{0:,.0f}".format(int(p)) for p in x.split('/')))
+            lambda x: (" / " if dollar else "/").join(("${0:,.0f}" if dollar else "{0:,.0f}").format(int(p)) for p in x.split('/')))
         filtered['Rate'] = filtered['VeterinarianSpecializedLiabilityRate'].apply(lambda x: "${0:,.0f}".format(x))
         return filtered.filter(items=['Limits', 'Rate'])
 
     # Household Pet block of VSPL
     def buildVetSpecializedLiabHousehold(self):
-        return self._buildVetSpecializedLiabByPet("HouseholdPet")
+        return self._buildVetSpecializedLiabByPet("HouseholdPet", dollar=True)
 
     # Non Household Pet block of VSPL
     def buildVetSpecializedLiabNonHousehold(self):
-        return self._buildVetSpecializedLiabByPet("OtherThanHouseholdPet")
+        return self._buildVetSpecializedLiabByPet("OtherThanHouseholdPet", dollar=True)
 
     # Builds a Mobile Equipment block from the ratebook's
     # BP7_PetMobileServicesPetEquipment tab, filtered to the given
@@ -440,10 +440,10 @@ class Office:
     # from the ratebook's BP7_VeterinarianProfessionalLiability tab (same
     # columns as the VSPL tab)
     def buildVetProfLiabHousehold(self):
-        return self._buildVetSpecializedLiabByPet("HouseholdPet", "BP7_VeterinarianProfessionalLiability")
+        return self._buildVetSpecializedLiabByPet("HouseholdPet", "BP7_VeterinarianProfessionalLiability", dollar=True)
 
     def buildVetProfLiabNonHousehold(self):
-        return self._buildVetSpecializedLiabByPet("OtherThanHouseholdPet", "BP7_VeterinarianProfessionalLiability")
+        return self._buildVetSpecializedLiabByPet("OtherThanHouseholdPet", "BP7_VeterinarianProfessionalLiability", dollar=True)
 
     # Builds the Pet Services block of the Mobile Pet and Veterinarian
     # Services Endorsement sheet (MPVS) — Returns a dataframe
@@ -499,9 +499,13 @@ class Office:
     # Returns a dataframe
     def buildPetServicesProfLiab(self):
         psProfLiab = self.buildDataFrame("BP7_PetServicesProfessionalLiability").copy()
-        psProfLiab['Limits'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
-        psProfLiab = psProfLiab.sort_values(by='Limits').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
-        psProfLiab['Limits'] = psProfLiab['Limits'].apply(lambda x: "${0:,.0f}".format(x))
+        # Limit code is "occurrence/aggregate" (e.g. 300000/900000); show both
+        # halves as dollar amounts ("$300,000 / $900,000") like Retail 4.F,
+        # sorted by occurrence.
+        psProfLiab['Occurrence'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[0].astype('int64')
+        psProfLiab['Aggregate'] = psProfLiab['PerOccurrenceAggregateLimitCode'].str.split('/').str[1].astype('int64')
+        psProfLiab = psProfLiab.sort_values(by='Occurrence').rename(columns={'PetServicesProfessionalLiabilityRate': 'Rate'})
+        psProfLiab['Limits'] = psProfLiab.apply(lambda r: "${0:,.0f} / ${1:,.0f}".format(r['Occurrence'], r['Aggregate']), axis=1)
         psProfLiab['Rate'] = psProfLiab['Rate'].apply(lambda x: "${0:,.0f}".format(x))
         return psProfLiab.filter(items=['Limits', 'Rate'])
 
@@ -587,8 +591,8 @@ class Office:
             ("Business Income (BI) per Customized Vehicle", self.buildVetSpecializedBIVehicle()),
             ("Business Income (BI) per Worker", self.buildVetSpecializedBIWorker()),
         ], blank_before_first=True)
-        # Wide enough for "2,000,000/6,000,000" and "Each Additional"
-        ws.column_dimensions['A'].width = 160 / 7.0
+        # Wide enough for "$2,000,000 / $6,000,000" and "Each Additional"
+        ws.column_dimensions['A'].width = 190 / 7.0
         ws.column_dimensions['B'].width = 120 / 7.0
         ws.column_dimensions['C'].width = 120 / 7.0
 
@@ -715,7 +719,7 @@ class Office:
              lambda ws: self._formatMPVS(ws, Office.fontBold, Office.font)),
             ('PSS', 'O Table 4.O. Pet Services Specialized Endorsement', self.buildPetServicesSpecializedEndorsement, False, True, None,
              lambda ws: self._formatPSSplzdEndo(ws, Office.fontBold, Office.font)),
-            ('PSPL', 'O Table 4.P. Pet Services Professional Liability', self.buildPetServicesProfLiab, False, True, None, lambda ws: ws.insert_rows(3)),
+            ('PSPL', 'O Table 4.P. Pet Services Professional Liability', self.buildPetServicesProfLiab, False, True, 'PSPL_RETAIL', lambda ws: ws.insert_rows(3)),
         ]
         return sheetSpecs
 

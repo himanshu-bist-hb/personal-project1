@@ -283,7 +283,7 @@ def build():
         ["OPTO", 1, "REST", 170],
         ["VET", 1, "REST", 205],
         ["AES", 1, "REST", 300],
-        ["VPL", 1, 1, 150], ["VPL", 2, "REST", 100],
+        ["VPL", 1, 1, 190], ["VPL", 2, "REST", 100],
         # A stale, unused "PSPL" row (205/54) already exists above from
         # Retail/Service's PSPL sheets, which both pass an explicit
         # layout_key ("PED") instead of using it — Office's own PSPL table

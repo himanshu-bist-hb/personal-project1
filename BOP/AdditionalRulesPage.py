@@ -107,6 +107,16 @@ class AdditionalRules:
         return rateCapping.query('RateCapType == "Migration" & FiledRatesReachedIndicator == 0 & YrsOnPCMin == 1'). \
                 filter(items=['MinimumRange', 'MaximumRange']).rename(columns={'MinimumRange': 'Lower Bound', 'MaximumRange': 'Upper Bound'})
 
+    # Builds the second "AR Table 98.C. Rate Capping" table (sheet RC2), added
+    # to every state's Additional Rules workbook: RateCapType = Migration and
+    # YrsOnPCMin = 1 and YrsOnPCMax = 3, shown as Lower/Upper Bound
+    # (MinimumRange/MaximumRange). Unlike buildRateCappingFactors it does not
+    # filter on FiledRatesReachedIndicator.
+    # Returns a dataframe
+    def buildRateCappingMigration(self):
+        rateCapping = self.buildDataFrame("BP7_RateCappingPremiumRange2")
+        return rateCapping.query('RateCapType == "Migration" & YrsOnPCMin == 1 & YrsOnPCMax == 3').                 filter(items=['MinimumRange', 'MaximumRange']).rename(columns={'MinimumRange': 'Lower Bound', 'MaximumRange': 'Upper Bound'})
+
     # Builds the Distribution Factor table.
     # Returns a dataframe
     def buildDistributionFactors(self):
@@ -414,7 +424,14 @@ class AdditionalRules:
     def _whExclusionSpec(self):
         return ('WHE', 'AR Table A.3. Windstorm or Hail Exclusion (Coverages Not Included in By-peril Rating)', self.buildWHExclusion, False, True, None, self.formatWHExclusion)
 
+    # Every state's sheet list (see _stateSheetSpecs) plus the Rate Capping
+    # (Migration, 1-3 years on PolicyCenter) sheet, appended last.
     def _sheetSpecs(self):
+        return self._stateSheetSpecs() + [
+            ('RC2', 'AR Table 98.C. Rate Capping', self.buildRateCappingMigration, False, True, None, self.formatRateCappingFactors),
+        ]
+
+    def _stateSheetSpecs(self):
         if self.state == "MD":
             return [
                 ('LHL', 'AR Table 1.C.1-2. Liability for Hazards of Lead', self.buildLiabilityHazards, False, True, None, self.formatLiabilityHazards),

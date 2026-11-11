@@ -429,9 +429,13 @@ class AdditionalRules:
     # Every state's sheet list (see _stateSheetSpecs) plus the Rate Capping
     # (Migration, 1-3 years on PolicyCenter) sheet, appended last.
     def _sheetSpecs(self):
-        return self._stateSheetSpecs() + [
-            ('RC2', 'AR Table 98.C. Rate Capping', self.buildRateCappingMigration, False, True, None, self.formatRateCappingFactors),
-        ]
+        specs = self._stateSheetSpecs()
+        title = 'AR Table 98.C. Rate Capping'
+        # The default-branch states already carry this table (first 'RC'
+        # entry, built with the same Migration/1/3 filter) — don't add it twice.
+        if not any(spec[1] == title for spec in specs):
+            specs.append(('RC2', title, self.buildRateCappingMigration, False, True, None, self.formatRateCappingFactors))
+        return specs
 
     def _stateSheetSpecs(self):
         if self.state == "MD":
@@ -465,7 +469,7 @@ class AdditionalRules:
                 ('SGLPD', 'AR-1 Table D. Stop Gap - Employers Liability Coverage Premium Determination', lambda: self._buildStopGapPremiumDetermination('BP7_Stop_Gap_Base_Rate'), False, True, None, self._formatStopGapPremiumDetermination),
             ]
         specs = [
-            ('RC', 'AR Table 98.C. Rate Capping', self.buildRateCappingFactors, False, True, None, self.formatRateCappingFactors),
+            ('RC', 'AR Table 98.C. Rate Capping', self.buildRateCappingMigration, False, True, None, self.formatRateCappingFactors),
             ('DF', 'AR - 2 Distribution Factor', self.buildDistributionFactors, False, True, None, self.formatDistributionFactors),
         ]
         if self.state == "FL":  # Sinkhole Loss (Table A.2) is filed in Florida only; goes before A.3

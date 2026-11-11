@@ -277,8 +277,10 @@ class AdditionalRules:
     def formatRateCappingFactors(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(80)
         ws.column_dimensions['B'].width = self.pixelsToInches(80)
+        # The ratebook stores whole-number percents (999, -75): append a literal
+        # "%" rather than using a percent format, which would multiply by 100.
         for cell in ws['4:4']:
-            cell.number_format = self.percentageFormat
+            cell.number_format = 'General"%"'
 
     def formatDistributionFactors(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(125)

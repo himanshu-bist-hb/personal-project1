@@ -378,8 +378,8 @@ class OptionalCoverages:
     # Returns a dataframe
     def buildEQDeductibleOptions(self):
         EQDeductibleOptions = self.buildDataFrame("BP7EarthquakeDeductibleOptions")
-        # Only the SubLimit_MaxPct == 100 band; every building class gets its own row
-        filteredEQDeductibleOptions = EQDeductibleOptions.query('`SubLimit_MaxPct` == 100')
+        # Only the SubLimit_MaxPct == 100 band and DeductibleTier 1; every building class gets its own row
+        filteredEQDeductibleOptions = EQDeductibleOptions.query('`SubLimit_MaxPct` == 100 & DeductibleTier == 1')
         pivotedEQDeductibleOptions = filteredEQDeductibleOptions.pivot(index=['DeductibleTier', 'BldgClass'], columns='Deductible', values='DeductibleFactor').reset_index(['DeductibleTier', 'BldgClass']). \
             rename(columns={'DeductibleTier' : "Deductible Tier", 'BldgClass' : "Building Classes"}).rename(columns={10 : '10%', 15 : '15%', 20 : '20%', 25 : '25%'})
         return pivotedEQDeductibleOptions

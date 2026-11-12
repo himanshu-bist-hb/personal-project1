@@ -1708,7 +1708,7 @@ class OptionalCoverages:
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
                 if col == 1: 
-                    cell.number_format = self.currencywdecFormat # Applying currency formatting to columns A-B
+                    cell.number_format = '$#,##0.000' # Rate shown to 3 decimals (C.14.E.1)
 
     # Three separately boxed tables, each with a title above it. `blocks` is
     # [(headerRow, dataRowCount)] as written back to back by

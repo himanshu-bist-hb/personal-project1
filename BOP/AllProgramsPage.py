@@ -54,6 +54,15 @@ class AllPrograms:
         TerritoryDefs = pd.DataFrame(data=self.TerritoryDefsByST)
         TerritoryDefs = TerritoryDefs.rename(columns={'allother1_cluster': 'NW-Other', 'allperil_cluster': 'AllPeril', 'cat1_cluster': 'ST', 'cat2_cluster': 'WS', 'cat3_cluster': 'HU', 'cat4_cluster': 'L-Products', 'fire1_cluster': 'NW-Fire', 'fire2_cluster': 'WF', 'fire3_cluster': 'FFEQ', 'fire4_cluster': 'NC-BINC', \
                                                       'liability1_cluster': 'L-SlipFall', 'liability2_cluster': 'L-Violence', 'liability3_cluster': 'L-OtherMed', 'liability4_cluster': 'L-OtherPrem', 'theft1_cluster': 'NW-Theft', 'water1_cluster': 'NW-Water', 'water2_cluster': 'NC-Water', 'weather1_cluster': 'NC-Other', 'weather2_cluster': 'NC-Wind', 'gkl_cluster' : 'Garage Keepers', 'GRID_ID' : 'Territory'})
+        # Columns 2-3 are LAT / LON (shown to 6 decimals via the TRDEF Number Formats row).
+        # A number format only applies to real numbers, so convert them if the source
+        # stored text — but only when every non-blank value converts (never lose data).
+        for pos in (1, 2):
+            if pos < TerritoryDefs.shape[1]:
+                col = TerritoryDefs.iloc[:, pos]
+                num = pd.to_numeric(col, errors='coerce')
+                if col.notna().sum() == num.notna().sum():
+                    TerritoryDefs.isetitem(pos, num)
         return TerritoryDefs
 
     # Builds the Territory Multiplier factor table
@@ -552,6 +561,8 @@ class AllPrograms:
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey) in enumerate(sheetSpecs, start=1):
+            if AllPrograms.isHabOnlySheet(title):  # state exception: no Hab program (e.g. FL)
+                continue
             if progress_callback:
                 progress_callback(f"Building sheet {i}/{total}: {tableCode}...")
             print(f"  [{i}/{total}] Building sheet: {tableCode}")

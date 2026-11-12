@@ -353,6 +353,8 @@ class AllPrograms:
 
         total = len(sheetSpecs)
         for i, (tableCode, title, build, useIndex, useHeader, layoutKey) in enumerate(sheetSpecs, start=1):
+            if AllPrograms.isHabOnlySheet(title):  # state exception: no Hab program (e.g. FL)
+                continue
             if progress_callback:
                 progress_callback(f"Building sheet {i}/{total}: {tableCode}...")
             print(f"  [{i}/{total}] Building sheet: {tableCode}")

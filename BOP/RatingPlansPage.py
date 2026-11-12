@@ -40,6 +40,7 @@ from openpyxl.styles.borders import Border, Side
 from openpyxl.utils import get_column_letter
 
 from . import ExcelSettingsBOP
+from .bop_config import is_no_hab_state
 
 
 COMPANY_DEVIATION_TABLE = "Company Deviation Factor_Ext"
@@ -131,8 +132,12 @@ class RatingPlans:
     # Returns a dataframe
     def buildMultiBuildingCredit(self):
         allOther    = self._buildMultiBuildingBlock('BP7_Peril_Multi_Building_Credit', 20000, 'All Other')
-        hab         = self._buildMultiBuildingBlock('BP7_Peril_Multi_Building_Credit', 10000, 'Habitational')
         allOtherNRP = self._buildMultiBuildingBlock('BP7 Peril Multi Building Credit NRP', 20000, 'All Other (NRP)')
+        if is_no_hab_state(self.state):
+            # State exception (e.g. FL): no Habitational columns — and merging
+            # on an absent Hab block would empty the whole table.
+            return pd.merge(allOther, allOtherNRP, on='Total # of Buildings', how='inner')
+        hab         = self._buildMultiBuildingBlock('BP7_Peril_Multi_Building_Credit', 10000, 'Habitational')
         habNRP      = self._buildMultiBuildingBlock('BP7 Peril Multi Building Credit NRP', 10000, 'Habitational (NRP)')
         nonNRP = pd.merge(allOther, hab, on='Total # of Buildings', how='inner')
         nrp = pd.merge(allOtherNRP, habNRP, on='Total # of Buildings', how='inner')
@@ -153,10 +158,12 @@ class RatingPlans:
     # Builds the Risk Tier Rating Plan table across all 3 program grade bands.
     # Returns a dataframe
     def buildTieringFactor(self):
-        hab    = self._buildTieringBlock(["1", "2", "3", "4", "5", "6", "7", "8", "9"], 'H')
         asfsw  = self._buildTieringBlock(["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"], 'AS/FS/W')
         ors    = self._buildTieringBlock(["K", "L", "M", "N", "O", "P", "Q", "R", "S", "T"], 'O/R/S')
-        tieringFactor = pd.concat([hab, asfsw, ors])
+        # State exception (e.g. FL): no Hab (grades 1-9) band.
+        bands = [asfsw, ors] if is_no_hab_state(self.state) else [
+            self._buildTieringBlock(["1", "2", "3", "4", "5", "6", "7", "8", "9"], 'H'), asfsw, ors]
+        tieringFactor = pd.concat(bands)
         # AllPeril rows always lead the table; the other perils follow alphabetically.
         tieringFactor['_order'] = (tieringFactor['Peril TypeCode'] != self.perilsConversions.get('allperil', 'allperil')).astype(int)
         return tieringFactor.sort_values(by='Program', ascending=False).sort_values(by=['_order', 'Peril TypeCode', 'Grade']). \
@@ -216,16 +223,22 @@ class RatingPlans:
     # "National Retail Program" spanning their non-NRP/NRP column pairs).
     def formatMultiBuildingCredit(self, ws):
         ws.insert_rows(3)
+        # 4 value columns normally (All Other, Habitational | NRP, NRP Hab);
+        # 2 when the state has no Hab (see bop_config.NO_HAB_STATES).
+        last = ws.max_column                      # E normally, C without Hab
+        half = (last - 1) // 2                    # columns per group
+        nrpCol = 2 + half                         # first NRP column
         ws['B2'] = 'MBCP Factor'
         ws['B3'] = 'All Other'
-        ws['D3'] = 'National Retail Program'
+        ws.cell(row=3, column=nrpCol).value = 'National Retail Program'
         for cell in list(ws['2:2']) + list(ws['3:3']):
             cell.border = self._thinBorder
             cell.font = Font(bold=True)
             cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=True)
-        ws.merge_cells('B2:E2')
-        ws.merge_cells('B3:C3')
-        ws.merge_cells('D3:E3')
+        ws.merge_cells(start_row=2, start_column=2, end_row=2, end_column=last)
+        if half > 1:
+            ws.merge_cells(start_row=3, start_column=2, end_row=3, end_column=1 + half)
+            ws.merge_cells(start_row=3, start_column=nrpCol, end_row=3, end_column=last)
         ws.print_title_rows = '1:4'
         ws.column_dimensions['A'].width = self.pixelsToInches(125)
         for col in range(2, ws.max_column + 1):

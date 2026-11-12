@@ -20,6 +20,7 @@
 # was), so the removal is a no-op and the insertions are skipped since the
 # codes already exist — same mixin works unmodified on both bases.
 
+from .ExcelSettingsBOP import filter_nonempty_blocks
 import pandas as pd
 from openpyxl.styles import Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -78,6 +79,10 @@ class _RetailAppetiteMixin:
         return self._buildPSBusinessIncome("1st Pet Service Worker", "Each Addl Pet Service Worker", "1st Worker")
 
     def _appendLabeledBlocks(self, ws, boldFont, font, blocks, blank_before_first=False):
+        # Skip tables with no values; a sheet left with none is dropped (see ExcelSettingsBOP.removeBlankSheets)
+        blocks = filter_nonempty_blocks(ws, blocks)
+        if not blocks:
+            return
         row = ws.max_row + 1
         max_col = 1
         for i, (label, df) in enumerate(blocks):

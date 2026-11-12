@@ -71,6 +71,20 @@ def resolve_default_appetite(cfg: "BOPConfig", state_abb: str) -> bool:
     return str(code).strip().upper() == "Y"
 
 
+# STATE EXCEPTION: states that do not write the Habitational (Hab / "H")
+# program. For these the Hab program page is not built, and every other
+# program's pages leave Hab out entirely: "H" in table titles, Hab rows and
+# columns, Hab-only sheets, Habitational class codes (10000-19999) and the
+# "Habitational and ..." wording. Implemented centrally in
+# ExcelSettingsBOP (scrub_hab_df / strip_hab_from_title) so it applies to
+# every program and version without per-page edits.
+NO_HAB_STATES = frozenset({"FL"})
+
+
+def is_no_hab_state(state) -> bool:
+    return str(state or "").strip().upper() in NO_HAB_STATES
+
+
 # Class_Code_Min -> program display name, used by the All Peril page.
 # Also the fallback when an older "BOP Input File.xlsx" (created before the
 # "Class Codes" tab existed) is loaded.

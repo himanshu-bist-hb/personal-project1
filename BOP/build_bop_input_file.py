@@ -333,6 +333,9 @@ def build():
     _write_table(ws, ["TableCode", "ColStart", "ColEnd", "RowStart", "Format"], [
         # Whole-dollar amounts, no decimals (unlike the shared "Currency" format,
         # which is "$#,##0.000" and looks awkward on whole-number amounts).
+        # Territory Definitions (TRDEF, All Programs 2.0): columns 2-3 are LAT / LON,
+        # shown to 6 decimal places. Other columns keep the default format.
+        ["TRDEF", 2, 3, 4, "0.000000"],
         ["PD", 1, 4, 5, "$#,##0"],
         ["PDH", 1, 4, 5, "$#,##0"],
         ["NSPP", 1, 4, 5, "$#,##0"],

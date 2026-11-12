@@ -29,7 +29,11 @@ from openpyxl.utils import get_column_letter, column_index_from_string
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 from config.constants import COMPANY_NAMES
-from .bop_config import load_bop_config
+import re
+
+import pandas as pd
+
+from .bop_config import load_bop_config, is_no_hab_state
 
 # Peril display names (see the "Peril Conversions" config tab / cat4, liability1-4)
 # whose text after the hyphen is longer than their neighboring peril columns
@@ -70,6 +74,119 @@ _ABBREVIATION_LEVELS = [
     [("Nationwide", "NW"), ("Insurance", "Ins")],
 ]
 _OVERFLOW_LINE = "+{n} more - see RP Table 96.C"
+
+
+# ── "No Hab" state exception (see bop_config.NO_HAB_STATES) ────────────────
+# Labels that mean the Habitational program. "H" alone is ambiguous (grade
+# letters etc.), so it only counts in a column headed "Program".
+_HAB_LABELS = {"hab", "habitational", "habitational (nrp)", "hab (nrp)"}
+_HAB_CLASS_CODE_HEADERS = {"code", "class code", "classcode"}
+_HAB_CLASS_CODE_RANGE = (10000, 19999)   # Class_Code_Min 10000 = Hab, 20000 = Auto
+_HAB_AND_PREFIX = re.compile(r"^Habitational\s*(?:,|and|&)\s*(?:and\s+|&\s*)?", re.IGNORECASE)
+
+
+def is_hab_only_title(title) -> bool:
+    """True for a title that belongs to the Habitational program alone
+    ("H Table 3.C.2.f. ..." with no other program's table in it)."""
+    return (isinstance(title, str) and title.startswith("H Table ")
+            and len(re.findall(r"\bTable\b", title)) == 1)
+
+
+def strip_hab_from_title(title):
+    """
+    Remove the Habitational ("H") program from a table title, e.g.
+      "AS, FS, H, O, R, S, W Table 3.C.2.b. ..."  -> "AS, FS, O, R, S, W Table 3.C.2.b. ..."
+      "H Table 3.C.2.m., AS, FS, O, R, S, W Table 3.C.2.n. ..." -> "AS, FS, O, R, S, W Table 3.C.2.n. ..."
+      "..., R Table 3.C.4.d., AS, H Table 3.C.4.e. ..." -> "..., R Table 3.C.4.d., AS Table 3.C.4.e. ..."
+    A Hab-only title is returned unchanged; callers drop those sheets via
+    is_hab_only_title().
+    """
+    if not isinstance(title, str) or is_hab_only_title(title):
+        return title
+    t = re.sub(r"^H Table [^\s,]+,\s*", "", title)      # leading H-only segment
+    t = re.sub(r",\s*H(?= Table\b)", "", t)             # "AS, H Table x" -> "AS Table x"
+    t = re.sub(r"(?<![\w.])H,\s*", "", t)               # "FS, H, O" -> "FS, O"
+    return t
+
+
+def _is_text(series) -> bool:
+    return series.dtype == object or pd.api.types.is_string_dtype(series)
+
+
+def scrub_hab_df(df, drop_rows=True):
+    """
+    Return `df` with every Habitational (Hab) trace removed:
+      - columns headed Hab / Habitational / Habitational (NRP);
+      - rows labelled Hab / Habitational (or "H" under a "Program" header) in
+        either of the first two columns, and rows whose class-code column
+        ("Code" / "Class Code") is a Hab class code (10000-19999);
+      - the wording "Habitational and Office Programs" -> "Office Programs".
+    drop_rows=False leaves rows alone (multi-table sheets, whose formatters
+    index their blocks by the original row counts).
+    """
+    if df is None or len(df.columns) == 0:
+        return df
+    is_hab_col = [str(c).strip().lower() in _HAB_LABELS for c in df.columns]
+    if any(is_hab_col):
+        df = df.loc[:, [not h for h in is_hab_col]]
+    if not drop_rows or len(df) == 0 or len(df.columns) == 0:
+        return df
+
+    drop = pd.Series(False, index=df.index)
+    for pos in range(min(2, df.shape[1])):
+        col = df.iloc[:, pos]
+        header = str(df.columns[pos]).strip().lower()
+        if _is_text(col):
+            text = col.astype("string").str.strip()
+            drop |= text.str.lower().isin(_HAB_LABELS).fillna(False).to_numpy()
+            if header == "program":
+                drop |= (text == "H").fillna(False).to_numpy()
+            rewrite = text.str.match(_HAB_AND_PREFIX).fillna(False)
+            if rewrite.any():
+                df = df.copy()
+                df.isetitem(pos, col.where(~rewrite, text.str.replace(_HAB_AND_PREFIX, "", regex=True)))
+        if header in _HAB_CLASS_CODE_HEADERS:
+            num = pd.to_numeric(col, errors="coerce")
+            drop |= num.between(*_HAB_CLASS_CODE_RANGE).fillna(False).to_numpy()
+    return df.loc[~drop] if drop.any() else df
+
+
+def df_has_data(df) -> bool:
+    """
+    True if `df` has at least one real value. A table whose dataframe has
+    columns but no rows (or only blank/NaN cells) prints as a bare header
+    row — e.g. Florida has no Windstorm/Hail "Per Building" deductible rows,
+    so that sheet came out as just a title and a header. Such tables are
+    dropped (see Excel.removeBlankSheets and filter_nonempty_blocks).
+    """
+    if df is None or len(df) == 0 or len(df.columns) == 0:
+        return False
+    try:
+        return bool(df.replace("", float("nan")).notna().any().any())
+    except Exception:
+        return True  # unsure -> keep the table rather than silently drop it
+
+
+def _filled_cells(ws) -> int:
+    return sum(1 for row in ws.iter_rows() for c in row if c.value is not None)
+
+
+def filter_nonempty_blocks(ws, blocks):
+    """
+    For the hand-built "labeled block" sheets (a label + a dataframe, stacked
+    on one sheet — see each program page's _appendLabeledBlocks): return only
+    the (label, df) blocks that actually have data, and record on the sheet
+    how many blocks were offered vs. kept so Excel.removeBlankSheets can drop
+    the whole sheet when none of its tables has a value.
+    """
+    st = ws.__dict__.setdefault("_bop_blank", {})
+    if st.get("no_hab"):
+        blocks = [(strip_hab_from_title(label), scrub_hab_df(df)) for label, df in blocks]
+        blocks = [(l, d) for l, d in blocks if str(l).strip().lower() not in _HAB_LABELS]
+    kept = [(label, df) for label, df in blocks if df_has_data(df)]
+    st["extra_total"] = st.get("extra_total", 0) + len(blocks)
+    st["extra_kept"] = st.get("extra_kept", 0) + len(kept)
+    return kept
 
 
 def set_small_market_context(footer_names=None) -> None:
@@ -116,6 +233,7 @@ class Excel:
         self.wb.active.title = "Index"
 
         self.state = state
+        self.noHab = is_no_hab_state(state)   # state exception: no Habitational program
         self.programName = programName
         self.nEffective = nEffective
         self.rEffective = rEffective
@@ -373,13 +491,19 @@ class Excel:
     #  WORKSHEET GENERATORS
     # ==========================================================================
 
-    @staticmethod
-    def _retitle(title: str) -> str:
+    def _retitle(self, title: str) -> str:
         # Small Market's merged base-rate sheet is built through the NGIC slot
         # (see BOPRatePages._merge_small_market), whose sheet title names NGIC.
         if _SMALL_MARKET["footer_names"] and isinstance(title, str):
-            return title.replace(_NGIC_TITLE_LABEL, _SM_TITLE_LABEL)
+            title = title.replace(_NGIC_TITLE_LABEL, _SM_TITLE_LABEL)
+        if self.noHab:
+            title = strip_hab_from_title(title)
         return title
+
+    def isHabOnlySheet(self, title) -> bool:
+        """True when this sheet is Hab-only and the state has no Hab: callers
+        skip it before building (see bop_config.NO_HAB_STATES)."""
+        return self.noHab and is_hab_only_title(title)
 
     def generateWorksheet(self, table_code, title, df, useIndex, useHeader, layout_key=None):
         """
@@ -394,8 +518,17 @@ class Excel:
         ws = self.wb.create_sheet(title=table_code)
         ws["A1"] = self._retitle(title)
         ws["A2"] = ""
+        if self.noHab:
+            df = scrub_hab_df(df)
         self._write_df_block(ws, df, useIndex, useHeader, index_cell="A3")
         self.format_table(ws, layout_key or table_code)
+        # No columns at all = a sheet whose body the page builds itself (its
+        # own postFormat / _appendLabeledBlocks), so it can't be judged here.
+        ws.__dict__.setdefault("_bop_blank", {})["no_hab"] = self.noHab
+        ws.__dict__.setdefault("_bop_blank", {})["base"] = (
+            "custom" if df is None or len(df.columns) == 0
+            else "data" if df_has_data(df) else "empty")
+        ws._bop_blank["cells"] = _filled_cells(ws)
         return ws
 
     def generateTerrWorksheet(self, table_code, title, df, useIndex, useHeader):
@@ -428,6 +561,9 @@ class Excel:
         ws["A1"] = self._retitle(title)
         ws["A2"] = ""
         block_start_rows = []
+        if self.noHab:
+            # columns only: callers' formatters index blocks by original row counts
+            dataframes = [scrub_hab_df(d, drop_rows=False) for d in dataframes]
         for df in dataframes:
             if reserved_header_rows and block_start_rows:
                 ws.append([])  # blank spacer row between blocks
@@ -439,6 +575,11 @@ class Excel:
                                      else ws.max_row + 1)
             self._write_df_block(ws, df, useIndex, useHeader, index_cell=f"A{ws.max_row + 1}")
         self.format_table(ws, layout_key or table_code)
+        ws.__dict__.setdefault("_bop_blank", {})["no_hab"] = self.noHab
+        ws.__dict__.setdefault("_bop_blank", {})["base"] = (
+            "data" if any(df_has_data(d) for d in dataframes)
+            else "empty" if any(len(d.columns) for d in dataframes) else "custom")
+        ws._bop_blank["cells"] = _filled_cells(ws)
         return block_start_rows, ws
 
     # ==========================================================================
@@ -566,7 +707,45 @@ class Excel:
     #  INDEX + GETTERS
     # ==========================================================================
 
+    def removeBlankSheets(self) -> list:
+        """
+        Drop every sheet none of whose tables has a value, so the workbook
+        (and so the PDF and Index) never shows a title + bare header row for
+        a table a state simply doesn't have. A sheet is blank when:
+          - its generated table(s) had no data ("empty"), or its body is
+            hand-built ("custom") and every labeled block it tried to add
+            was empty; AND
+          - it was not given any content a page builds some other way.
+        Sheets of unknown shape are always kept. Returns the removed names.
+        """
+        removed = []
+        for ws in list(self.wb.worksheets):
+            if ws.title == "Index":
+                continue
+            st = getattr(ws, "_bop_blank", None)
+            if not st:
+                continue
+            base = st.get("base")
+            total, kept = st.get("extra_total", 0), st.get("extra_kept", 0)
+            if base == "empty":
+                # kept == 0: no labeled block added data; the cell count
+                # guard: nothing else was written into the sheet after it
+                # was generated (a postFormat that fills in its own content).
+                blank = kept == 0 and _filled_cells(ws) == st.get("cells")
+            elif base == "custom":
+                blank = total > 0 and kept == 0
+            else:
+                blank = False
+            if blank:
+                removed.append(ws.title)
+                self.wb.remove(ws)
+        if removed:
+            print(f"[ExcelSettingsBOP] {self.state} {self.programName}: omitted {len(removed)} blank sheet(s): {', '.join(removed)}")
+        self.removedSheets = removed
+        return removed
+
     def createIndex(self) -> None:
+        self.removeBlankSheets()
         ws_index = self.wb["Index"]
         ws_index["A1"] = f"{self.state} - INDEX"
         ws_index["A1"].font = self.fontBold

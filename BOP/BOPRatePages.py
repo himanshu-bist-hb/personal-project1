@@ -48,7 +48,7 @@ from . import ExcelSettingsBOP
 from . import ClassModifierPage
 from . import CommonRulesPage
 from . import AdditionalRulesPage
-from .bop_config import load_bop_config, resolve_default_version, resolve_default_appetite
+from .bop_config import load_bop_config, resolve_default_version, resolve_default_appetite, is_no_hab_state
 from .BOPpagebreaks import (
     process_pagebreaks, export_to_pdf, export_single_sheet_pdf, split_pdf_by_size,
 )
@@ -345,6 +345,18 @@ def _run_impl(
         footer_names = _small_market_footer_names(rate_tables)
         print(f"Small Market footer companies: {footer_names}")
         ExcelSettingsBOP.set_small_market_context(footer_names)
+
+    # ── State exception: some states (e.g. FL) don't write the Habitational
+    # program — don't build its page. (Every other program's pages leave Hab
+    # out too; see ExcelSettingsBOP.scrub_hab_df.) The outputs below then
+    # line up with the programs actually built, not the ones requested. ──────
+    if "Hab" in programs and is_no_hab_state(info.state_abb):
+        programs = [p for p in programs if p != "Hab"]
+        msg = f"{info.state_abb} does not have the Habitational program — Hab rate pages not built."
+        print(msg)
+        if not programs:
+            raise ValueError(msg)
+        if progress_callback: progress_callback(msg)
 
     # ── 6-8. Build, save and page-break each requested program ──────────────
     # The expensive part (opening + extracting the ratebooks above) is shared;

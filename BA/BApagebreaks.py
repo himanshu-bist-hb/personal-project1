@@ -1275,6 +1275,12 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
     # draw loop further down) so every value's display text/width is only
     # computed once no matter how many times it repeats in the sheet.
     def _make_fmt(excel_fmt):
+        # Plain fixed-decimal format ("0.000000" = TRDEF's LAT/LON): keep the
+        # decimals, no thousands separator, text values pass through as-is.
+        m = re.fullmatch(r"0\.(0+)", excel_fmt or "")
+        if m:
+            nd = len(m.group(1))
+            return lambda v: f"{v:.{nd}f}" if isinstance(v, (int, float)) else str(v)
         if excel_fmt and excel_fmt.startswith("$"):
             return lambda v: f"${v:,.0f}" if isinstance(v, (int, float)) else str(v)
         if excel_fmt and "#,##0" in excel_fmt:
@@ -1293,11 +1299,14 @@ def _render_grid_sheet_pdf(xlsx_path, sheet_name, out_pdf, page_size, progress):
     width_cache = {}
 
     def _disp_text(v, ci):
-        txt = disp_cache.get(v)
+        # Keyed by the column's format as well as the value: the same number
+        # (e.g. 40.0) can sit in a formatted LAT column and a General one.
+        fmt = col_fmt_fns.get(ci)
+        key = (id(fmt), v)
+        txt = disp_cache.get(key)
         if txt is None:
-            fmt = col_fmt_fns.get(ci)
             txt = fmt(v) if fmt else _general(v)
-            disp_cache[v] = txt
+            disp_cache[key] = txt
         return txt
 
     def _disp_width(txt):

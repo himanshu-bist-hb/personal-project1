@@ -49,6 +49,7 @@
 # table (R Table 4.E): the label should read as a plain bold caption, not a
 # tightly-boxed cell (see [[bop_retail_pss_border_width_fix]]).
 
+from .ExcelSettingsBOP import filter_nonempty_blocks
 from copy import copy
 
 import numpy as np
@@ -540,6 +541,10 @@ class Office:
     # above the table, not a tightly-boxed cell (see
     # [[bop_retail_pss_border_width_fix]]).
     def _appendLabeledBlocks(self, ws, boldFont, font, blocks, blank_before_first=False):
+        # Skip tables with no values; a sheet left with none is dropped (see ExcelSettingsBOP.removeBlankSheets)
+        blocks = filter_nonempty_blocks(ws, blocks)
+        if not blocks:
+            return
         row = ws.max_row + 1
         max_col = 1
         for i, (label, df) in enumerate(blocks):

@@ -2683,6 +2683,10 @@ elif active_lob == "Business Owners Policy":
                     irpm_credit=st.session_state.bop_irpm_credit / 100.0,
                     irpm_debit=st.session_state.bop_irpm_debit / 100.0)
                 st.session_state.bop_xlsx_paths = xlsx_outs; st.session_state.bop_pdf_paths = pdf_outs
+                # run() can build fewer programs than requested (e.g. Hab for a state
+                # without it) — keep built_programs aligned with the output files.
+                _outs = xlsx_outs if isinstance(xlsx_outs, list) else [xlsx_outs]
+                built_programs = [next((p for p in built_programs if f" BOP {p} Rate Pages" in os.path.basename(x)), None) for x in _outs]
                 st.session_state.bop_built_programs = built_programs
                 # Store the *resolved* version/appetite (e.g. "Default" ->
                 # "2.0"/True for that state's ratebook) — the PDF step's

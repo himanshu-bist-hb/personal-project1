@@ -378,8 +378,9 @@ class OptionalCoverages:
     # Returns a dataframe
     def buildEQDeductibleOptions(self):
         EQDeductibleOptions = self.buildDataFrame("BP7EarthquakeDeductibleOptions")
-        filteredEQDeductibleOptions = EQDeductibleOptions.query(f'`SubLimit_MinPct` == 76 & (BldgClass == "1C" | BldgClass == "2A" | BldgClass == "3C" | BldgClass == "4B")')
-        pivotedEQDeductibleOptions = filteredEQDeductibleOptions.pivot(index=['DeductibleTier', 'BldgClass'], columns='Deductible', values='DeductibleFactor').reset_index(['DeductibleTier', 'BldgClass']).replace({'BldgClass' : {'1C' : "1C, 1D", '2A' : "2A, 2B, 3A, 3B, 4A", '3C' : "3C, 4C, 4D, 5B, 5C, 5AA", '4B' : "4B, 5A"}}). \
+        # Only the SubLimit_MaxPct == 100 band; every building class gets its own row
+        filteredEQDeductibleOptions = EQDeductibleOptions.query('`SubLimit_MaxPct` == 100')
+        pivotedEQDeductibleOptions = filteredEQDeductibleOptions.pivot(index=['DeductibleTier', 'BldgClass'], columns='Deductible', values='DeductibleFactor').reset_index(['DeductibleTier', 'BldgClass']). \
             rename(columns={'DeductibleTier' : "Deductible Tier", 'BldgClass' : "Building Classes"}).rename(columns={10 : '10%', 15 : '15%', 20 : '20%', 25 : '25%'})
         return pivotedEQDeductibleOptions
     
@@ -1506,13 +1507,11 @@ class OptionalCoverages:
                 ws.cell(row=row, column=col).number_format = self.currencyFormat if isDollars else '0.000'
 
     def formatEQDeductibleOptions(self, ws):
-        # Widen Building Classes so lists like "3C, 4C, 4D, 5B, 5C, 5AA" don't wrap
-        ws.column_dimensions['B'].width = self.pixelsToInches(190)
         for col in range(1, ws.max_column + 1):
             char = get_column_letter(col) # Letter representing the current column
             for row in range(4, ws.max_row + 1):
                 cell = ws[char + str(row)]
-                if col == 1: 
+                if col == 1:
                     cell.number_format = self.noDecimalFormat # Applying currency formatting to columns A-B
                 elif col >= 3: 
                     cell.number_format = self.twodecimal # Applying currency formatting to columns A-B

@@ -284,7 +284,7 @@ def _format_wkst(wkstname, titlerows, A1title, A2title="", dfname=None, statenam
     ftr.left.text = footer_text
     ftr.left.font, ftr.left.size = _HF_FONT, footer_size
     ftr.center.text = stabb + " - SRP - &[Tab] - &P"
-    ftr.center.font, ftr.center.size = _HF_FONT, _FONT_SIZE
+    ftr.center.font, ftr.center.size = _HF_FONT, footer_size   # same font and size as the company names (left)
 
 
 def borderfnct(ws):

@@ -18,6 +18,7 @@
 
 import logging
 import math
+import numbers
 from pathlib import Path
 import re
 import threading
@@ -32,7 +33,7 @@ import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font
 from openpyxl.styles.borders import Border, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.utils import column_index_from_string, get_column_letter
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.pagebreak import Break
 
@@ -325,8 +326,72 @@ def addlformat(ws):
     ws.page_setup.fitToPage = True
 
 
+def narrow_construction_columns(ws, header_row=3):
+    """Trim the 'Construction Group 1-3 / 4-6' columns. borderfnct sizes every column at
+    (longest text + 2) * 1.2, which leaves these two very wide because of their long header;
+    (len + 2) * 1.0 is still wide enough for the bold header and about 17% narrower."""
+    for cell in ws[header_row]:
+        if isinstance(cell.value, str) and cell.value.startswith("Construction Group"):
+            ws.column_dimensions[cell.column_letter].width = len(cell.value) + 2
+
+
+def narrow_limit_columns(ws, header_row=3):
+    """Rule 81 sheets: size each 'Limit' column at (longest text + 2) * 1.0 instead of the
+    sheet-wide * 1.2, i.e. a bit narrower. Run after the spacer columns are inserted."""
+    for col in ws.iter_cols(min_row=header_row):
+        if col[0].value == "Limit":
+            longest = max((len(str(c.value)) for c in col if c.value not in (None, "")), default=0)
+            ws.column_dimensions[col[0].column_letter].width = longest + 2
+
+
+def dollar_columns(ws, cols=(1, 2), first_row=4, last_row=None):
+    """Put a $ on the data cells of the given columns. Numbers get a currency number format
+    (cents only when needed); text values (e.g. pre-formatted limits) get a leading '$'.
+    Run before gap_after_title, while the first data row is still first_row."""
+    for row in range(first_row, (last_row or ws.max_row) + 1):
+        for col in cols:
+            cell = ws.cell(row=row, column=col)
+            v = cell.value
+            if isinstance(v, bool) or v is None or v == "":
+                continue
+            if isinstance(v, numbers.Number):        # also numpy ints/floats from pandas
+                cell.number_format = '$#,##0' if float(v).is_integer() else '$#,##0.00'
+            elif isinstance(v, str) and not v.startswith("$"):
+                cell.value = "$" + v
+
+
+def format_wine_leakage(ws):
+    """Wine Leakage layout (after the row shuffle): row 3 = Minimum Charge | value, row 4 spacer,
+    row 5 = Deductible | Rate header, rows 6+ = data. $ on the minimum charge and the deductibles,
+    rates to three decimals."""
+    dollar_columns(ws, cols=(2,), first_row=3, last_row=3)   # Minimum Charge value
+    dollar_columns(ws, cols=(1,), first_row=6)               # Deductible column
+    for row in range(6, ws.max_row + 1):
+        ws.cell(row=row, column=2).number_format = '0.000'  # Rate column
+
+
+def gap_after_title(ws, extra_cols=0):
+    """Insert one blank row between the sheet title (row 1) and the sub-title (row 2).
+
+    Call AFTER borderfnct / number formats: those key off the original layout (sub-title in row 2,
+    header in row 3). Everything below row 1 moves down one row with its styles, so the header row
+    becomes row 4; the repeated print-title rows and the print area follow it. extra_cols keeps a print
+    area that is deliberately wider than the table (sheets with notes beside it)."""
+    ws.insert_rows(2)
+    ws.print_title_rows = "1:4"
+    ws.print_area = "A1:" + get_column_letter(ws.max_column + extra_cols) + str(ws.max_row + 1)
+
+
 def _blank(v):
     return v is None or (isinstance(v, str) and v.strip() == "")
+
+
+_NUMBER_LIKE = re.compile(r"[\s$%+\-–.,0-9()]+")
+
+
+def _number_like(v):
+    """Text that is only digits and number punctuation, e.g. '0.7', '$5,000', '3,000,001-5,000,000'."""
+    return isinstance(v, str) and bool(_NUMBER_LIKE.fullmatch(v))
 
 
 def _header_rows(rows_vals, first_hdr, last_hdr):
@@ -347,7 +412,9 @@ def _header_rows(rows_vals, first_hdr, last_hdr):
             prev_is_header = prev_is_label = False
             continue
         prev_blank = not nonblank[r - 2] if r >= 2 else True
-        text_only = len(filled) >= 2 and all(isinstance(v, str) for v in filled)
+        # A row of number-like text (a table whose values are stored as strings) is data, not a header.
+        text_only = (len(filled) >= 2 and all(isinstance(v, str) for v in filled)
+                     and not all(_number_like(v) for v in filled))
         has_next = r < n and bool(nonblank[r])
         if text_only and has_next and (prev_blank or prev_is_header or prev_is_label):
             rows.add(r)
@@ -356,6 +423,85 @@ def _header_rows(rows_vals, first_hdr, last_hdr):
             prev_is_label = len(filled) == 1 and (prev_blank or prev_is_header)
             prev_is_header = False
     return sorted(rows)
+
+
+_PX_PER_UNIT = 7          # one Excel column-width unit = the width of a digit in the default font
+_PX_PAD = 5               # padding Excel adds to every column
+_DEFAULT_COL_WIDTH = 8.43
+_MAX_PRINT_COL = 30
+_font_cache = {}
+
+
+def _text_px(text, bold, size=_FONT_SIZE):
+    """Rendered width in pixels (96 dpi) of text in Arial. Uses the real Arial metrics when available,
+    otherwise a conservative per-character estimate."""
+    key = (bool(bold), size)
+    font = _font_cache.get(key)
+    if font is None:
+        try:
+            from PIL import ImageFont
+            name = "arialbd.ttf" if bold else "arial.ttf"
+            font = ImageFont.truetype(name, size * 96 / 72)
+        except Exception:                      # PIL/Arial not available: fall back to the estimate
+            font = False
+        _font_cache[key] = font
+    if font:
+        return font.getlength(text)
+    return len(text) * (10.5 if bold else 8.5) * size / 10
+
+
+def _widen_print_area_for_titles(ws):
+    """Excel prints a long title/sub-title/note by spilling it into the empty cells to its right, but the
+    print area cuts it off at its last column, so a narrow table (e.g. one 'Factor' column) loses the end of
+    its title in the PDF. Measure every long text cell and extend the print area to the right, just far enough
+    to show it. Only empty columns are added; the table itself is untouched. Sheets with no explicit print
+    area already print their overflow, so they are left alone."""
+    area = ws.print_area
+    if not area:
+        return
+    m = re.search(r"\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)$", str(area).split("!")[-1])
+    if not m:
+        return
+    first_col, first_row, last_col, last_row = m.group(1), m.group(2), column_index_from_string(m.group(3)), m.group(4)
+    first_row_i, last_row_i = int(first_row), int(last_row)
+
+    def col_px(idx):
+        dim = ws.column_dimensions.get(get_column_letter(idx))
+        width = dim.width if dim is not None and dim.width else _DEFAULT_COL_WIDTH
+        return width * _PX_PER_UNIT + _PX_PAD
+
+    new_last = last_col
+    # Stay inside the sheet's real extent: iterating past it would create empty cells and grow max_row/max_column.
+    rows = ws.iter_rows(min_row=first_row_i, max_row=min(last_row_i, ws.max_row),
+                        max_col=min(ws.max_column, _MAX_PRINT_COL))
+    for row in rows:
+        vals = [c.value for c in row]
+        for idx, cell in enumerate(row, start=1):
+            v = vals[idx - 1]
+            if not isinstance(v, str) or len(v) < 3 or v == "Blank":   # short titles ("HOPS GROWER") can clip too
+                continue
+            # Text can only spill through empty cells; a non-empty neighbour clips it however wide the page is.
+            nxt = idx
+            while nxt < len(vals) and vals[nxt] in (None, ""):
+                nxt += 1
+            need = _text_px(v, bool(cell.font and cell.font.b), (cell.font.sz if cell.font and cell.font.sz else _FONT_SIZE)) * 1.06 + 4
+            horiz = cell.alignment.horizontal if cell.alignment else None
+            own = col_px(idx)
+            if horiz == "center":
+                need_right = (own + need) / 2        # centred text spills equally to both sides
+            elif horiz == "right":
+                continue                             # spills to the left, which the print area already covers
+            else:
+                need_right = need
+            have, col = own, idx
+            while have < need_right and col < _MAX_PRINT_COL:
+                col += 1
+                have += col_px(col)
+            if nxt < len(vals):
+                col = min(col, nxt)                  # the next non-empty cell clips the text: columns beyond it cannot help
+            new_last = max(new_last, min(col, _MAX_PRINT_COL))
+    if new_last != last_col:
+        ws.print_area = f"{first_col}{first_row}:{get_column_letter(new_last)}{last_row}"
 
 
 def _left_align_and_box_headers(book):
@@ -370,6 +516,7 @@ def _left_align_and_box_headers(book):
             continue
         ws.print_options.horizontalCentered = False
         ws.print_options.verticalCentered = False
+        _widen_print_area_for_titles(ws)
         rows = str(ws.print_title_rows or "1:3")
         try:
             last_hdr = int(rows.split(":")[-1].replace("$", ""))
@@ -378,7 +525,10 @@ def _left_align_and_box_headers(book):
         rows_vals = [list(r) for r in ws.iter_rows(values_only=True)]
         if not rows_vals:
             continue
-        for r in _header_rows(rows_vals, 3, max(3, last_hdr)):
+        # The column-header row is the last print-title row (row 3 on most sheets; row 4 where a
+        # blank spacer row sits under the title, e.g. SM LCM). Rows above it are titles, not headers.
+        hdr = max(3, last_hdr)
+        for r in _header_rows(rows_vals, hdr, hdr):
             if r > len(rows_vals):
                 continue
             for c, value in enumerate(rows_vals[r - 1], start=1):
@@ -405,7 +555,9 @@ def _link_index(book):
         target = "A1"
         cell = index["A" + str(i)]
         cell.hyperlink = f"#'{names[i]}'!{target}"
-        cell.value = ws[target].value
+        title = ws[target].value
+        # Index entries are all upper case (some sheet titles are mixed case, e.g. "Rating Factor").
+        cell.value = title.upper() if isinstance(title, str) else title
         cell.font = font_blue
 
 
@@ -804,17 +956,17 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     BGIBLOI = BGIBLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index(names=['Limit',1,2,3,4,5,6])
     BGIBLOI = BGIBLOI.drop(columns=[2,3,5,6])
     BGIBLOI = BGIBLOI.drop(BGIBLOI.tail(1).index)
-    BGIBLOI['Limit'] = BGIBLOI['Limit'].apply('{:,}'.format)
+    BGIBLOI['Limit'] = BGIBLOI['Limit'].apply('${:,}'.format)
     BGIBLOI.iloc[-1, BGIBLOI.columns.get_loc('Limit')] = BGIBLOI.iloc[-1,BGIBLOI.columns.get_loc('Limit')] + "+"
     BGIBLOI = BGIBLOI.rename(columns={1:"Construction Group 1-3",4:"Construction Group 4-6"})
     BGIBLOI = splitdf(BGIBLOI, 2).fillna('')
 
-    BGIIBLOI['Limit'] = BGIIBLOI['Limit'].apply('{:,}'.format)
+    BGIIBLOI['Limit'] = BGIIBLOI['Limit'].apply('${:,}'.format)
     BGIIBLOI = BGIIBLOI.drop(BGIIBLOI.tail(1).index)
     BGIIBLOI.iloc[-1, BGIIBLOI.columns.get_loc('Limit')] = BGIIBLOI.iloc[-1, BGIIBLOI.columns.get_loc('Limit')] + "+"
     BGIIBLOI = splitdf(BGIIBLOI,2).fillna('')
 
-    SCOLBLOI['Limit'] = SCOLBLOI['Limit'].apply('{:,}'.format)
+    SCOLBLOI['Limit'] = SCOLBLOI['Limit'].apply('${:,}'.format)
     SCOLBLOI = SCOLBLOI.drop(SCOLBLOI.tail(1).index)
     SCOLBLOI.iloc[-1, SCOLBLOI.columns.get_loc('Limit')] = SCOLBLOI.iloc[-1, SCOLBLOI.columns.get_loc('Limit')] + "+"
     SCOLBLOI = splitdf(SCOLBLOI,2).fillna('')
@@ -822,17 +974,17 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     BGIPPLOI = BGIPPLOI.pivot(index='Limit',columns='ConstructionCode',values='Factor').reset_index(names=['Limit',1,2,3,4,5,6])
     BGIPPLOI = BGIPPLOI.drop(columns=[2,3,5,6])
     BGIPPLOI = BGIPPLOI.drop(BGIPPLOI.tail(1).index)
-    BGIPPLOI['Limit'] = BGIPPLOI['Limit'].apply('{:,}'.format)
+    BGIPPLOI['Limit'] = BGIPPLOI['Limit'].apply('${:,}'.format)
     BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] = BGIPPLOI.iloc[-1, BGIPPLOI.columns.get_loc('Limit')] + "+"
     BGIPPLOI = BGIPPLOI.rename(columns={1:"Construction Group 1-3",4:"Construction Group 4-6"})
     BGIPPLOI = splitdf(BGIPPLOI, 2).fillna('')
 
-    BGIIPPLOI['Limit'] = BGIIPPLOI['Limit'].apply('{:,}'.format)
+    BGIIPPLOI['Limit'] = BGIIPPLOI['Limit'].apply('${:,}'.format)
     BGIIPPLOI = BGIIPPLOI.drop(BGIIPPLOI.tail(1).index)
     BGIIPPLOI.iloc[-1, BGIIPPLOI.columns.get_loc('Limit')] = BGIIPPLOI.iloc[-1, BGIIPPLOI.columns.get_loc('Limit')] + "+"
     BGIIPPLOI = splitdf(BGIIPPLOI,2).fillna('')
 
-    SCOLPPLOI['Limit'] = SCOLPPLOI['Limit'].apply('{:,}'.format)
+    SCOLPPLOI['Limit'] = SCOLPPLOI['Limit'].apply('${:,}'.format)
     SCOLPPLOI = SCOLPPLOI.drop(SCOLPPLOI.tail(1).index)
     SCOLPPLOI.iloc[-1, SCOLPPLOI.columns.get_loc('Limit')] = SCOLPPLOI.iloc[-1, SCOLPPLOI.columns.get_loc('Limit')] + "+"
     SCOLPPLOI = splitdf(SCOLPPLOI,2).fillna('')
@@ -952,6 +1104,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     DIP['deductible'] = DIP['deductible'].astype(int).apply('{:,}'.format)
     DIP = DIP.reset_index(drop=True)
     DIP = pd.concat([DedLim2,DIP],ignore_index=True)
+    DIP['deductible'] = '$' + DIP['deductible'].astype(str)   # $ on the Deductible column
 
     DIPI = DIP[['deductible','limit','basic group i']].rename(columns={"basic group i":"Factor"})
     DIPII = DIP[['deductible','limit','basic group ii']].rename(columns={"basic group ii":"Factor"})
@@ -967,27 +1120,27 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     ##Formatting Limit Column
     for i in range(len(DIPI['Limit'])):
         if int(DIPI['Limit'][i]) not in [min(DIPI['Limit'].astype(int)),max(DIPI['Limit'].astype(int))]:
-            DIPILim[i] = str(f"{DIPI['Limit'][i-1]:,}") + ' - ' + str(f"{DIPI['Limit'][i]:,}")
+            DIPILim[i] = str(f"${DIPI['Limit'][i-1]:,}") + ' - ' + str(f"${DIPI['Limit'][i]:,}")
         elif int(DIPI['Limit'][i]) == min(DIPI['Limit'].astype(int)):
-            DIPILim[i] = str(f"{DIPI['Limit'][i]:,}") + ' or less'
+            DIPILim[i] = str(f"${DIPI['Limit'][i]:,}") + ' or less'
         else:
-            DIPILim[i] = 'More than ' + str(f"{DIPI['Limit'][i-1]:,}")
+            DIPILim[i] = 'More than ' + str(f"${DIPI['Limit'][i-1]:,}")
 
     for i in range(len(DIPII['Limit'])):
         if int(DIPII['Limit'][i]) not in [min(DIPII['Limit'].astype(int)),max(DIPII['Limit'].astype(int))]:
-            DIPIILim[i] = str(f"{DIPII['Limit'][i-1]:,}") + ' - ' + str(f"{DIPII['Limit'][i]:,}")
+            DIPIILim[i] = str(f"${DIPII['Limit'][i-1]:,}") + ' - ' + str(f"${DIPII['Limit'][i]:,}")
         elif int(DIPII['Limit'][i]) == min(DIPII['Limit'].astype(int)):
-            DIPIILim[i] = str(f"{DIPII['Limit'][i]:,}") + ' or less'
+            DIPIILim[i] = str(f"${DIPII['Limit'][i]:,}") + ' or less'
         else:
-            DIPIILim[i] = 'More than ' + str(f"{DIPII['Limit'][i-1]:,}")
+            DIPIILim[i] = 'More than ' + str(f"${DIPII['Limit'][i-1]:,}")
 
     for i in range(len(DIPSCOL['Limit'])):
         if int(DIPSCOL['Limit'][i]) not in [min(DIPSCOL['Limit'].astype(int)),max(DIPSCOL['Limit'].astype(int))]:
-            DIPSCOLLim[i] = str(f"{DIPSCOL['Limit'][i-1]:,}") + ' - ' + str(f"{DIPSCOL['Limit'][i]:,}")
+            DIPSCOLLim[i] = str(f"${DIPSCOL['Limit'][i-1]:,}") + ' - ' + str(f"${DIPSCOL['Limit'][i]:,}")
         elif int(DIPSCOL['Limit'][i]) == min(DIPSCOL['Limit'].astype(int)):
-            DIPSCOLLim[i] = str(f"{DIPSCOL['Limit'][i]:,}") + ' or less'
+            DIPSCOLLim[i] = str(f"${DIPSCOL['Limit'][i]:,}") + ' or less'
         else:
-            DIPSCOLLim[i] = 'More than ' + str(f"{DIPSCOL['Limit'][i-1]:,}")
+            DIPSCOLLim[i] = 'More than ' + str(f"${DIPSCOL['Limit'][i-1]:,}")
 
     DIPI['Limit'] = DIPILim
     DIPII['Limit'] = DIPIILim
@@ -1031,7 +1184,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
 
     EmployeeDF["Each Add'l Rateable Employee"] = EDLR['Premium Per Rateable Employee >5']
     EmployeeDF.rename(columns={'Premium < 5 Rateable Employees':'1-5 Rateable Employees'},inplace=True)
-    EmployeeDF['Limit'] = EmployeeDF['Limit'].apply('{:,}'.format)
+    EmployeeDF['Limit'] = EmployeeDF['Limit'].apply('${:,}'.format)
     #</editor-fold>
 
     #<editor-fold desc="Create Fraudulent Impersonation DF">
@@ -1102,7 +1255,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     else:
         EmergencyDF = pd.read_excel(CWRatebook, sheet_name='EmergencyEvacuationIncludin (1)', skiprows=11)
 
-    EmergencyDF['Limit'] = EmergencyDF['Limit'].apply('{:,}'.format)
+    EmergencyDF['Limit'] = EmergencyDF['Limit'].apply('${:,}'.format)
 
     #</editor-fold>
 
@@ -1245,6 +1398,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
 
     PolicyMinDF.iloc[0,0] = "All Policies"
     PolicyMinDF['Minimum'] = '$' + PolicyMinDF['Minimum'].astype(str)
+    PolicyMinDF = PolicyMinDF.rename(columns={'Minimum': 'Minimum Premium'})
 
     if 'Nut Hullers And Processors Cove' in NGICwb.sheetnames:
         NutHullProcDF = pd.read_excel(_rb_for('Nut Hullers And Processors Cove'), sheet_name='Nut Hullers And Processors Cove', skiprows=11).drop(columns = 'Constant')
@@ -1738,17 +1892,17 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         BGIBLOIMM = BGIBLOIMM.pivot(index='Limit', columns='ConstructionCode', values='Factor').reset_index(names=['Limit', 1, 2, 3, 4, 5, 6])
         BGIBLOIMM = BGIBLOIMM.drop(columns=[2, 3, 5, 6])
         BGIBLOIMM = BGIBLOIMM.drop(BGIBLOIMM.tail(1).index)
-        BGIBLOIMM['Limit'] = BGIBLOIMM['Limit'].apply('{:,}'.format)
-        BGIBLOIMM.iloc[-1, BGIBLOIMM.columns.get_loc('Limit')] = "10,000,000+"
+        BGIBLOIMM['Limit'] = BGIBLOIMM['Limit'].apply('${:,}'.format)
+        BGIBLOIMM.iloc[-1, BGIBLOIMM.columns.get_loc('Limit')] = "$10,000,000+"
         BGIBLOIMM = BGIBLOIMM.rename(columns={1: "Construction Group 1-3", 4: "Construction Group 4-6"})
         BGIBLOIMM = splitdf(BGIBLOIMM, 2).fillna('')
 
-        BGIIBLOIMM['Limit'] = BGIIBLOIMM['Limit'].apply('{:,}'.format)
+        BGIIBLOIMM['Limit'] = BGIIBLOIMM['Limit'].apply('${:,}'.format)
         BGIIBLOIMM = BGIIBLOIMM.drop(BGIIBLOIMM.tail(1).index)
         BGIIBLOIMM.iloc[-1, BGIIBLOIMM.columns.get_loc('Limit')] = BGIIBLOIMM.iloc[-1, BGIIBLOIMM.columns.get_loc('Limit')] + "+"
         BGIIBLOIMM = splitdf(BGIIBLOIMM, 2).fillna('')
 
-        SCOLBLOIMM['Limit'] = SCOLBLOIMM['Limit'].apply('{:,}'.format)
+        SCOLBLOIMM['Limit'] = SCOLBLOIMM['Limit'].apply('${:,}'.format)
         SCOLBLOIMM = SCOLBLOIMM.drop(SCOLBLOIMM.tail(1).index)
         SCOLBLOIMM.iloc[-1, SCOLBLOIMM.columns.get_loc('Limit')] = SCOLBLOIMM.iloc[-1, SCOLBLOIMM.columns.get_loc('Limit')] + "+"
         SCOLBLOIMM = splitdf(SCOLBLOIMM, 2).fillna('')
@@ -1756,17 +1910,17 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         BGIPPLOIMM = BGIPPLOIMM.pivot(index='Limit', columns='ConstructionCode', values='Factor').reset_index(names=['Limit', 1, 2, 3, 4, 5, 6])
         BGIPPLOIMM = BGIPPLOIMM.drop(columns=[2, 3, 5, 6])
         BGIPPLOIMM = BGIPPLOIMM.drop(BGIPPLOIMM.tail(1).index)
-        BGIPPLOIMM['Limit'] = BGIPPLOIMM['Limit'].apply('{:,}'.format)
+        BGIPPLOIMM['Limit'] = BGIPPLOIMM['Limit'].apply('${:,}'.format)
         BGIPPLOIMM.iloc[-1, BGIPPLOIMM.columns.get_loc('Limit')] = BGIPPLOIMM.iloc[-1, BGIPPLOIMM.columns.get_loc('Limit')] + "+"
         BGIPPLOIMM = BGIPPLOIMM.rename(columns={1: "Construction Group 1-3", 4: "Construction Group 4-6"})
         BGIPPLOIMM = splitdf(BGIPPLOIMM, 2).fillna('')
 
-        BGIIPPLOIMM['Limit'] = BGIIPPLOIMM['Limit'].apply('{:,}'.format)
+        BGIIPPLOIMM['Limit'] = BGIIPPLOIMM['Limit'].apply('${:,}'.format)
         BGIIPPLOIMM = BGIIPPLOIMM.drop(BGIIPPLOIMM.tail(1).index)
         BGIIPPLOIMM.iloc[-1, BGIIPPLOIMM.columns.get_loc('Limit')] = BGIIPPLOIMM.iloc[-1, BGIIPPLOIMM.columns.get_loc('Limit')] + "+"
         BGIIPPLOIMM = splitdf(BGIIPPLOIMM, 2).fillna('')
 
-        SCOLPPLOIMM['Limit'] = SCOLPPLOIMM['Limit'].apply('{:,}'.format)
+        SCOLPPLOIMM['Limit'] = SCOLPPLOIMM['Limit'].apply('${:,}'.format)
         SCOLPPLOIMM = SCOLPPLOIMM.drop(SCOLPPLOIMM.tail(1).index)
         SCOLPPLOIMM.iloc[-1, SCOLPPLOIMM.columns.get_loc('Limit')] = SCOLPPLOIMM.iloc[-1, SCOLPPLOIMM.columns.get_loc('Limit')] + "+"
         SCOLPPLOIMM = splitdf(SCOLPPLOIMM, 2).fillna('')
@@ -1814,26 +1968,24 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
     if sm.enabled and sm.lcm:
         _step('Building SM LCM Excel Sheet')
         ws = wb.create_sheet(title='LCM')
-        formatwkstSM(wkstname=ws,titlerows='3',A1title='BASE RATE CALCULATION',A2title='Loss Cost Multiplier',dfname=SMLCMTable,statename=State,stabb=StateAbb, effdate=EffectiveDate)
+        # Layout: 1 title, 2 blank spacer, 3 "Loss Cost Multiplier", 4 column headers, 5+ data.
+        formatwkstSM(wkstname=ws,titlerows='4',A1title='BASE RATE CALCULATION',A2title='Loss Cost Multiplier',dfname=SMLCMTable,statename=State,stabb=StateAbb, effdate=EffectiveDate)
+        ws.insert_rows(2)
 
         for row in range(1, ws.max_row + 1):
             for col in range(1, ws.max_column + 1):
                 char = get_column_letter(col)  # Letter representing the current column
                 cell = ws[char + str(row)]
                 ws.column_dimensions[char].bestFit = True  # Using bestfit as the default option for column widths
-                if row > 3 and cell.value is not None:  # Adding a border to the table data
+                if row > 4 and cell.value is not None:  # Adding a border to the table data
                     cell.border = Border(left=Side(border_style='thin', color='00000000'),
                                          right=Side(border_style='thin', color='00000000'),
                                          top=Side(border_style='thin', color='00000000'),
                                          bottom=Side(border_style='thin', color='00000000'))
-                if row < 2:  # Applies bold font to rows 1-3, which are header rows
+                if row < 2:  # Row 1 is the bold/underlined title
                     cell.font = fontBoldUnderline
-                elif row == 2:
+                elif row == 3:  # "Loss Cost Multiplier" sub-title
                     cell.alignment = Alignment(horizontal='left', vertical='bottom', wrap_text=False)
-                elif row == 4:  # Additional formatting for row 4 (table header row)
-                    cell.number_format = rateFormat
-                    cell.font = font
-                    cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
                 else:
                     cell.number_format = rateFormat  # Default format for rates
                     cell.font = font
@@ -1977,7 +2129,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 elif row == 2:
                     cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
                 elif col == 1:
-                    cell.number_format = codeFormat
+                    cell.number_format = currencyFormat if 3 < row < 19 else codeFormat  # $ on Deductible Amount values
                     cell.font = font
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
                 elif col == 2 and row < 17:
@@ -1990,11 +2142,13 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
                 if 18 < row < 22:
                     cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
-                elif row > 22 and cell.value is not None:
+                elif row >= 22 and cell.value is not None:  # row 22 = column header of the 2nd table
                     cell.border = Border(left=Side(border_style='thin', color='00000000'),
                                             right=Side(border_style='thin', color='00000000'),
                                             top=Side(border_style='thin', color='00000000'),
                                             bottom=Side(border_style='thin', color='00000000'))
+                    if row == 22:
+                        cell.font = Font(name=fontName, size=fontSize, bold=True)
         for col in ws3.columns:
             max_length = 0
             column = col[0].column_letter  # Get the column name
@@ -2112,13 +2266,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ws10.print_area = f"A1:{get_column_letter(ws10.max_column)}{ws10.max_row}"
         ws10.page_setup.fitToPage = True
 
-        # Add page breaks every 120 rows
-        pagefacnum = math.ceil(ws10.max_row / 120)
-        for rnum in range(1, pagefacnum):
-            ws10.row_breaks.append(Break(id=rnum * 120))
-
+        # Landscape: the three side-by-side tables fill the page width, and the rows flow onto as
+        # many pages as needed (fitToHeight=0). The old portrait layout forced a break every 120 rows,
+        # which would squeeze the text to an unreadable size on a landscape page.
+        ws10.page_setup.orientation = 'landscape'
         ws10.page_setup.fitToWidth = 1
-        ws10.page_setup.fitToHeight = pagefacnum
+        ws10.page_setup.fitToHeight = 0
     # </editor-fold>
 
     #<editor-fold desc="MM Index Sheet">
@@ -2291,7 +2444,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 elif row == 2:
                     cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
                 elif col == 1:
-                    cell.number_format = codeFormat
+                    cell.number_format = currencyFormat if 3 < row < 19 else codeFormat  # $ on Deductible Amount values
                     cell.font = font
                     cell.alignment = Alignment(horizontal='center', vertical='bottom', wrap_text=False)
                 elif col == 2 and row < 17:
@@ -2305,11 +2458,13 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
 
                 if 18 < row < 22:
                     cell.font = Font(name=fontName, size=fontSize, color='FFFFFFFF')
-                elif row > 22 and cell.value is not None:
+                elif row >= 22 and cell.value is not None:  # row 22 = column header of the 2nd table
                     cell.border = Border(left=Side(border_style='thin', color='00000000'),
                                          right=Side(border_style='thin', color='00000000'),
                                          top=Side(border_style='thin', color='00000000'),
                                          bottom=Side(border_style='thin', color='00000000'))
+                    if row == 22:
+                        cell.font = Font(name=fontName, size=fontSize, bold=True)
 
         for col in ws7.columns:
             max_length = 0
@@ -2421,13 +2576,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ws11.print_area = f"A1:{get_column_letter(ws11.max_column)}{ws11.max_row}"
         ws11.page_setup.fitToPage = True
 
-        # Add page breaks every 120 rows
-        tablefac2 = math.ceil(ws11.max_row / 120)
-        for rnum in range(1, tablefac2):
-            ws11.row_breaks.append(Break(id=rnum * 120))
-
+        # Landscape: the three side-by-side tables fill the page width, and the rows flow onto as
+        # many pages as needed (fitToHeight=0). The old portrait layout forced a break every 120 rows,
+        # which would squeeze the text to an unreadable size on a landscape page.
+        ws11.page_setup.orientation = 'landscape'
         ws11.page_setup.fitToWidth = 1
-        ws11.page_setup.fitToHeight = tablefac2
+        ws11.page_setup.fitToHeight = 0
     # </editor-fold>
 
     # <editor-fold desc="MM Segmentation Removal Sheets">
@@ -2553,6 +2707,15 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     pass
                 adjusted_width = (max_length + 2) * 1.2
                 ws12.column_dimensions[column].width = adjusted_width
+
+        # One blank row between the titles (row 1) and the sub-titles. openpyxl does not move merged
+        # ranges on insert, so unmerge the sub-titles, insert the row, then merge them one row lower.
+        for rng in ('A2:B2', 'G2:H2', 'M2:O2'):
+            ws12.unmerge_cells(rng)
+        ws12.insert_rows(2)
+        for rng in ('A3:B3', 'G3:H3', 'M3:O3'):
+            ws12.merge_cells(rng)
+        ws12.print_title_rows = '1:4'
 
         ws12.print_area = 'A1:' + get_column_letter(ws12.max_column+1) + str(ws12.max_row+1)
         ws12.page_setup.fitToPage = True
@@ -2849,6 +3012,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = ws15[char + str(row)]
                 cell.number_format = rateFormat
+        narrow_construction_columns(ws15)
+        gap_after_title(ws15)
 
         ws16 = wb2.create_sheet(title='AOI Bldg Grp II')
         formatwkstMM(wkstname=ws16, titlerows='3', A1title='AOI CURVES', A2title='Basic Group II Limit Factors Building', dfname=BGIIBLOIMM, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -2858,6 +3023,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = ws16[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(ws16)
 
         ws17 = wb2.create_sheet(title='AOI Bldg SCOL')
         formatwkstMM(wkstname=ws17, titlerows='3', A1title='AOI CURVES', A2title='Special Cause of Loss Limit Factors Building', dfname=SCOLBLOIMM, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -2867,6 +3033,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = ws17[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(ws17)
 
         ws18 = wb2.create_sheet(title='AOI PP Grp I')
         formatwkstMM(wkstname=ws18, titlerows='3', A1title='AOI CURVES', A2title='Basic Group I Limit Factors Contents', dfname=BGIPPLOIMM, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -2876,6 +3043,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = ws18[char + str(row)]
                 cell.number_format = rateFormat
+        narrow_construction_columns(ws18)
+        gap_after_title(ws18)
 
         ws19 = wb2.create_sheet(title='AOI PP Grp II')
         formatwkstMM(wkstname=ws19, titlerows='3', A1title='AOI CURVES', A2title='Basic Group II Limit Factors Contents', dfname=BGIIPPLOIMM, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -2885,6 +3054,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = ws19[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(ws19)
 
         ws20 = wb2.create_sheet(title='AOI PP SCOL')
         formatwkstMM(wkstname=ws20, titlerows='3', A1title='AOI CURVES', A2title='Special Cause of Loss Limit Factors - Contents', dfname=SCOLPPLOIMM, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -2894,6 +3064,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = ws20[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(ws20)
 
     # <editor-fold desc="SM Deductible tables">
     if sm.enabled and sm.deductible:
@@ -2931,10 +3102,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         
         DedbyAOIBG1SM.column_dimensions['G'].width = 9.5
         DedbyAOIBG1SM.column_dimensions['K'].width = 9.5
+        narrow_limit_columns(DedbyAOIBG1SM)
         DedbyAOIBG1SM.print_area = 'A1:' + get_column_letter(DedbyAOIBG1SM.max_column) + str(DedbyAOIBG1SM.max_row + 1)
         DedbyAOIBG1SM.page_setup.fitToPage = True
         DedbyAOIBG1SM.page_setup.fitToHeight = 1
         DedbyAOIBG1SM.page_setup.fitToWidth = 1
+        gap_after_title(DedbyAOIBG1SM)
 
         DedbyAOIBG2SM = wb.create_sheet(title='Deductible by AOI Grp II')
         formatwkstSM(wkstname=DedbyAOIBG2SM, titlerows='3', A1title='RULE 81. DEDUCTIBLE INSURANCE PLAN', A2title='Basic Group II Factors', dfname=DIPII, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -2969,10 +3142,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         
         DedbyAOIBG2SM.column_dimensions['G'].width = 9.5
         DedbyAOIBG2SM.column_dimensions['K'].width = 9.5
+        narrow_limit_columns(DedbyAOIBG2SM)
         DedbyAOIBG2SM.print_area = 'A1:' + get_column_letter(DedbyAOIBG2SM.max_column) + str(DedbyAOIBG2SM.max_row + 1)
         DedbyAOIBG2SM.page_setup.fitToPage = True
         DedbyAOIBG2SM.page_setup.fitToHeight = 1
         DedbyAOIBG2SM.page_setup.fitToWidth = 1
+        gap_after_title(DedbyAOIBG2SM)
 
         DedbyAOISCOLSM = wb.create_sheet(title='Deductible by AOI SCOL')
         formatwkstSM(wkstname=DedbyAOISCOLSM, titlerows='3', A1title='RULE 81. DEDUCTIBLE INSURANCE PLAN', A2title='Special Cause of Loss Factors', dfname=DIPSCOL, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3007,10 +3182,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         
         DedbyAOISCOLSM.column_dimensions['G'].width = 9.5
         DedbyAOISCOLSM.column_dimensions['K'].width = 9.5
+        narrow_limit_columns(DedbyAOISCOLSM)
         DedbyAOISCOLSM.print_area = 'A1:' + get_column_letter(DedbyAOISCOLSM.max_column) + str(DedbyAOISCOLSM.max_row + 1)
         DedbyAOISCOLSM.page_setup.fitToPage = True
         DedbyAOISCOLSM.page_setup.fitToHeight = 1
         DedbyAOISCOLSM.page_setup.fitToWidth = 1
+        gap_after_title(DedbyAOISCOLSM)
 
     # <editor-fold desc="SM Full Manual">
     if sm.enabled and sm.full_manual:
@@ -3018,10 +3195,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ExpSM = wb.create_sheet(title='Expense Constant')
         formatwkstSM(wkstname=ExpSM, titlerows='3', A1title='RULE 8 EXPENSE CONSTANT', A2title='8. Rate and Premium Computation', dfname=ExpConstDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(ExpSM)
+        gap_after_title(ExpSM)
 
         MinPSM = wb.create_sheet(title='Minimum Premium')
         formatwkstSM(wkstname=MinPSM, titlerows='3', A1title='RULE 8 EXPENSE CONSTANT', A2title='8. Rate and Premium Computation', dfname=PolicyMinDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(MinPSM)
+        gap_after_title(MinPSM)
 
         AOIBG1SM = wb.create_sheet(title='AOI Bldg Grp I')
         formatwkstSM(wkstname=AOIBG1SM, titlerows='3', A1title='AOI CURVES', A2title='Limit of Insurance Relativity Factors Building Basic Group I', dfname=BGIBLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3031,6 +3210,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = AOIBG1SM[char + str(row)]
                 cell.number_format = rateFormat
+        narrow_construction_columns(AOIBG1SM)
+        gap_after_title(AOIBG1SM)
 
         AOIBG2SM = wb.create_sheet(title='AOI Bldg Grp II')
         formatwkstSM(wkstname=AOIBG2SM, titlerows='3', A1title='AOI CURVES', A2title='Basic Group II Limit Factors Building', dfname=BGIIBLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3040,6 +3221,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = AOIBG2SM[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(AOIBG2SM)
 
         AOIBSCOLSM = wb.create_sheet(title='AOI Bldg SCOL')
         formatwkstSM(wkstname=AOIBSCOLSM, titlerows='3', A1title='AOI CURVES', A2title='Special Cause of Loss Limit Factors Building', dfname=SCOLBLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3049,6 +3231,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = AOIBSCOLSM[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(AOIBSCOLSM)
 
         AOIPPG1SM = wb.create_sheet(title='AOI PP Grp I')
         formatwkstSM(wkstname=AOIPPG1SM, titlerows='3', A1title='AOI CURVES', A2title='Basic Group I Limit Factors Contents', dfname=BGIPPLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3058,6 +3241,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = AOIPPG1SM[char + str(row)]
                 cell.number_format = rateFormat
+        narrow_construction_columns(AOIPPG1SM)
+        gap_after_title(AOIPPG1SM)
 
         AOIPPG2SM = wb.create_sheet(title='AOI PP Grp II')
         formatwkstSM(wkstname=AOIPPG2SM, titlerows='3', A1title='AOI CURVES', A2title='Basic Group II Limit Factors Contents', dfname=BGIIPPLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3067,6 +3252,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = AOIPPG2SM[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(AOIPPG2SM)
 
         AOIPPSCOLSM = wb.create_sheet(title='AOI PP SCOL')
         formatwkstSM(wkstname=AOIPPSCOLSM, titlerows='3', A1title='AOI CURVES', A2title='Special Cause of Loss Limit Factors - Contents', dfname=SCOLPPLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3076,6 +3262,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 char = get_column_letter(col) # Letter representing the current column
                 cell = AOIPPSCOLSM[char + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(AOIPPSCOLSM)
 
         TieringG1SM = wb.create_sheet(title='Tiering Grp I')
         formatwkstSM(wkstname=TieringG1SM, titlerows='3', A1title='TIERING GRADE FACTORS', A2title='Basic Group I Tiering Factors', dfname=BGITier, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3084,6 +3271,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, TieringG1SM.max_column + 1):
                 cell = TieringG1SM[get_column_letter(col) + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(TieringG1SM)
 
         TieringG2SM = wb.create_sheet(title='Tiering Grp II')
         formatwkstSM(wkstname=TieringG2SM, titlerows='3', A1title='TIERING GRADE FACTORS', A2title='Basic Group II Tiering Factors', dfname=BGIITier, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3092,6 +3280,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, TieringG2SM.max_column + 1):
                 cell = TieringG2SM[get_column_letter(col) + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(TieringG2SM)
 
         TieringSCOLSM = wb.create_sheet(title='Tiering SCOL')
         formatwkstSM(wkstname=TieringSCOLSM, titlerows='3', A1title='TIERING GRADE FACTORS', A2title='Special Cause of Loss Tiering Factors', dfname=SCOLTier, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3100,6 +3289,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, TieringSCOLSM.max_column + 1):
                 cell = TieringSCOLSM[get_column_letter(col) + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(TieringSCOLSM)
 
         if LeafSM is not None:
             LeafWS = wb.create_sheet(title='LEAF')
@@ -3112,6 +3302,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         formatwkstSM(wkstname=EmergencySM, titlerows='3', A1title='EMERGENCY EVACUATION INCLUDING CIVIL AUTHORITY COVERAGE', A2title='', dfname=EmergencyDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(EmergencySM)
         addlformat(EmergencySM)
+        for row in range(4, EmergencySM.max_row + 1):   # $ on the Premium column (Limit already carries its $)
+            EmergencySM['B' + str(row)].number_format = currencyFormat
 
         HumanSvEnhSM = wb.create_sheet(title='Human Serv. Enhancement Cover.')
         formatwkstSM(wkstname=HumanSvEnhSM, titlerows='3', A1title='HUMAN SERVICES ENHANCEMENT COVERAGE', A2title='', dfname=HumSvcsEnhDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3169,6 +3361,10 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         AOBGrp1SM.column_dimensions['M'].width = 12
         AOBGrp1SM.column_dimensions['N'].width = 12
         AOBGrp1SM.print_area = 'A1:' + get_column_letter(AOBGrp1SM.max_column + 1) + str(AOBGrp1SM.max_row + 1)
+        # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+        AOBGrp1SM.insert_rows(2)
+        AOBGrp1SM.print_title_rows = '1:4'
+        AOBGrp1SM.print_area = 'A1:' + get_column_letter(AOBGrp1SM.max_column + 1) + str(AOBGrp1SM.max_row)
 
         AOBGrp2SM = wb.create_sheet(title='Age of Building Grp II')
         formatwkstSM(wkstname=AOBGrp2SM, titlerows='3', A1title='AGE OF BUILDING FACTORS', A2title='Basic Group II Factors', dfname=BGIIAOB, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3196,6 +3392,10 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         AOBGrp2SM.column_dimensions['M'].width = 12
         AOBGrp2SM.column_dimensions['N'].width = 12
         AOBGrp2SM.print_area = 'A1:' + get_column_letter(AOBGrp2SM.max_column + 1) + str(AOBGrp2SM.max_row + 1)
+        # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+        AOBGrp2SM.insert_rows(2)
+        AOBGrp2SM.print_title_rows = '1:4'
+        AOBGrp2SM.print_area = 'A1:' + get_column_letter(AOBGrp2SM.max_column + 1) + str(AOBGrp2SM.max_row)
 
         AOBSCOLSM = wb.create_sheet(title='Age of Building SCOL')
         formatwkstSM(wkstname=AOBSCOLSM, titlerows='3', A1title='AGE OF BUILDING FACTORS', A2title='Special Cause of Loss Factors', dfname=SCOLAOB, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3223,6 +3423,10 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         AOBSCOLSM.column_dimensions['M'].width = 12
         AOBSCOLSM.column_dimensions['N'].width = 12
         AOBSCOLSM.print_area = 'A1:' + get_column_letter(AOBSCOLSM.max_column + 1) + str(AOBSCOLSM.max_row + 1)
+        # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+        AOBSCOLSM.insert_rows(2)
+        AOBSCOLSM.print_title_rows = '1:4'
+        AOBSCOLSM.print_area = 'A1:' + get_column_letter(AOBSCOLSM.max_column + 1) + str(AOBSCOLSM.max_row)
 
         CivilTimeSM = wb.create_sheet(title='Civil Authority Time Element')
         formatwkstSM(wkstname=CivilTimeSM, titlerows='3', A1title='RULE 54. E. CIVIL AUTHORITY CHANGES', A2title='Table 54.E.3.b: Civil Authority Increased Radius Coverage Factor', dfname=CivilDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3230,12 +3434,20 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         addlformat(CivilTimeSM)
         CivilTimeSM['E3'].alignment = Alignment(horizontal='center')
         CivilTimeSM.column_dimensions['E'].width = 14
+        # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+        CivilTimeSM.insert_rows(2)
+        CivilTimeSM.print_title_rows = '1:4'
+        CivilTimeSM.print_area = 'A1:' + get_column_letter(CivilTimeSM.max_column) + str(CivilTimeSM.max_row)
 
         CosmeticSM = wb.create_sheet(title='Cosmetic Exclusion')
         formatwkstSM(wkstname=CosmeticSM, titlerows='3', A1title='COSMETIC EXCLUSION ON COVERAGE FOR SIDING', A2title='Multiply the Basic Group II building rate by the below factor', dfname=CosmeticDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(CosmeticSM)
         addlformat(CosmeticSM)
         CosmeticSM['D4'].alignment = Alignment(horizontal='center')
+        # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+        CosmeticSM.insert_rows(2)
+        CosmeticSM.print_title_rows = '1:4'
+        CosmeticSM.print_area = 'A1:' + get_column_letter(CosmeticSM.max_column) + str(CosmeticSM.max_row)
 
         TerrorismSM = wb.create_sheet(title='Terrorism')
         formatwkstMM(wkstname=TerrorismSM, titlerows='3', A1title='Coverage for Certified Acts of Terrorism', A2title='', dfname=TerrorismDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3245,6 +3457,10 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         Money304SM = wb.create_sheet(title='Money & Securities 304')
         formatwkstSM(wkstname=Money304SM, titlerows='3', A1title='304 Money and Securities', A2title='Base Premium', dfname=CrimeMSDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(Money304SM)
+        # Blank spacer row under the "304 Money and Securities" title (title / blank / "Base Premium" / headers / data)
+        Money304SM.insert_rows(2)
+        Money304SM.print_title_rows = '1:4'
+        Money304SM.print_area = 'A1:' + get_column_letter(Money304SM.max_column) + str(Money304SM.max_row)
 
         Money304RFSM = wb.create_sheet(title='Money & Securities 304 RF')
         formatwkstSM(wkstname=Money304RFSM, titlerows='3', A1title='Rating Factor', A2title='Base Premium', dfname=MSDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3257,22 +3473,30 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             cell.number_format = "#,##0"
             cell = Money304RFSM["B" + str(row)]
             cell.number_format = "#,##0"
+        # Blank spacer row under the "Rating Factor" title (title / blank / "Base Premium" / headers / data);
+        # done after the formatting above so every row keeps its style when shifted down.
+        Money304RFSM.insert_rows(2)
+        Money304RFSM.print_title_rows = '1:4'
+        Money304RFSM.print_area = 'A1:' + get_column_letter(Money304RFSM.max_column) + str(Money304RFSM.max_row)
 
         LPDPSM = wb.create_sheet(title='LPDP')
         formatwkstSM(wkstname=LPDPSM, titlerows='3', A1title='Large Premium Discount Factor', A2title='', dfname=LPDFDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(LPDPSM)
 
         Employee308SM = wb.create_sheet(title='Employee Dishonesty 308')
-        formatwkstSM(wkstname=Employee308SM, titlerows='3', A1title='308 Employee Dishonesty', A2title='Base Premium', dfname=EmployeeDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
+        formatwkstSM(wkstname=Employee308SM, titlerows='3', A1title='308 EMPLOYEE DISHONESTY', A2title='Base Premium', dfname=EmployeeDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(Employee308SM)
+        gap_after_title(Employee308SM)
 
         CompFraudSM = wb.create_sheet(title='Computer Fraud 311 BP')
-        formatwkstSM(wkstname=CompFraudSM, titlerows='3', A1title='311 Computer and Funds Transfer Fraud', A2title='Base Premium', dfname=ComputerDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
+        formatwkstSM(wkstname=CompFraudSM, titlerows='3', A1title='311 COMPUTER AND FUNDS TRANSFER FRAUD', A2title='Base Premium', dfname=ComputerDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(CompFraudSM)
         for row in range(4, CompFraudSM.max_row + 1):
             for col in range(1, CompFraudSM.max_column + 1):
                 cell = CompFraudSM[get_column_letter(col) + str(row)]
                 cell.number_format = "#,##0"
+        dollar_columns(CompFraudSM)
+        gap_after_title(CompFraudSM)
 
         CompFraudGSFSM = wb.create_sheet(title='Computer Fraud 311 GSF')
         formatwkstSM(wkstname=CompFraudGSFSM, titlerows='3', A1title='Annual Gross Sales Factor', A2title='', dfname=ComputerAnnualDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3287,14 +3511,19 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 cell.number_format = rateFormat
             cell = CounterfeitSM["A" + str(row)]
             cell.number_format = "#,##0"
+        dollar_columns(CounterfeitSM)   # $ on Limit and Premium
 
         ForgerySM = wb.create_sheet(title='Forgery or Alteration 314')
         formatwkstSM(wkstname=ForgerySM, titlerows='3', A1title='314 Forgery or Alteration', A2title='Base Premium', dfname=ForgeryDF2, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(ForgerySM)
+        dollar_columns(ForgerySM, cols=(1,))   # $ on Limit only
+        gap_after_title(ForgerySM)
 
         Fraud516SM = wb.create_sheet(title='Fraudulent Impersonation 516')
         formatwkstSM(wkstname=Fraud516SM, titlerows='3', A1title='516 Fraudulent Impersonation', A2title='Base Premium', dfname=FraudDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(Fraud516SM)
+        dollar_columns(Fraud516SM, cols=(1,))   # $ on Limit only
+        gap_after_title(Fraud516SM)
 
         ##
         WineLeakSM = wb.create_sheet(title='Wine Leakage Endorsement')
@@ -3314,6 +3543,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         addlformat(WineLeakSM)
         WineLeakSM['E1'].alignment = Alignment(horizontal='left')
         WineLeakSM.column_dimensions['E'].width = 14.8
+        format_wine_leakage(WineLeakSM)
 
         BIALSSM = wb.create_sheet(title='BI ALS')
         formatwkstSM(wkstname=BIALSSM, titlerows='3', A1title='RULE 51. BUSINESS INCOME COVERAGE OPTIONS', A2title='Table 51.C.3: Business Income Actual Loss Sustained Factors', dfname=BusinessDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3322,6 +3552,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, BIALSSM.max_column + 1):
                 cell = BIALSSM[get_column_letter(col) + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(BIALSSM)
 
         NutHullerSM = wb.create_sheet(title='Nut Hullers')
         formatwkstSM(wkstname=NutHullerSM, titlerows='3', A1title='NUT HULLERS AND PROCESSORS COVERAGE', A2title='Charge the below premium', dfname=NutHullProcDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3343,6 +3574,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ConAtmoSM['E7'].font = Font(name='Arial', size=10)
         ConAtmoSM.print_area = 'A1:' + get_column_letter(ConAtmoSM.max_column + 3) + str(ConAtmoSM.max_row + 1)
         ConAtmoSM.page_setup.fitToPage = True
+        gap_after_title(ConAtmoSM, extra_cols=3)   # notes sit in column E, so they move down with the table
 
         ConAtmoStorSM = wb.create_sheet(title='Con Atmo Stor and Chem Inj')
         formatwkstSM(wkstname=ConAtmoStorSM, titlerows='3', A1title='CONTROLLED ATMOSPHERE, STORAGE AND CHEMICAL INJURY COVERAGE', A2title='a. The base rate for all types of occupancies is below (per $100).', dfname=ControlAtChInjDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3360,6 +3592,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ConAtmoStorSM.column_dimensions['E'].width = 11.5
         ConAtmoStorSM.print_area = 'A1:' + get_column_letter(ConAtmoStorSM.max_column + 3) + str(ConAtmoStorSM.max_row + 1)
         ConAtmoStorSM.page_setup.fitToPage = True
+        gap_after_title(ConAtmoStorSM, extra_cols=3)   # notes sit in column E, so they move down with the table
 
         HopsGrowerSM = wb.create_sheet(title='Hops Grower')
         formatwkstSM(wkstname=HopsGrowerSM, titlerows='3', A1title='HOPS GROWER', A2title='', dfname=HopsDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3383,39 +3616,54 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, WineryIncSM.max_column + 1):
                 cell = WineryIncSM[get_column_letter(col) + str(row)]
                 cell.number_format = "#,##0"
+        dollar_columns(WineryIncSM, cols=(2, 3))   # $ on Limit and Rate
 
         ##
         CPPPlusSM = wb.create_sheet(title='PLUS Endorsements CPP')
         formatwkstSM(wkstname=CPPPlusSM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='COMMERCIAL PROPERTY PROTECTION PLUS ENDORSEMENTS', dfname=PropPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(CPPPlusSM)
+        dollar_columns(CPPPlusSM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(CPPPlusSM)
 
         BMGPlusSM = wb.create_sheet(title='PLUS Endorsements BMG')
         formatwkstSM(wkstname=BMGPlusSM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='BEVERAGE MAKERS GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=BrewPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(BMGPlusSM)
+        dollar_columns(BMGPlusSM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(BMGPlusSM)
 
         ##
         GBGPlusSM = wb.create_sheet(title='PLUS Endorsements GCG')
         formatwkstSM(wkstname=GBGPlusSM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='GOLF COURSE GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=GolfPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(GBGPlusSM)
+        dollar_columns(GBGPlusSM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(GBGPlusSM)
 
         ##
         MGPlusSM = wb.create_sheet(title='PLUS Endorsements MG')
         formatwkstSM(wkstname=MGPlusSM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='MANUFACTURER GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=ManuPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(MGPlusSM)
+        dollar_columns(MGPlusSM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(MGPlusSM)
 
         ##
         RGPlusSM = wb.create_sheet(title='PLUS Endorsements RG')
         formatwkstSM(wkstname=RGPlusSM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='RESTAURANT GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=RestPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(RGPlusSM)
+        dollar_columns(RGPlusSM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(RGPlusSM)
 
         ##
         WGPlusSM = wb.create_sheet(title='PLUS Endorsements WG')
         formatwkstSM(wkstname=WGPlusSM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='WHOLESALER GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=WholePPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(WGPlusSM)
+        dollar_columns(WGPlusSM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(WGPlusSM)
 
         HGPlusSM = wb.create_sheet(title='PLUS Endorsements HG')
         formatwkstSM(wkstname=HGPlusSM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='HOTEL GOLD & PLATINUM PROTECTION PLUS ENDORSEMENTS', dfname=HotelPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(HGPlusSM)
+        dollar_columns(HGPlusSM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(HGPlusSM)
 
         FranchiseSM = wb.create_sheet(title='Franchise Upgrade Endorsement')
         formatwkstSM(wkstname=FranchiseSM, titlerows='3', A1title='FRANCHISE UPGRADE ENDORSEMENT',
@@ -3435,6 +3683,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             cell.number_format = "#,##0"
             cell = NutHullsSM["B" + str(row)]
             cell.number_format = "#,##0"
+        dollar_columns(NutHullsSM, cols=(1, 2))   # $ on both limit columns
 
     #<editor-fold desc="MM Deductible">
     if mm.enabled and mm.deductible:
@@ -3469,10 +3718,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             DedbyAOIBGIMM.column_dimensions[column].width = adjusted_width
         DedbyAOIBGIMM.column_dimensions['G'].width = 9.5
         DedbyAOIBGIMM.column_dimensions['K'].width = 9.5
+        narrow_limit_columns(DedbyAOIBGIMM)
         DedbyAOIBGIMM.print_area = 'A1:' + get_column_letter(DedbyAOIBGIMM.max_column) + str(DedbyAOIBGIMM.max_row+1)
         DedbyAOIBGIMM.page_setup.fitToPage = True
         DedbyAOIBGIMM.page_setup.fitToHeight = 1
         DedbyAOIBGIMM.page_setup.fitToWidth = 1
+        gap_after_title(DedbyAOIBGIMM)
 
         DedbyAOIBG2MM = wb2.create_sheet(title='Deductible by AOI BGII')
         formatwkstMM(wkstname=DedbyAOIBG2MM, titlerows='3', A1title='RULE 81. DEDUCTIBLE INSURANCE PLAN',
@@ -3504,10 +3755,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             DedbyAOIBG2MM.column_dimensions[column].width = adjusted_width
         DedbyAOIBG2MM.column_dimensions['G'].width = 9.5
         DedbyAOIBG2MM.column_dimensions['K'].width = 9.5
+        narrow_limit_columns(DedbyAOIBG2MM)
         DedbyAOIBG2MM.print_area = 'A1:' + get_column_letter(DedbyAOIBG2MM.max_column) + str(DedbyAOIBG2MM.max_row+1)
         DedbyAOIBG2MM.page_setup.fitToPage = True
         DedbyAOIBG2MM.page_setup.fitToHeight = 1
         DedbyAOIBG2MM.page_setup.fitToWidth = 1
+        gap_after_title(DedbyAOIBG2MM)
 
         DedbyAOISCOLMM = wb2.create_sheet(title='Deductible by AOI SCOL')
         formatwkstMM(wkstname=DedbyAOISCOLMM, titlerows='3', A1title='RULE 81. DEDUCTIBLE INSURANCE PLAN',
@@ -3539,10 +3792,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             DedbyAOISCOLMM.column_dimensions[column].width = adjusted_width
         DedbyAOISCOLMM.column_dimensions['G'].width = 9.5
         DedbyAOISCOLMM.column_dimensions['K'].width = 9.5
+        narrow_limit_columns(DedbyAOISCOLMM)
         DedbyAOISCOLMM.print_area = 'A1:' + get_column_letter(DedbyAOISCOLMM.max_column) + str(DedbyAOISCOLMM.max_row+1)
         DedbyAOISCOLMM.page_setup.fitToPage = True
         DedbyAOISCOLMM.page_setup.fitToHeight = 1
         DedbyAOISCOLMM.page_setup.fitToWidth = 1
+        gap_after_title(DedbyAOISCOLMM)
 
     #<editor-fold desc="MM Full Manual">
     if mm.enabled and mm.full_manual:
@@ -3550,10 +3805,12 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ExpMM = wb2.create_sheet(title='Expense Constant')
         formatwkstMM(wkstname=ExpMM, titlerows='3', A1title='RULE 8 EXPENSE CONSTANT', A2title='8. Rate and Premium Computation', dfname=ExpConstDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(ExpMM)
+        gap_after_title(ExpMM)
 
         MinPMM = wb2.create_sheet(title='Minimum Premium')
         formatwkstMM(wkstname=MinPMM, titlerows='3', A1title='RULE 8 EXPENSE CONSTANT', A2title='8. Rate and Premium Computation', dfname=PolicyMinDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(MinPMM)
+        gap_after_title(MinPMM)
 
         if mm.segmentation_removal:
             AOIBG1MM = wb2.create_sheet(title='AOI Bldg Grp I')
@@ -3564,6 +3821,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     char = get_column_letter(col) # Letter representing the current column
                     cell = AOIBG1MM[char + str(row)]
                     cell.number_format = rateFormat
+            narrow_construction_columns(AOIBG1MM)
+            gap_after_title(AOIBG1MM)
 
             AOIBG2MM = wb2.create_sheet(title='AOI Bldg Grp II')
             formatwkstMM(wkstname=AOIBG2MM, titlerows='3', A1title='AOI CURVES', A2title='Basic Group II Limit Factors Building', dfname=BGIIBLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3573,6 +3832,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     char = get_column_letter(col) # Letter representing the current column
                     cell = AOIBG2MM[char + str(row)]
                     cell.number_format = rateFormat
+            gap_after_title(AOIBG2MM)
 
             AOIBSCOLMM = wb2.create_sheet(title='AOI Bldg SCOL')
             formatwkstMM(wkstname=AOIBSCOLMM, titlerows='3', A1title='AOI CURVES', A2title='Special Cause of Loss Limit Factors Building', dfname=SCOLBLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3582,6 +3842,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     char = get_column_letter(col) # Letter representing the current column
                     cell = AOIBSCOLMM[char + str(row)]
                     cell.number_format = rateFormat
+            gap_after_title(AOIBSCOLMM)
 
             AOIPPG1MM = wb2.create_sheet(title='AOI PP Grp I')
             formatwkstMM(wkstname=AOIPPG1MM, titlerows='3', A1title='AOI CURVES', A2title='Basic Group I Limit Factors Contents', dfname=BGIPPLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3591,6 +3852,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     char = get_column_letter(col) # Letter representing the current column
                     cell = AOIPPG1MM[char + str(row)]
                     cell.number_format = rateFormat
+            narrow_construction_columns(AOIPPG1MM)
+            gap_after_title(AOIPPG1MM)
 
             AOIPPG2MM = wb2.create_sheet(title='AOI PP Grp II')
             formatwkstMM(wkstname=AOIPPG2MM, titlerows='3', A1title='AOI CURVES', A2title='Basic Group II Limit Factors Contents', dfname=BGIIPPLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3600,6 +3863,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     char = get_column_letter(col) # Letter representing the current column
                     cell = AOIPPG2MM[char + str(row)]
                     cell.number_format = rateFormat
+            gap_after_title(AOIPPG2MM)
 
             AOIPPSCOLMM = wb2.create_sheet(title='AOI PP SCOL')
             formatwkstMM(wkstname=AOIPPSCOLMM, titlerows='3', A1title='AOI CURVES', A2title='Special Cause of Loss Limit Factors Contents', dfname=SCOLPPLOI, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3609,6 +3873,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                     char = get_column_letter(col) # Letter representing the current column
                     cell = AOIPPSCOLMM[char + str(row)]
                     cell.number_format = rateFormat
+            gap_after_title(AOIPPSCOLMM)
 
             TierG1MM = wb2.create_sheet(title='Tiering Grp I')
             formatwkstMM(wkstname=TierG1MM, titlerows='3', A1title='TIERING GRADE FACTORS', A2title='Basic Group I Tiering Factors', dfname=BGITier, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3617,6 +3882,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 for col in range(1, TierG1MM.max_column + 1):
                     cell = TierG1MM[get_column_letter(col) + str(row)]
                     cell.number_format = rateFormat
+            gap_after_title(TierG1MM)
 
             TierG2MM = wb2.create_sheet(title='Tiering Grp II')
             formatwkstMM(wkstname=TierG2MM, titlerows='3', A1title='TIERING GRADE FACTORS', A2title='Basic Group II Tiering Factors', dfname=BGIITier, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3625,6 +3891,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 for col in range(1, TierG2MM.max_column + 1):
                     cell = TierG2MM[get_column_letter(col) + str(row)]
                     cell.number_format = rateFormat
+            gap_after_title(TierG2MM)
 
             TierSCOLMM = wb2.create_sheet(title='Tiering SCOL')
             formatwkstMM(wkstname=TierSCOLMM, titlerows='3', A1title='TIERING GRADE FACTORS', A2title='Special Cause of Loss Tiering Factors', dfname=SCOLTier, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3633,6 +3900,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 for col in range(1, TierSCOLMM.max_column + 1):
                     cell = TierSCOLMM[get_column_letter(col) + str(row)]
                     cell.number_format = rateFormat
+            gap_after_title(TierSCOLMM)
 
             AOBG1MM = wb2.create_sheet(title='Age of Building Grp I')
             formatwkstMM(wkstname=AOBG1MM, titlerows='3', A1title='AGE OF BUILDING FACTORS', A2title='Basic Group I Factors', dfname=BGIAOB, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3658,6 +3926,10 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             AOBG1MM.column_dimensions['M'].width = 12
             AOBG1MM.column_dimensions['N'].width = 12
             AOBG1MM.print_area = 'A1:' + get_column_letter(AOBG1MM.max_column+1) + str(AOBG1MM.max_row + 1)
+            # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+            AOBG1MM.insert_rows(2)
+            AOBG1MM.print_title_rows = '1:4'
+            AOBG1MM.print_area = 'A1:' + get_column_letter(AOBG1MM.max_column + 1) + str(AOBG1MM.max_row)
 
             AOBG2MM = wb2.create_sheet(title='Age of Building Grp II')
             formatwkstMM(wkstname=AOBG2MM, titlerows='3', A1title='AGE OF BUILDING FACTORS', A2title='Basic Group II Factors', dfname=BGIIAOB, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3683,6 +3955,10 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             AOBG2MM.column_dimensions['M'].width = 12
             AOBG2MM.column_dimensions['N'].width = 12
             AOBG2MM.print_area = 'A1:' + get_column_letter(AOBG2MM.max_column+1) + str(AOBG2MM.max_row + 1)
+            # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+            AOBG2MM.insert_rows(2)
+            AOBG2MM.print_title_rows = '1:4'
+            AOBG2MM.print_area = 'A1:' + get_column_letter(AOBG2MM.max_column + 1) + str(AOBG2MM.max_row)
 
             AOBSCOLMM = wb2.create_sheet(title='Age of Building SCOL')
             formatwkstMM(wkstname=AOBSCOLMM, titlerows='3', A1title='AGE OF BUILDING FACTORS', A2title='Special Cause of Loss Factors', dfname=SCOLAOB, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3708,6 +3984,10 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             AOBSCOLMM.column_dimensions['M'].width = 12
             AOBSCOLMM.column_dimensions['N'].width = 12
             AOBSCOLMM.print_area = 'A1:' + get_column_letter(AOBSCOLMM.max_column+1) + str(AOBSCOLMM.max_row + 1)
+            # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+            AOBSCOLMM.insert_rows(2)
+            AOBSCOLMM.print_title_rows = '1:4'
+            AOBSCOLMM.print_area = 'A1:' + get_column_letter(AOBSCOLMM.max_column + 1) + str(AOBSCOLMM.max_row)
 
         else:
             pass
@@ -3716,6 +3996,8 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         formatwkstMM(wkstname=EmergencyMM, titlerows='3', A1title='EMERGENCY EVACUATION INCLUDING CIVIL AUTHORITY COVERAGE', A2title='', dfname=EmergencyDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(EmergencyMM)
         addlformat(EmergencyMM)
+        for row in range(4, EmergencyMM.max_row + 1):
+            EmergencyMM['B' + str(row)].number_format = currencyFormat
 
         HumanSvEnhMM = wb2.create_sheet(title='Human Serv. Enhancement Cover.')
         formatwkstMM(wkstname=HumanSvEnhMM, titlerows='3', A1title='HUMAN SERVICES PROPERTY ENDORSEMENT FACTOR', A2title='', dfname=HumSvcsEnhDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3752,11 +4034,19 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         borderfnct(CivilTimeMM)
         addlformat(CivilTimeMM)
         CivilTimeMM.column_dimensions['E'].width = 14
+        # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+        CivilTimeMM.insert_rows(2)
+        CivilTimeMM.print_title_rows = '1:4'
+        CivilTimeMM.print_area = 'A1:' + get_column_letter(CivilTimeMM.max_column) + str(CivilTimeMM.max_row)
 
         Cosmetic = wb2.create_sheet(title='Cosmetic Exclusion')
         formatwkstMM(wkstname=Cosmetic, titlerows='3', A1title='COSMETIC EXCLUSION ON COVERAGE FOR SIDING', A2title='Multiply the Basic Group II building rate by the below factor', dfname=CosmeticDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(Cosmetic)
         addlformat(Cosmetic)
+        # Blank spacer row under the title (title / blank / subtitle / headers / data); done last so rows keep their styles
+        Cosmetic.insert_rows(2)
+        Cosmetic.print_title_rows = '1:4'
+        Cosmetic.print_area = 'A1:' + get_column_letter(Cosmetic.max_column) + str(Cosmetic.max_row)
 
         Terrorism = wb2.create_sheet(title='Terrorism')
         formatwkstMM(wkstname=Terrorism, titlerows='3', A1title='Coverage for Certified Acts of Terrorism', A2title='', dfname=TerrorismDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3782,14 +4072,21 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             cell.number_format = "0"
             cell = Money304RFMM["B" + str(row)]
             cell.number_format = "#,##0"
+        # Blank spacer row under the "Rating Factor" title (title / blank / "Base Premium" / headers / data);
+        # done after the formatting above so every row keeps its style when shifted down.
+        Money304RFMM.insert_rows(2)
+        Money304RFMM.print_title_rows = '1:4'
+        Money304RFMM.print_area = 'A1:' + get_column_letter(Money304RFMM.max_column) + str(Money304RFMM.max_row)
 
         Employee306MM = wb2.create_sheet(title='Employee Dishonesty 306')
-        formatwkstMM(wkstname=Employee306MM, titlerows='3', A1title='306 Employee Dishonesty', A2title='', dfname=EmployeeDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
+        formatwkstMM(wkstname=Employee306MM, titlerows='3', A1title='306 EMPLOYEE DISHONESTY', A2title='', dfname=EmployeeDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(Employee306MM)
 
         CompFraudMM = wb2.create_sheet(title='Computer Fraud 311')
-        formatwkstMM(wkstname=CompFraudMM, titlerows='3', A1title='311 Computer and Funds Transfer Fraud', A2title='Base Premium', dfname=ComputerDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
+        formatwkstMM(wkstname=CompFraudMM, titlerows='3', A1title='311 COMPUTER AND FUNDS TRANSFER FRAUD', A2title='Base Premium', dfname=ComputerDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(CompFraudMM)
+        dollar_columns(CompFraudMM)
+        gap_after_title(CompFraudMM)
 
         CompFraudGSFMM = wb2.create_sheet(title='Computer Fraud 311 GSF')
         formatwkstMM(wkstname=CompFraudGSFMM, titlerows='3', A1title='Annual Gross Sales Factor', A2title='', dfname=ComputerAnnualDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3804,14 +4101,19 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 cell.number_format = rateFormat
             cell = CounterfeitMM["A" + str(row)]
             cell.number_format = "#,##0"
+        dollar_columns(CounterfeitMM)   # $ on Limit and Premium
 
         ForgeryMM = wb2.create_sheet(title='Forgery or Alteration 314')
         formatwkstMM(wkstname=ForgeryMM, titlerows='3', A1title='314 Forgery or Alteration', A2title='Base Premium', dfname=ForgeryDF2, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(ForgeryMM)
+        dollar_columns(ForgeryMM, cols=(1,))   # $ on Limit only
+        gap_after_title(ForgeryMM)
 
         Fraud516MM = wb2.create_sheet(title='Fraudulent Impersonation 516')
         formatwkstMM(wkstname=Fraud516MM, titlerows='3', A1title='516 Fraudulent Impersonation', A2title='Base Premium', dfname=FraudDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(Fraud516MM)
+        dollar_columns(Fraud516MM, cols=(1,))   # $ on Limit only
+        gap_after_title(Fraud516MM)
 
         WineLeakMM = wb2.create_sheet(title='Wine Leakage Endorsement')
         formatwkstMM(wkstname=WineLeakMM, titlerows='3', A1title='WINE LEAKAGE ENDORSEMENT', A2title='', dfname=WineLkgDF1, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3838,6 +4140,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
                 cell.number_format = rateFormat
             cell = WineLeakMM["E" + str(row)]
             cell.number_format = "#,##0"
+        format_wine_leakage(WineLeakMM)
 
         BIALSMM = wb2.create_sheet(title='BI ALS')
         formatwkstMM(wkstname=BIALSMM, titlerows='3', A1title='RULE 51. BUSINESS INCOME COVERAGE OPTIONS', A2title='Table 51.C.3: Business Income Actual Loss Sustained Factors', dfname=BusinessDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3846,6 +4149,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, BIALSMM.max_column + 1):
                 cell = BIALSMM[get_column_letter(col) + str(row)]
                 cell.number_format = rateFormat
+        gap_after_title(BIALSMM)
 
         NutHullerMM = wb2.create_sheet(title='Nut Hullers')
         formatwkstMM(wkstname=NutHullerMM, titlerows='3', A1title='NUT HULLERS AND PROCESSORS COVERAGE', A2title='Charge the below premiums', dfname=NutHullProcDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3867,6 +4171,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ConAtmoMM['E7'].font = Font(name='Arial',size=10)
         ConAtmoMM.print_area = 'A1:' + get_column_letter(ConAtmoMM.max_column + 3) + str(ConAtmoMM.max_row + 1)
         ConAtmoMM.page_setup.fitToPage = True
+        gap_after_title(ConAtmoMM, extra_cols=3)   # notes sit in column E, so they move down with the table
 
         ConAtmoStorMM = wb2.create_sheet(title='Con Atmo Stor and Chem Inj')
         formatwkstMM(wkstname=ConAtmoStorMM, titlerows='3', A1title='CONTROLLED ATMOSPHERE, STORAGE AND CHEMICAL INJURY COVERAGE', A2title='a. The base rate for all types of occupancies is below (per $100)', dfname=ControlAtChInjDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3884,6 +4189,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
         ConAtmoStorMM.column_dimensions['E'].width = 11.5
         ConAtmoStorMM.print_area = 'A1:' + get_column_letter(ConAtmoStorMM.max_column + 3) + str(ConAtmoStorMM.max_row + 1)
         ConAtmoStorMM.page_setup.fitToPage = True
+        gap_after_title(ConAtmoStorMM, extra_cols=3)   # notes sit in column E, so they move down with the table
 
         HopsGrowerMM = wb2.create_sheet(title='Hops Grower')
         formatwkstMM(wkstname=HopsGrowerMM, titlerows='3', A1title='HOPS GROWER', A2title='', dfname=HopsDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3907,34 +4213,49 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             for col in range(1, WineryIncMM.max_column + 1):
                 cell = WineryIncMM[get_column_letter(col) + str(row)]
                 cell.number_format = "#,##0"
+        dollar_columns(WineryIncMM, cols=(2, 3))   # $ on Limit and Rate
 
         CPPPlusMM = wb2.create_sheet(title='PLUS Endorsements CPP')
         formatwkstMM(wkstname=CPPPlusMM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='COMMERCIAL PROPERTY PROTECTION PLUS ENDORSEMENTS', dfname=PropPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(CPPPlusMM)
+        dollar_columns(CPPPlusMM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(CPPPlusMM)
 
         BMGPlusMM = wb2.create_sheet(title='PLUS Endorsements BMG')
         formatwkstMM(wkstname=BMGPlusMM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='BEVERAGE MAKERS GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=BrewPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(BMGPlusMM)
+        dollar_columns(BMGPlusMM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(BMGPlusMM)
 
         GCGPlusMM = wb2.create_sheet(title='PLUS Endorsements GCG')
         formatwkstMM(wkstname=GCGPlusMM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='GOLF COURSE GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=GolfPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(GCGPlusMM)
+        dollar_columns(GCGPlusMM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(GCGPlusMM)
 
         MGPlusMM = wb2.create_sheet(title='PLUS Endorsements MG')
         formatwkstMM(wkstname=MGPlusMM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='MANUFACTURER GOLD & PLATINUM PROTECTION PLUS ENDORSEMENT', dfname=ManuPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(MGPlusMM)
+        dollar_columns(MGPlusMM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(MGPlusMM)
 
         RGPlusMM = wb2.create_sheet(title='PLUS Endorsements RG')
         formatwkstMM(wkstname=RGPlusMM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='RESTAURANT GOLD & PLATINUM PROTECTION PLUS ENDORSEMENTS', dfname=RestPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(RGPlusMM)
+        dollar_columns(RGPlusMM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(RGPlusMM)
 
         WGPlusMM = wb2.create_sheet(title='PLUS Endorsements WG')
         formatwkstMM(wkstname=WGPlusMM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='WHOLESALER GOLD & PLATINUM PROTECTION PLUS ENDORSEMENTS', dfname=WholePPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(WGPlusMM)
+        dollar_columns(WGPlusMM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(WGPlusMM)
 
         HGPlusMM = wb2.create_sheet(title='PLUS Endorsements HG')
         formatwkstMM(wkstname=HGPlusMM, titlerows='3', A1title='PROTECTION PLUS ENDORSEMENTS', A2title='HOTEL GOLD & PLATINUM PROTECTION PLUS ENDORSEMENTS', dfname=HotelPPDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
         borderfnct(HGPlusMM)
+        dollar_columns(HGPlusMM, cols=(2, 3))   # $ on Minimum / Maximum Charge
+        gap_after_title(HGPlusMM)
 
         FranchiseMM = wb2.create_sheet(title='Franchise Upgrade Endorsement')
         formatwkstMM(wkstname=FranchiseMM, titlerows='3', A1title='Franchise Upgrade Endorsement', A2title='', dfname=FranUpgDF, statename=State, stabb=StateAbb, effdate=EffectiveDate)
@@ -3952,6 +4273,7 @@ def _build(ratebooks, CWRatebook, info, sm, mm, _step):
             cell.number_format = "#,##0"
             cell = NutsHullsMM["B" + str(row)]
             cell.number_format = "#,##0"
+        dollar_columns(NutsHullsMM, cols=(1, 2))   # $ on both limit columns
 
 
     _step("Finalizing Index sheets")

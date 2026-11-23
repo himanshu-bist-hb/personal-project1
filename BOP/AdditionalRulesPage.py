@@ -279,8 +279,9 @@ class AdditionalRules:
         ws.column_dimensions['B'].width = self.pixelsToInches(80)
         # The ratebook stores whole-number percents (999, -75): append a literal
         # "%" rather than using a percent format, which would multiply by 100.
+        # Thousands separator so e.g. -99999/99900 read "-99,900%" / "99,900%".
         for cell in ws['4:4']:
-            cell.number_format = 'General"%"'
+            cell.number_format = '#,##0"%"'
 
     def formatDistributionFactors(self, ws):
         ws.column_dimensions['A'].width = self.pixelsToInches(125)
@@ -426,23 +427,107 @@ class AdditionalRules:
     def _whExclusionSpec(self):
         return ('WHE', 'AR Table A.3. Windstorm or Hail Exclusion (Coverages Not Included in By-peril Rating)', self.buildWHExclusion, False, True, None, self.formatWHExclusion)
 
-    # Every state's sheet list (see _stateSheetSpecs) plus the Rate Capping
-    # (Migration, 1-3 years on PolicyCenter) sheet, appended last.
+    # ── Rate Capping page, per state ────────────────────────────────────────
+    # Source: the filing team's "Transition Capping" lookup sheet. Each state
+    # files its capping table under its own section label / table number /
+    # table name, and the sheet title is composed from those three parts:
+    #   "<Section Label> Table <Table Number> <Table Name>"
+    #   e.g. "AR Table 98.C. Rate Capping", "AR-2 Table A.2. Transition Capping".
+    # Table Number is '' for states that file the table without one (the
+    # "Table <n>" part is then omitted: "AR-1 Transition Rate Capping").
+    # Strings are kept exactly as the lookup sheet has them (incl. the
+    # inconsistent trailing periods, e.g. "Table 3", "Table AR-1").
+    RATE_CAPPING_TITLES = {
+        'AL': ('AR-3', 'Table A.1.', 'Transition Capping Program'),
+        'AZ': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'AR': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'CO': ('AR-1', '', 'Transition Rate Capping'),
+        'CT': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'DE': ('AR-2', 'Table B.', 'Rate Capping'),
+        'DC': ('AR', 'Table 2.B.', 'Rate Capping'),
+        'FL': ('AR-1', 'Table A.1.', 'Transition Capping Program'),
+        'GA': ('AR', 'Table 3', 'Rate Capping'),
+        'IL': ('AR-2', 'Table A.2.', 'Rate Capping'),
+        'IN': ('AR-2', 'Table A.2.', 'Transition Capping Program'),
+        'IA': ('AR-1', 'Table A.1.', 'Transition Capping Program'),
+        'KS': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'KY': ('AR-2', 'Table A.2.', 'Transition Capping Program'),
+        'ME': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'MD': ('AR-4', 'Table A.4.', 'Transition Capping Program'),
+        'MA': ('AR-1', 'Table A.1.', 'Transition Capping Program'),
+        'MI': ('AR', 'Table 1.', 'Transition Rate Capping'),
+        'MN': ('AR-1', '', 'Rate Capping'),
+        'MS': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'MO': ('AR-1', 'Table 1.B.', 'Transition Capping'),
+        'MT': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'NE': ('AR-2.B', '', 'Transition Capping Program'),
+        'NV': ('AR', 'Table AR-1', 'Rate Capping'),
+        'NH': ('AR-1', '', 'Transition Capping'),
+        'NJ': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'NY': ('AR-3', 'Table A.3.', 'Transition Capping Program'),
+        'NC': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'ND': ('AR-2', 'Table A.2.', 'Transition Capping'),
+        'OH': ('AR-4', 'Table B.', 'Transition Capping Program'),
+        'PA': ('AR-2', 'Table A.2.', 'Transition Capping Program'),
+        'RI': ('AR-2', 'Table A.2.', 'Transition Capping Program'),
+        'SC': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'SD': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'TN': ('AR-1', 'Table 1.B.', 'Rate Capping'),
+        'TX': ('AR', 'Table 4.B.', 'Transition Capping Program'),
+        'UT': ('AR-1', 'Table A.1.', 'Transition Capping Program'),
+        'VT': ('AR-1', 'Table A.1.', 'Transition Capping Program'),
+        'VA': ('AR', 'Table 98.C.', 'Rate Capping'),
+        'WA': ('AR', 'Table AR-2.B.', 'Transition Capping Program'),
+        'WI': ('AR-1', 'Table A.1.', 'Transition Capping Program'),
+        'WV': ('AR-2', 'Table A.1.', 'Transition Capping Program'),
+        'WY': ('AR', 'Table 98.C.', 'Rate Capping'),
+    }
+    # "Do Not Print": no capping in the state -> no Rate Capping page.
+    NO_CAPPING_STATES = frozenset({'CA', 'ID', 'NM', 'OR'})
+    # "Not Applicable": BOP not filed in the state -> no Rate Capping page.
+    NOT_FILED_STATES = frozenset({'OK', 'LA', 'AK', 'HI'})
+    # Fallback title for a state missing from the lookup (e.g. a territory).
+    DEFAULT_RATE_CAPPING_TITLE = ('AR', 'Table 98.C.', 'Rate Capping')
+
+    def hasRateCapping(self):
+        return self.state not in self.NO_CAPPING_STATES and self.state not in self.NOT_FILED_STATES
+
+    def rateCappingTitle(self):
+        label, number, name = self.RATE_CAPPING_TITLES.get(self.state, self.DEFAULT_RATE_CAPPING_TITLE)
+        return ' '.join(part for part in (label, number, name) if part)
+
+    # The Rate Capping sheet for this state, or None when the state doesn't
+    # file one. "Transition ..." titles use the Transition factor query
+    # (MD/OH's proven one); plain "Rate Capping" uses the Migration 1-3 yr one.
+    def _rateCappingSpec(self):
+        if not self.hasRateCapping():
+            return None
+        name = self.RATE_CAPPING_TITLES.get(self.state, self.DEFAULT_RATE_CAPPING_TITLE)[2]
+        build = self.buildRateCappingFactors if 'Transition' in name else self.buildRateCappingMigration
+        return ('RC', self.rateCappingTitle(), build, False, True, None, self.formatRateCappingFactors)
+
+    # Every state's sheet list (see _stateSheetSpecs) plus its Rate Capping
+    # sheet (if any). Default-branch states (Rate Capping first, then
+    # Distribution Factor...) keep it first; states with their own
+    # state-specific sheets get it last.
     def _sheetSpecs(self):
         specs = self._stateSheetSpecs()
-        title = 'AR Table 98.C. Rate Capping'
-        # The default-branch states already carry this table (first 'RC'
-        # entry, built with the same Migration/1/3 filter) — don't add it twice.
-        if not any(spec[1] == title for spec in specs):
-            specs.append(('RC2', title, self.buildRateCappingMigration, False, True, None, self.formatRateCappingFactors))
+        rc = self._rateCappingSpec()
+        if rc is not None:
+            if self._isDefaultBranch():
+                specs.insert(0, rc)
+            else:
+                specs.append(rc)
         return specs
+
+    def _isDefaultBranch(self):
+        return self.state not in ("MD", "OH", "AL", "IN", "KY", "WA")
 
     def _stateSheetSpecs(self):
         if self.state == "MD":
             return [
                 ('LHL', 'AR Table 1.C.1-2. Liability for Hazards of Lead', self.buildLiabilityHazards, False, True, None, self.formatLiabilityHazards),
                 ('WHE', 'AR Table A.3. Windstorm or Hail Exclusion (Coverages Not Included in By-peril Rating)', self.buildWHExclusion, False, True, None, self.formatWHExclusion),
-                ('RC', 'AR-4 Table A.4. Transition Capping Program', self.buildRateCappingFactors, False, True, None, self.formatRateCappingFactors),
             ]
         if self.state == "OH":
             return [
@@ -453,7 +538,6 @@ class AdditionalRules:
                 ('SGEIL', 'AR-2 Table E.4.C Stop Gap - Extended Coverage Endorsement Increased Limits', lambda: self._buildStopGapIncreasedLimits('BP7_Extended_Stop_Gap_Base_Rate'), False, True, None, self._formatStopGapIncreasedLimits),
                 ('SGEPD', 'AR-2 Table E.4 Stop Gap - Extended Coverage Endorsement Premium Determination', lambda: self._buildStopGapPremiumDetermination('BP7_Extended_Stop_Gap_Base_Rate'), False, True, None, self._formatStopGapPremiumDetermination),
                 ('UPS', 'AR-3 Table F. Underground Petroleum Storage Tank Deductible Coverage', self.buildUPS, False, True, None, self.formatUPS),
-                ('RC', 'AR-4 Table B. Transition Capping Program', self.buildRateCappingFactors, False, True, None, self.formatRateCappingFactors),
             ]
         if self.state == "AL":
             return [
@@ -469,8 +553,7 @@ class AdditionalRules:
                 ('SGLPD', 'AR-1 Table D. Stop Gap - Employers Liability Coverage Premium Determination', lambda: self._buildStopGapPremiumDetermination('BP7_Stop_Gap_Base_Rate'), False, True, None, self._formatStopGapPremiumDetermination),
             ]
         specs = [
-            ('RC', 'AR Table 98.C. Rate Capping', self.buildRateCappingMigration, False, True, None, self.formatRateCappingFactors),
-            ('DF', 'AR - 2 Distribution Factor', self.buildDistributionFactors, False, True, None, self.formatDistributionFactors),
+            ('DF','AR - 2 Distribution Factor', self.buildDistributionFactors, False, True, None, self.formatDistributionFactors),
         ]
         if self.state == "FL":  # Sinkhole Loss (Table A.2) is filed in Florida only; goes before A.3
             specs.append(('SH', 'AR Table A.2. Sinkhole Loss Coverage and Catastrophic Ground Cover Collapse', self.buildSinkholeLoss, False, True, None, self.formatSinkholeLoss))

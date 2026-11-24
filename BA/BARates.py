@@ -3162,7 +3162,12 @@ class Auto:
         MedPaymentsZone = pd.DataFrame(self.rateTables[company]['ZoneRatedMedicalPaymentsTextFactor'][1:], index=None, columns=self.rateTables[company]['ZoneRatedMedicalPaymentsTextFactor'][0])
         #MedPaymentsZone = self.buildDataFrame("ZoneRatedMedicalPaymentsTextFactor")
         MedPaymentsZone = MedPaymentsZone.rename(columns={'MedicalPaymentsLimitText' : 'Limit', 'Factor' : 'Zone-Rated'}).filter(items=['Limit', 'Zone-Rated'])
-        MedPaymentsZone = MedPaymentsZone.query(f'Limit != "No Coverage" & Limit != "500"').sort_values('Zone-Rated')
+        MedPaymentsZone = MedPaymentsZone.query(f'Limit != "No Coverage" & Limit != "500"')
+        # Sort by the numeric value of the limit (ascending), not by factor or as text
+        # ("10,000" would sort before "5,000" as a string). Stable so ties keep ratebook order.
+        MedPaymentsZone = MedPaymentsZone.assign(
+            _limit_sort=pd.to_numeric(MedPaymentsZone['Limit'].astype(str).str.replace(r'[^\d.]', '', regex=True), errors='coerce')
+        ).sort_values('_limit_sort', kind='stable').drop(columns='_limit_sort')
         MedPaymentsZoneFactor = MedPaymentsZone[MedPaymentsZone["Limit"] == "5,000"].iloc[0,1]
         MedPaymentsZone['Zone-Rated'] = MedPaymentsZone['Zone-Rated'] / MedPaymentsZoneFactor
         MedPaymentsZone = MedPaymentsZone.astype(object)
